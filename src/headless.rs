@@ -1,6 +1,6 @@
 use crate::assets::Assets;
 use crate::collision::CollisionMask;
-use crate::game::{AppScreen,Game,InputState,LEVEL_X,LEVEL_Y,LOGICAL_H,LOGICAL_W,VK_D,VK_ENTER,VK_RIGHT,VK_S,VK_SPACE};
+use crate::game::{AppScreen,AudioEvent,Game,InputState,LEVEL_X,LEVEL_Y,LOGICAL_H,LOGICAL_W,PICKUPS,VK_D,VK_ENTER,VK_RIGHT,VK_S,VK_SPACE};
 use crate::render;
 use png::{BitDepth,ColorType,Encoder};
 use std::fs::{self,File};
@@ -21,6 +21,7 @@ pub fn render_smoke(out:&str){
     game.tick(&mut input,&ground);
     input.set(VK_ENTER,false);
     assert_eq!(game.screen,AppScreen::Playing);
+    assert_eq!(game.take_audio_events(),vec![AudioEvent::MusicStart]);
 
     // Preserve the real root presentation instead of skipping straight into
     // gameplay: fade-in starts immediately, level-title continues longer.
@@ -61,7 +62,9 @@ pub fn render_smoke(out:&str){
     input.set(VK_SPACE,true);
     game.tick(&mut input,&ground);
     input.set(VK_SPACE,false);
-    for _ in 0..3 { game.tick(&mut input,&ground); }
+    game.tick(&mut input,&ground);
+    assert_eq!(game.take_audio_events(),vec![AudioEvent::Jump]);
+    for _ in 0..2 { game.tick(&mut input,&ground); }
     snapshot(&out,"05_jump.png",&mut game,&assets);
 
     // Hold Space during descent until the original fall->glide rule enters.
@@ -119,6 +122,31 @@ pub fn render_smoke(out:&str){
     assert!(game.level1a_complete);
     assert_eq!(game.fadeout_tick,Some(40));
     snapshot(&out,"12_level1a_complete.png",&mut game,&assets);
+
+    // Audio/item regression gate from original itemLogic.
+    let mut item_game=Game::new();
+    item_game.screen=AppScreen::Playing;
+    item_game.player.x=PICKUPS[0].0-LEVEL_X;
+    item_game.player.y=PICKUPS[0].1-LEVEL_Y;
+    item_game.tick(&mut input,&ground);
+    assert_eq!(item_game.batarangs,5);
+    assert_eq!(item_game.score,5);
+    assert!(item_game.take_audio_events().contains(&AudioEvent::Item));
+
+    // Level 1A pitLogic regression gate. Symbol 149 is invisible gameplay
+    // geometry, so force Batman into its exact level-local hit region.
+    let mut pit_game=Game::new();
+    pit_game.screen=AppScreen::Playing;
+    pit_game.player.x=0.0;
+    pit_game.player.y=500.0;
+    pit_game.tick(&mut input,&ground);
+    assert_eq!(pit_game.lives,4);
+    assert_eq!(pit_game.fadeout_tick,Some(0));
+    for _ in 0..41 { pit_game.tick(&mut input,&ground); }
+    assert_eq!(pit_game.screen,AppScreen::Playing);
+    assert_eq!(pit_game.lives,4);
+    assert_eq!(pit_game.fadeout_tick,None);
+    assert_eq!(pit_game.ticks,0);
 }
 
 fn snapshot(out:&Path,name:&str,game:&mut Game,assets:&Assets){
