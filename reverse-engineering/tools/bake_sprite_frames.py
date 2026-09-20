@@ -241,9 +241,9 @@ def parse_shape(payload: bytes, tag: int, unsupported: set[str]):
     _, pos = read_rect(payload, pos)
     has_alpha = tag in (32, 83)
 
-    # This title is SWF7 and uses DefineShape/2/3. Shape4 support remains
-    # correct for future sources: UsesFillWindingRule selects non-zero.
-    even_odd = False
+    # Match Flash/Ruffle: legacy DefineShape/2/3 use even-odd.
+    # DefineShape4 can explicitly select non-zero winding.
+    even_odd = True
     if tag == 83:
         _, pos = read_rect(payload, pos)
         uses_fill_winding = bool(payload[pos] & 0x04)
