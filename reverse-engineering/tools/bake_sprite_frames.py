@@ -202,36 +202,117 @@ def _stitch_contours(contours):
     return out
 
 
+def _pending_add(pending, style_id, segment, flip=False):
+    """Ruffle-style directed edge-soup linking for one SWF fill style."""
+    if style_id <= 0 or len(segment) < 2:
+        return
+    index = style_id - 1
+    if index >= len(pending):
+        return
+    new_segment = list(reversed(segment)) if flip else list(segment)
+    segments = pending[index]
+    start_open = True
+    end_open = True
+    i = 0
+    while (start_open or end_open) and i < len(segments):
+        other = segments[i]
+        if start_open and other[-1] == new_segment[0]:
+            new_segment = other + new_segment[1:]
+            segments.pop(i)
+            start_open = False
+        elif end_open and new_segment[-1] == other[0]:
+            new_segment = new_segment + other[1:]
+            segments.pop(i)
+            end_open = False
+        else:
+            i += 1
+    segments.append(new_segment)
+
+
 def parse_shape(payload: bytes, tag: int, unsupported: set[str]):
+    """Convert Flash's directed edge soup into ordered drawing layers.
+
+    This follows Ruffle's ShapeConverter model: FillStyle0 and FillStyle1 own
+    independent active paths, FillStyle0 is flipped when flushed, arbitrary
+    edge fragments are linked only by directed endpoints, and StateNewStyles
+    terminates the current drawing layer instead of extending style arrays.
+    """
     _, pos = struct.unpack_from("<H", payload, 0)[0], 2
     _, pos = read_rect(payload, pos)
     has_alpha = tag in (32, 83)
-    # Legacy DefineShape/2/3 in this title render correctly with Flash's
-    # historical winding behavior. DefineShape4 explicitly carries the
-    # UsesFillWindingRule switch, so only Shape4 selects even-odd when false.
+
+    # This title is SWF7 and uses DefineShape/2/3. Shape4 support remains
+    # correct for future sources: UsesFillWindingRule selects non-zero.
     even_odd = False
     if tag == 83:
-        _, pos = read_rect(payload, pos)  # EdgeBounds
+        _, pos = read_rect(payload, pos)
         uses_fill_winding = bool(payload[pos] & 0x04)
         even_odd = not uses_fill_winding
         pos += 1
+
     fills, pos = _read_fill_array(payload, pos, has_alpha, unsupported)
     lines, pos = _read_line_array(payload, pos, has_alpha, tag == 83, unsupported)
     bits = Bits(payload, pos)
     fill_bits = bits.u(4)
     line_bits = bits.u(4)
+
     x = y = 0
     fill0 = fill1 = lineidx = 0
-    paths: dict[int, list[list[tuple[float, float]]]] = {}
-    line_paths: dict[int, list[list[tuple[float, float]]]] = {}
-    active: dict[int, list[tuple[float, float]]] = {}
+    active0 = [(x, y)]
+    active1 = [(x, y)]
+    active_line = [(x, y)]
+    pending_fills = [[] for _ in fills]
+    pending_lines = [[] for _ in lines]
+    layers = []
+
+    def reset_active(start):
+        nonlocal active0, active1, active_line
+        active0 = [start]
+        active1 = [start]
+        active_line = [start]
+
+    def flush_fill(which, flip, start):
+        nonlocal active0, active1
+        active = active0 if which == 0 else active1
+        style = fill0 if which == 0 else fill1
+        if style > 0 and len(active) >= 2:
+            _pending_add(pending_fills, style, active, flip)
+        if which == 0:
+            active0 = [start]
+        else:
+            active1 = [start]
+
+    def flush_stroke(start):
+        nonlocal active_line
+        if lineidx > 0 and len(active_line) >= 2 and lineidx - 1 < len(pending_lines):
+            pending_lines[lineidx - 1].append(list(active_line))
+        active_line = [start]
+
+    def flush_paths(start):
+        flush_fill(1, False, start)
+        flush_fill(0, True, start)
+        flush_stroke(start)
+
+    def emit_layer(start):
+        nonlocal pending_fills, pending_lines
+        flush_paths(start)
+        if any(pending_fills) or any(pending_lines):
+            layers.append({
+                "fills": fills,
+                "paths": {i: segs for i, segs in enumerate(pending_fills) if segs},
+                "lines": lines,
+                "line_paths": {i: segs for i, segs in enumerate(pending_lines) if segs},
+                "even_odd": even_odd,
+            })
+        pending_fills = [[] for _ in fills]
+        pending_lines = [[] for _ in lines]
 
     while True:
         edge_record = bits.u(1)
         if edge_record:
             straight = bits.u(1)
             bit_count = bits.u(4) + 2
-            start = (x, y)
+            start_point = (x, y)
             if straight:
                 general = bits.u(1)
                 if general:
@@ -242,65 +323,93 @@ def parse_shape(payload: bytes, tag: int, unsupported: set[str]):
                     dx, dy = bits.s(bit_count), 0
                 x += dx
                 y += dy
-                points = [start, (x, y)]
+                edge_points = [start_point, (x, y)]
             else:
                 cdx, cdy = bits.s(bit_count), bits.s(bit_count)
                 adx, ady = bits.s(bit_count), bits.s(bit_count)
                 control = (x + cdx, y + cdy)
-                end = (control[0] + adx, control[1] + ady)
-                length = math.hypot(control[0] - x, control[1] - y) + math.hypot(end[0] - control[0], end[1] - control[1])
+                end_point = (control[0] + adx, control[1] + ady)
+                length = (
+                    math.hypot(control[0] - x, control[1] - y)
+                    + math.hypot(end_point[0] - control[0], end_point[1] - control[1])
+                )
                 steps = max(2, min(40, int(length / 120) + 1))
-                points = []
+                edge_points = []
                 for i in range(steps + 1):
                     t = i / steps
                     u = 1.0 - t
-                    points.append((u * u * x + 2.0 * u * t * control[0] + t * t * end[0], u * u * y + 2.0 * u * t * control[1] + t * t * end[1]))
-                x, y = end
-            if lineidx:
-                line_paths.setdefault(lineidx - 1, []).append(points)
-            _append_edge(active, paths, fill1, points)
-            if fill0 != fill1:
-                _append_edge(active, paths, fill0, points, reverse=True)
-        else:
-            new_styles = bits.u(1)
-            state_line = bits.u(1)
-            state_fill1 = bits.u(1)
-            state_fill0 = bits.u(1)
-            move_to = bits.u(1)
-            if not (new_styles or state_line or state_fill1 or state_fill0 or move_to):
-                _flush(active, paths)
-                break
-            if move_to:
-                _flush(active, paths)
-                count = bits.u(5)
-                x, y = bits.s(count), bits.s(count)
-            if state_fill0:
-                _flush(active, paths, fill0 - 1 if fill0 else -1)
-                fill0 = bits.u(fill_bits)
-            if state_fill1:
-                _flush(active, paths, fill1 - 1 if fill1 else -1)
-                fill1 = bits.u(fill_bits)
-            if state_line:
-                lineidx = bits.u(line_bits)
-                _flush(active, paths)
-            if new_styles:
-                bits.align()
-                pos = bits.pos
-                more, pos = _read_fill_array(payload, pos, has_alpha, unsupported)
-                fills.extend(more)
-                more_lines, pos = _read_line_array(payload, pos, has_alpha, tag == 83, unsupported)
-                lines.extend(more_lines)
-                bits.bit = pos * 8
-                fill_bits = bits.u(4)
-                line_bits = bits.u(4)
-    # SWF fill edges may be emitted as multiple open fragments. Flash joins
-    # fragments by endpoint before applying the winding rule; doing the same
-    # here prevents complex fills (HUD wings, rounded panels, etc.) from
-    # collapsing into outlines or corner shards.
-    paths = {key: _stitch_contours(contours) for key, contours in paths.items()}
-    # Stroke fragments do not participate in fill winding. Keep their original
-    # record segmentation instead of reconnecting unrelated touching strokes.
-    return fills, paths, lines, line_paths, even_odd
+                    edge_points.append((
+                        u * u * x + 2.0 * u * t * control[0] + t * t * end_point[0],
+                        u * u * y + 2.0 * u * t * control[1] + t * t * end_point[1],
+                    ))
+                x, y = end_point
+
+            # Ruffle's visit_point adds the same directed edge to all currently
+            # active sides; orientation is handled only when a fill path flushes.
+            tail = edge_points[1:]
+            if fill0 > 0:
+                active0.extend(tail)
+            if fill1 > 0:
+                active1.extend(tail)
+            if lineidx > 0:
+                active_line.extend(tail)
+            continue
+
+        new_styles = bits.u(1)
+        state_line = bits.u(1)
+        state_fill1 = bits.u(1)
+        state_fill0 = bits.u(1)
+        move_to = bits.u(1)
+        if not (new_styles or state_line or state_fill1 or state_fill0 or move_to):
+            emit_layer((x, y))
+            break
+
+        new_x = x
+        new_y = y
+        if move_to:
+            count = bits.u(5)
+            new_x, new_y = bits.s(count), bits.s(count)
+        next_fill0 = bits.u(fill_bits) if state_fill0 else None
+        next_fill1 = bits.u(fill_bits) if state_fill1 else None
+        next_line = bits.u(line_bits) if state_line else None
+
+        replacement_fills = replacement_lines = None
+        if new_styles:
+            bits.align()
+            pos = bits.pos
+            replacement_fills, pos = _read_fill_array(payload, pos, has_alpha, unsupported)
+            replacement_lines, pos = _read_line_array(payload, pos, has_alpha, tag == 83, unsupported)
+            bits.bit = pos * 8
+            next_fill_bits = bits.u(4)
+            next_line_bits = bits.u(4)
+
+        # Ruffle applies MoveTo first, then treats NewStyles as a layer break,
+        # then changes active style IDs against the replacement style arrays.
+        if move_to:
+            x, y = new_x, new_y
+            flush_paths((x, y))
+
+        if new_styles:
+            emit_layer((x, y))
+            fills = replacement_fills
+            lines = replacement_lines
+            pending_fills = [[] for _ in fills]
+            pending_lines = [[] for _ in lines]
+            fill_bits = next_fill_bits
+            line_bits = next_line_bits
+
+        if state_fill1:
+            flush_fill(1, False, (x, y))
+            fill1 = next_fill1
+        if state_fill0:
+            flush_fill(0, True, (x, y))
+            fill0 = next_fill0
+        if state_line:
+            flush_stroke((x, y))
+            lineidx = next_line
+
+    return layers
+
 
 
 def load_shapes(swf_path: Path, unsupported: set[str]):
@@ -569,65 +678,102 @@ def render_symbol(symbol_id, frame, transform, canvas, symbols, shapes, bitmaps,
     if depth > 32:
         raise RuntimeError(f"symbol recursion exceeded at character {symbol_id}")
     if symbol_id in shapes:
-        fills, paths, lines, line_paths, even_odd = shapes[symbol_id]
         draw = ImageDraw.Draw(canvas)
-        for fill_index, contours in paths.items():
-            if fill_index >= len(fills):
-                continue
-            fill = fills[fill_index]
-            if fill is None:
-                continue
-            contours_px = [
-                [(round(px), round(py)) for px, py in (point(transform, (x / 20.0, y / 20.0)) for x, y in contour)]
-                for contour in contours
-            ]
-            flat_points = [p for contour in contours_px for p in contour]
-            if not flat_points:
-                continue
-            left = max(0, min(p[0] for p in flat_points))
-            top = max(0, min(p[1] for p in flat_points))
-            right = min(canvas.width - 1, max(p[0] for p in flat_points))
-            bottom = min(canvas.height - 1, max(p[1] for p in flat_points))
-            if left > right or top > bottom:
-                continue
-            region_size = (right - left + 1, bottom - top + 1)
-            mask = _shape_mask(contours_px, left, top, right, bottom, even_odd)
-            if isinstance(fill, dict) and "gradient" in fill:
-                _render_gradient(fill, transform, contours_px, canvas, left, top, right, bottom, even_odd)
-            elif isinstance(fill, dict):
-                bitmap = bitmaps.get(fill["bitmap_id"])
-                if bitmap is None:
-                    missing.add(fill["bitmap_id"])
+        for layer in shapes[symbol_id]:
+            fills = layer["fills"]
+            paths = layer["paths"]
+            lines = layer["lines"]
+            line_paths = layer["line_paths"]
+            even_odd = layer["even_odd"]
+
+            for fill_index, contours in paths.items():
+                if fill_index >= len(fills):
                     continue
-                bitmap_to_canvas = compose(transform, affine(fill["matrix"]))
-                region_transform = compose((1.0, 0.0, 0.0, 1.0, -left, -top), bitmap_to_canvas)
-                inverse = _inverse(region_transform)
-                if inverse is None:
+                fill = fills[fill_index]
+                if fill is None:
                     continue
-                pillow_inverse = (inverse[0], inverse[1], inverse[4], inverse[2], inverse[3], inverse[5])
-                sampled = bitmap.transform(
-                    region_size,
-                    Image.Transform.AFFINE,
-                    pillow_inverse,
-                    resample=Image.Resampling.BILINEAR if fill["smooth"] else Image.Resampling.NEAREST,
-                    fillcolor=(0, 0, 0, 0) if not fill["repeat"] else None,
-                )
-                sampled.putalpha(ImageChops.multiply(sampled.getchannel("A"), mask))
-                canvas.alpha_composite(sampled, (left, top))
-            else:
-                color_layer = Image.new("RGBA", region_size, fill)
-                color_layer.putalpha(ImageChops.multiply(color_layer.getchannel("A"), mask))
-                canvas.alpha_composite(color_layer, (left, top))
-        matrix_scale = math.sqrt(abs(transform[0] * transform[3] - transform[1] * transform[2]))
-        for line_index, segments in line_paths.items():
-            if line_index >= len(lines):
-                continue
-            style = lines[line_index]
-            width = max(1, round(style["width"] * matrix_scale))
-            for segment in segments:
-                points = [point(transform, (x / 20.0, y / 20.0)) for x, y in segment]
-                if len(points) >= 2:
-                    draw.line([(round(x), round(y)) for x, y in points], fill=style["color"], width=width)
+                contours_px = [
+                    [
+                        (round(px), round(py))
+                        for px, py in (
+                            point(transform, (x / 20.0, y / 20.0))
+                            for x, y in contour
+                        )
+                    ]
+                    for contour in contours
+                ]
+                flat_points = [p for contour in contours_px for p in contour]
+                if not flat_points:
+                    continue
+                left = max(0, min(p[0] for p in flat_points))
+                top = max(0, min(p[1] for p in flat_points))
+                right = min(canvas.width - 1, max(p[0] for p in flat_points))
+                bottom = min(canvas.height - 1, max(p[1] for p in flat_points))
+                if left > right or top > bottom:
+                    continue
+                region_size = (right - left + 1, bottom - top + 1)
+                mask = _shape_mask(contours_px, left, top, right, bottom, even_odd)
+                if isinstance(fill, dict) and "gradient" in fill:
+                    _render_gradient(
+                        fill, transform, contours_px, canvas,
+                        left, top, right, bottom, even_odd
+                    )
+                elif isinstance(fill, dict):
+                    bitmap = bitmaps.get(fill["bitmap_id"])
+                    if bitmap is None:
+                        missing.add(fill["bitmap_id"])
+                        continue
+                    bitmap_to_canvas = compose(transform, affine(fill["matrix"]))
+                    region_transform = compose(
+                        (1.0, 0.0, 0.0, 1.0, -left, -top),
+                        bitmap_to_canvas,
+                    )
+                    inverse = _inverse(region_transform)
+                    if inverse is None:
+                        continue
+                    pillow_inverse = (
+                        inverse[0], inverse[1], inverse[4],
+                        inverse[2], inverse[3], inverse[5],
+                    )
+                    sampled = bitmap.transform(
+                        region_size,
+                        Image.Transform.AFFINE,
+                        pillow_inverse,
+                        resample=(
+                            Image.Resampling.BILINEAR
+                            if fill["smooth"] else Image.Resampling.NEAREST
+                        ),
+                        fillcolor=(0, 0, 0, 0) if not fill["repeat"] else None,
+                    )
+                    sampled.putalpha(ImageChops.multiply(sampled.getchannel("A"), mask))
+                    canvas.alpha_composite(sampled, (left, top))
+                else:
+                    color_layer = Image.new("RGBA", region_size, fill)
+                    color_layer.putalpha(
+                        ImageChops.multiply(color_layer.getchannel("A"), mask)
+                    )
+                    canvas.alpha_composite(color_layer, (left, top))
+
+            # Flash draws strokes after all fills in each drawing layer.
+            matrix_scale = math.sqrt(
+                abs(transform[0] * transform[3] - transform[1] * transform[2])
+            )
+            for line_index, segments in line_paths.items():
+                if line_index >= len(lines):
+                    continue
+                style = lines[line_index]
+                width = max(1, round(style["width"] * matrix_scale))
+                for segment in segments:
+                    points = [
+                        point(transform, (x / 20.0, y / 20.0))
+                        for x, y in segment
+                    ]
+                    if len(points) >= 2:
+                        draw.line(
+                            [(round(x), round(y)) for x, y in points],
+                            fill=style["color"],
+                            width=width,
+                        )
         return
 
     if symbol_id in TEXT_DEFS:
@@ -698,23 +844,31 @@ def symbol_bounds(symbol_id, frame, transform, symbols, shapes, depth=0, exclude
         raise RuntimeError(f"symbol recursion exceeded at character {symbol_id}")
     bounds = [math.inf, math.inf, -math.inf, -math.inf]
     if symbol_id in shapes:
-        fills, paths, _, line_paths, _ = shapes[symbol_id]
-        for fill_index, contours in paths.items():
-            if fill_index >= len(fills) or fills[fill_index] is None:
-                continue
-            for contour in contours:
-                for x, y in contour:
-                    px, py = point(transform, (x / 20.0, y / 20.0))
-                    bounds[0] = min(bounds[0], px)
-                    bounds[1] = min(bounds[1], py)
-                    bounds[2] = max(bounds[2], px)
-                    bounds[3] = max(bounds[3], py)
-        line_points = [point(transform, (x / 20.0, y / 20.0)) for segments in line_paths.values() for segment in segments for x, y in segment]
-        if line_points:
-            bounds[0] = min(bounds[0], min(p[0] for p in line_points))
-            bounds[1] = min(bounds[1], min(p[1] for p in line_points))
-            bounds[2] = max(bounds[2], max(p[0] for p in line_points))
-            bounds[3] = max(bounds[3], max(p[1] for p in line_points))
+        for layer in shapes[symbol_id]:
+            fills = layer["fills"]
+            paths = layer["paths"]
+            line_paths = layer["line_paths"]
+            for fill_index, contours in paths.items():
+                if fill_index >= len(fills) or fills[fill_index] is None:
+                    continue
+                for contour in contours:
+                    for x, y in contour:
+                        px, py = point(transform, (x / 20.0, y / 20.0))
+                        bounds[0] = min(bounds[0], px)
+                        bounds[1] = min(bounds[1], py)
+                        bounds[2] = max(bounds[2], px)
+                        bounds[3] = max(bounds[3], py)
+            line_points = [
+                point(transform, (x / 20.0, y / 20.0))
+                for segments in line_paths.values()
+                for segment in segments
+                for x, y in segment
+            ]
+            if line_points:
+                bounds[0] = min(bounds[0], min(p[0] for p in line_points))
+                bounds[1] = min(bounds[1], min(p[1] for p in line_points))
+                bounds[2] = max(bounds[2], max(p[0] for p in line_points))
+                bounds[3] = max(bounds[3], max(p[1] for p in line_points))
         return bounds
 
     if symbol_id in TEXT_DEFS:
