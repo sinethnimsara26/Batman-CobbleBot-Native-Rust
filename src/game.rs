@@ -173,6 +173,8 @@ pub struct Game{
     overlay_playing:bool,
     walk_checkpoint_started_tick:Option<u64>,
     pub level1a_exit_reached:bool,
+    pub fadeout_tick:Option<u16>,
+    pub level1a_complete:bool,
     pub pickups:[bool;7],
     pub shots:Vec<Shot>,
     pub ticks:u64,
@@ -196,7 +198,7 @@ impl Game{
             background_x:0.0,background_y:BG_INITIAL_Y,
             gravity:GLOBAL_GRAVITY,
             batarangs:0,score:0,lives:5,health:100,player_attacking:false,
-            overlay_frame:OVERLAY_BLANK,overlay_playing:false,walk_checkpoint_started_tick:None,level1a_exit_reached:false,
+            overlay_frame:OVERLAY_BLANK,overlay_playing:false,walk_checkpoint_started_tick:None,level1a_exit_reached:false,fadeout_tick:None,level1a_complete:false,
             pickups:[false;7],shots:Vec::new(),ticks:0,
         }
     }
@@ -238,6 +240,8 @@ impl Game{
         }
 
         self.ticks+=1;
+        self.advance_level_exit();
+        if self.level1a_complete{input.clear_pressed();return;}
         self.advance_tutorial_overlay();
         let state_at_tick_start=self.player.state;
 
@@ -553,6 +557,17 @@ impl Game{
         }
     }
 
+    fn advance_level_exit(&mut self){
+        if let Some(t)=self.fadeout_tick{
+            if t>=40{
+                self.fadeout_tick=Some(40);
+                self.level1a_complete=true;
+            }else{
+                self.fadeout_tick=Some(t+1);
+            }
+        }
+    }
+
     fn overlay_goto_and_play(&mut self,frame:usize){
         self.overlay_frame=frame;
         self.overlay_playing=true;
@@ -606,11 +621,15 @@ impl Game{
             self.overlay_goto_and_play(OVERLAY_TO_STREET);
         }
 
-        if CP_NEXT.hits_player(x,y){
-            // The original sets gotoNext="level1b" and starts fadeout here.
-            // Campaign expansion stays frozen, so expose the exact exit event
-            // now and wire the original fade-out before Level 1B is enabled.
+        if CP_NEXT.hits_player(x,y)&&self.fadeout_tick.is_none(){
+            // Original Level 1A exit: set gotoNext="level1b" and play root
+            // fadeout (symbol 34). Level 1B remains intentionally frozen,
+            // so native Rust stops on the final black frame after the exact
+            // 41-frame transition instead of entering the next stage.
             self.level1a_exit_reached=true;
+            self.fadeout_tick=Some(0);
+            self.player.dx=0.0;
+            self.player.dy=0.0;
         }
     }
 
