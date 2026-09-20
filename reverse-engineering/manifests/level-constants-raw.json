@@ -1,0 +1,1132 @@
+{
+  "level1a": {
+    "root_frame": 19,
+    "candidates": [
+      {
+        "offset": 401183,
+        "property": "playerWidth",
+        "value": 50
+      },
+      {
+        "offset": 401166,
+        "property": "playerHeight",
+        "value": 75
+      },
+      {
+        "offset": 401149,
+        "property": "playerStrength",
+        "value": 10
+      },
+      {
+        "offset": 401118,
+        "property": "playerHealth",
+        "value": 100
+      },
+      {
+        "offset": 401101,
+        "property": "playerLives",
+        "value": 3
+      },
+      {
+        "offset": 401014,
+        "property": "playerWalkSpeed",
+        "value": 6
+      },
+      {
+        "offset": 400997,
+        "property": "playerSpeed",
+        "value": 19
+      },
+      {
+        "offset": 400980,
+        "property": "playerDir",
+        "value": 1
+      },
+      {
+        "offset": 400959,
+        "property": "playerDy",
+        "value": 0.0
+      },
+      {
+        "offset": 400938,
+        "property": "playerDx",
+        "value": 0.0
+      },
+      {
+        "offset": 400917,
+        "property": "camOffset",
+        "value": 0.0
+      },
+      {
+        "offset": 400900,
+        "property": "camZoom",
+        "value": 100
+      },
+      {
+        "offset": 400883,
+        "property": "camMax",
+        "value": 7650
+      },
+      {
+        "offset": 400866,
+        "property": "camMin",
+        "value": -1350
+      },
+      {
+        "offset": 400845,
+        "property": "camJump",
+        "value": 1.25
+      },
+      {
+        "offset": 400828,
+        "property": "camHeight",
+        "value": 150
+      },
+      {
+        "offset": 400720,
+        "property": "globalGravity",
+        "value": 5
+      },
+      {
+        "offset": 400703,
+        "property": "gravity",
+        "value": 5
+      }
+    ]
+  },
+  "level1b": {
+    "root_frame": 20,
+    "candidates": [
+      {
+        "offset": 742600,
+        "property": "playerHealth",
+        "value": 100
+      },
+      {
+        "offset": 742527,
+        "property": "playerWidth",
+        "value": 50
+      },
+      {
+        "offset": 742510,
+        "property": "playerHeight",
+        "value": 75
+      },
+      {
+        "offset": 742493,
+        "property": "playerStrength",
+        "value": 10
+      },
+      {
+        "offset": 742462,
+        "property": "playerLives",
+        "value": 3
+      },
+      {
+        "offset": 742375,
+        "property": "playerWalkSpeed",
+        "value": 6
+      },
+      {
+        "offset": 742358,
+        "property": "playerSpeed",
+        "value": 19
+      },
+      {
+        "offset": 742341,
+        "property": "playerDir",
+        "value": -1
+      },
+      {
+        "offset": 742320,
+        "property": "playerDy",
+        "value": 0.0
+      },
+      {
+        "offset": 742299,
+        "property": "playerDx",
+        "value": 0.0
+      },
+      {
+        "offset": 742278,
+        "property": "camOffset",
+        "value": 0.0
+      },
+      {
+        "offset": 742261,
+        "property": "camZoom",
+        "value": 100
+      },
+      {
+        "offset": 742244,
+        "property": "camMax",
+        "value": 600
+      },
+      {
+        "offset": 742227,
+        "property": "camMin",
+        "value": -6220
+      },
+      {
+        "offset": 742210,
+        "property": "camJump",
+        "value": 3
+      },
+      {
+        "offset": 742193,
+        "property": "camHeight",
+        "value": 125
+      },
+      {
+        "offset": 742085,
+        "property": "globalGravity",
+        "value": 5
+      },
+      {
+        "offset": 742068,
+        "property": "gravity",
+        "value": 5
+      },
+      {
+        "offset": 741737,
+        "property": "strength",
+        "value": 10
+      },
+      {
+        "offset": 741505,
+        "property": "speed",
+        "value": 9
+      },
+      {
+        "offset": 741475,
+        "property": "strength",
+        "value": 5
+      },
+      {
+        "offset": 741445,
+        "property": "health",
+        "value": 32
+      }
+    ]
+  },
+  "level1c_penguin": {
+    "root_frame": 21,
+    "candidates": [
+      {
+        "offset": 872291,
+        "property": "playerWidth",
+        "value": 50
+      },
+      {
+        "offset": 872274,
+        "property": "playerHeight",
+        "value": 75
+      },
+      {
+        "offset": 872257,
+        "property": "playerStrength",
+        "value": 10
+      },
+      {
+        "offset": 872240,
+        "property": "playerHealth",
+        "value": 100
+      },
+      {
+        "offset": 872153,
+        "property": "playerLives",
+        "value": 3
+      },
+      {
+        "offset": 872052,
+        "property": "playerSpeed",
+        "value": 19
+      },
+      {
+        "offset": 872035,
+        "property": "playerDir",
+        "value": 1
+      },
+      {
+        "offset": 872014,
+        "property": "playerDy",
+        "value": 0.0
+      },
+      {
+        "offset": 871993,
+        "property": "playerDx",
+        "value": 0.0
+      },
+      {
+        "offset": 871976,
+        "property": "camZoom",
+        "value": 100
+      },
+      {
+        "offset": 871955,
+        "property": "camOffset",
+        "value": 0.0
+      },
+      {
+        "offset": 871938,
+        "property": "camMax",
+        "value": 2150
+      },
+      {
+        "offset": 871921,
+        "property": "camMin",
+        "value": 250
+      },
+      {
+        "offset": 871904,
+        "property": "camJump",
+        "value": 4
+      },
+      {
+        "offset": 871887,
+        "property": "camHeight",
+        "value": 270
+      },
+      {
+        "offset": 871779,
+        "property": "globalGravity",
+        "value": 5
+      },
+      {
+        "offset": 871762,
+        "property": "gravity",
+        "value": 5
+      },
+      {
+        "offset": 871406,
+        "property": "enemyHeight",
+        "value": 50
+      },
+      {
+        "offset": 871376,
+        "property": "stength",
+        "value": 5
+      },
+      {
+        "offset": 871342,
+        "property": "range",
+        "value": 0.0
+      },
+      {
+        "offset": 871312,
+        "property": "health",
+        "value": 200
+      },
+      {
+        "offset": 871198,
+        "property": "speed",
+        "value": 6
+      }
+    ]
+  },
+  "level2a": {
+    "root_frame": 23,
+    "candidates": [
+      {
+        "offset": 1073657,
+        "property": "playerHealth",
+        "value": 100
+      },
+      {
+        "offset": 1073584,
+        "property": "playerWidth",
+        "value": 50
+      },
+      {
+        "offset": 1073567,
+        "property": "playerHeight",
+        "value": 75
+      },
+      {
+        "offset": 1073550,
+        "property": "playerStrength",
+        "value": 10
+      },
+      {
+        "offset": 1073519,
+        "property": "playerLives",
+        "value": 3
+      },
+      {
+        "offset": 1073432,
+        "property": "playerWalkSpeed",
+        "value": 6
+      },
+      {
+        "offset": 1073415,
+        "property": "playerSpeed",
+        "value": 19
+      },
+      {
+        "offset": 1073398,
+        "property": "playerDir",
+        "value": -1
+      },
+      {
+        "offset": 1073381,
+        "property": "playerDy",
+        "value": 3
+      },
+      {
+        "offset": 1073360,
+        "property": "playerDx",
+        "value": 0.0
+      },
+      {
+        "offset": 1073339,
+        "property": "camOffset",
+        "value": 0.0
+      },
+      {
+        "offset": 1073322,
+        "property": "camZoom",
+        "value": 100
+      },
+      {
+        "offset": 1073305,
+        "property": "camMax",
+        "value": 55252
+      },
+      {
+        "offset": 1073288,
+        "property": "camMin",
+        "value": 200
+      },
+      {
+        "offset": 1073271,
+        "property": "camJump",
+        "value": 3
+      },
+      {
+        "offset": 1073254,
+        "property": "camHeight",
+        "value": 275
+      },
+      {
+        "offset": 1073146,
+        "property": "globalGravity",
+        "value": 5
+      },
+      {
+        "offset": 1073129,
+        "property": "gravity",
+        "value": 5
+      },
+      {
+        "offset": 1072904,
+        "property": "speed",
+        "value": 5
+      },
+      {
+        "offset": 1072874,
+        "property": "health",
+        "value": 30
+      },
+      {
+        "offset": 1072228,
+        "property": "speed",
+        "value": 6
+      },
+      {
+        "offset": 1072198,
+        "property": "strength",
+        "value": 10
+      },
+      {
+        "offset": 1072168,
+        "property": "health",
+        "value": 70
+      },
+      {
+        "offset": 1074550,
+        "property": "camHeight",
+        "value": 275
+      }
+    ]
+  },
+  "level2b": {
+    "root_frame": 25,
+    "candidates": [
+      {
+        "offset": 1294103,
+        "property": "playerHealth",
+        "value": 100
+      },
+      {
+        "offset": 1294030,
+        "property": "playerWidth",
+        "value": 50
+      },
+      {
+        "offset": 1294013,
+        "property": "playerHeight",
+        "value": 75
+      },
+      {
+        "offset": 1293996,
+        "property": "playerStrength",
+        "value": 10
+      },
+      {
+        "offset": 1293965,
+        "property": "playerLives",
+        "value": 3
+      },
+      {
+        "offset": 1293878,
+        "property": "playerWalkSpeed",
+        "value": 6
+      },
+      {
+        "offset": 1293861,
+        "property": "playerSpeed",
+        "value": 19
+      },
+      {
+        "offset": 1293844,
+        "property": "playerDir",
+        "value": 1
+      },
+      {
+        "offset": 1293827,
+        "property": "playerDy",
+        "value": 3
+      },
+      {
+        "offset": 1293806,
+        "property": "playerDx",
+        "value": 0.0
+      },
+      {
+        "offset": 1293785,
+        "property": "camOffset",
+        "value": 0.0
+      },
+      {
+        "offset": 1293768,
+        "property": "camZoom",
+        "value": 100
+      },
+      {
+        "offset": 1293751,
+        "property": "camMax",
+        "value": 55252
+      },
+      {
+        "offset": 1293734,
+        "property": "camMin",
+        "value": 250
+      },
+      {
+        "offset": 1293717,
+        "property": "camJump",
+        "value": 3
+      },
+      {
+        "offset": 1293700,
+        "property": "camHeight",
+        "value": 275
+      },
+      {
+        "offset": 1293592,
+        "property": "globalGravity",
+        "value": 5
+      },
+      {
+        "offset": 1293575,
+        "property": "gravity",
+        "value": 5
+      },
+      {
+        "offset": 1293350,
+        "property": "speed",
+        "value": 5
+      },
+      {
+        "offset": 1293320,
+        "property": "health",
+        "value": 30
+      },
+      {
+        "offset": 1295123,
+        "property": "camHeight",
+        "value": 275
+      }
+    ]
+  },
+  "level3a": {
+    "root_frame": 27,
+    "candidates": [
+      {
+        "offset": 1406062,
+        "property": "playerHealth",
+        "value": 100
+      },
+      {
+        "offset": 1405989,
+        "property": "playerWidth",
+        "value": 50
+      },
+      {
+        "offset": 1405972,
+        "property": "playerHeight",
+        "value": 75
+      },
+      {
+        "offset": 1405955,
+        "property": "playerStrength",
+        "value": 10
+      },
+      {
+        "offset": 1405924,
+        "property": "playerLives",
+        "value": 3
+      },
+      {
+        "offset": 1405837,
+        "property": "playerWalkSpeed",
+        "value": 6
+      },
+      {
+        "offset": 1405820,
+        "property": "playerSpeed",
+        "value": 19
+      },
+      {
+        "offset": 1405803,
+        "property": "playerDir",
+        "value": 1
+      },
+      {
+        "offset": 1405786,
+        "property": "playerDy",
+        "value": 3
+      },
+      {
+        "offset": 1405765,
+        "property": "playerDx",
+        "value": 0.0
+      },
+      {
+        "offset": 1405744,
+        "property": "camOffset",
+        "value": 0.0
+      },
+      {
+        "offset": 1405727,
+        "property": "camZoom",
+        "value": 100
+      },
+      {
+        "offset": 1405710,
+        "property": "camMax",
+        "value": 50000
+      },
+      {
+        "offset": 1405693,
+        "property": "camMin",
+        "value": 240
+      },
+      {
+        "offset": 1405676,
+        "property": "camJump",
+        "value": 3
+      },
+      {
+        "offset": 1405659,
+        "property": "camHeight",
+        "value": -45
+      },
+      {
+        "offset": 1405555,
+        "property": "globalGravity",
+        "value": 5
+      },
+      {
+        "offset": 1405538,
+        "property": "gravity",
+        "value": 5
+      },
+      {
+        "offset": 1404624,
+        "property": "speed",
+        "value": 6
+      },
+      {
+        "offset": 1404594,
+        "property": "strength",
+        "value": 11
+      },
+      {
+        "offset": 1404564,
+        "property": "health",
+        "value": 75
+      },
+      {
+        "offset": 1404332,
+        "property": "speed",
+        "value": 12
+      },
+      {
+        "offset": 1404302,
+        "property": "strength",
+        "value": 8
+      },
+      {
+        "offset": 1404272,
+        "property": "health",
+        "value": 75
+      },
+      {
+        "offset": 1407472,
+        "property": "camHeight",
+        "value": 3750
+      },
+      {
+        "offset": 1407310,
+        "property": "camHeight",
+        "value": 275
+      },
+      {
+        "offset": 1407193,
+        "property": "camHeight",
+        "value": -45
+      }
+    ]
+  },
+  "level3b_kabuki": {
+    "root_frame": 28,
+    "candidates": [
+      {
+        "offset": 1686008,
+        "property": "playerHealth",
+        "value": 100
+      },
+      {
+        "offset": 1685935,
+        "property": "playerWidth",
+        "value": 50
+      },
+      {
+        "offset": 1685918,
+        "property": "playerHeight",
+        "value": 75
+      },
+      {
+        "offset": 1685901,
+        "property": "playerStrength",
+        "value": 10
+      },
+      {
+        "offset": 1685870,
+        "property": "playerLives",
+        "value": 3
+      },
+      {
+        "offset": 1685783,
+        "property": "playerWalkSpeed",
+        "value": 8
+      },
+      {
+        "offset": 1685766,
+        "property": "playerSpeed",
+        "value": 19
+      },
+      {
+        "offset": 1685749,
+        "property": "playerDir",
+        "value": 1
+      },
+      {
+        "offset": 1685732,
+        "property": "playerDy",
+        "value": 3
+      },
+      {
+        "offset": 1685711,
+        "property": "playerDx",
+        "value": 0.0
+      },
+      {
+        "offset": 1685690,
+        "property": "camOffset",
+        "value": 0.0
+      },
+      {
+        "offset": 1685673,
+        "property": "camZoom",
+        "value": 100
+      },
+      {
+        "offset": 1685656,
+        "property": "camMax",
+        "value": 600
+      },
+      {
+        "offset": 1685639,
+        "property": "camMin",
+        "value": 340
+      },
+      {
+        "offset": 1685622,
+        "property": "camJump",
+        "value": 3
+      },
+      {
+        "offset": 1685605,
+        "property": "camHeight",
+        "value": -10
+      },
+      {
+        "offset": 1685497,
+        "property": "globalGravity",
+        "value": 5
+      },
+      {
+        "offset": 1685480,
+        "property": "gravity",
+        "value": 5
+      },
+      {
+        "offset": 1685249,
+        "property": "enemyHeight",
+        "value": 50
+      },
+      {
+        "offset": 1685220,
+        "property": "range",
+        "value": 0.0
+      },
+      {
+        "offset": 1685195,
+        "property": "strength",
+        "value": 12
+      },
+      {
+        "offset": 1685170,
+        "property": "health",
+        "value": 300
+      },
+      {
+        "offset": 1685145,
+        "property": "xMin",
+        "value": 300
+      },
+      {
+        "offset": 1685120,
+        "property": "xMax",
+        "value": 800
+      },
+      {
+        "offset": 1684964,
+        "property": "speed",
+        "value": 17
+      },
+      {
+        "offset": 1684530,
+        "property": "enemyHeight",
+        "value": 50
+      },
+      {
+        "offset": 1684496,
+        "property": "range",
+        "value": 0.0
+      },
+      {
+        "offset": 1684466,
+        "property": "strength",
+        "value": 12
+      },
+      {
+        "offset": 1684436,
+        "property": "health",
+        "value": 300
+      },
+      {
+        "offset": 1684406,
+        "property": "xMin",
+        "value": 300
+      },
+      {
+        "offset": 1684376,
+        "property": "xMax",
+        "value": 800
+      },
+      {
+        "offset": 1684185,
+        "property": "speed",
+        "value": 11
+      }
+    ]
+  },
+  "level4a": {
+    "root_frame": 30,
+    "candidates": [
+      {
+        "offset": 1875965,
+        "property": "playerHealth",
+        "value": 100
+      },
+      {
+        "offset": 1875892,
+        "property": "playerWidth",
+        "value": 50
+      },
+      {
+        "offset": 1875875,
+        "property": "playerHeight",
+        "value": 75
+      },
+      {
+        "offset": 1875858,
+        "property": "playerStrength",
+        "value": 10
+      },
+      {
+        "offset": 1875827,
+        "property": "playerLives",
+        "value": 3
+      },
+      {
+        "offset": 1875740,
+        "property": "playerWalkSpeed",
+        "value": 6
+      },
+      {
+        "offset": 1875723,
+        "property": "playerSpeed",
+        "value": 19
+      },
+      {
+        "offset": 1875706,
+        "property": "playerDir",
+        "value": 1
+      },
+      {
+        "offset": 1875689,
+        "property": "playerDy",
+        "value": 3
+      },
+      {
+        "offset": 1875668,
+        "property": "playerDx",
+        "value": 0.0
+      },
+      {
+        "offset": 1875647,
+        "property": "camOffset",
+        "value": 0.0
+      },
+      {
+        "offset": 1875630,
+        "property": "camZoom",
+        "value": 100
+      },
+      {
+        "offset": 1875613,
+        "property": "camMax",
+        "value": 1700
+      },
+      {
+        "offset": 1875596,
+        "property": "camMin",
+        "value": 150
+      },
+      {
+        "offset": 1875579,
+        "property": "camJump",
+        "value": 3
+      },
+      {
+        "offset": 1875562,
+        "property": "camHeight",
+        "value": 600
+      },
+      {
+        "offset": 1875454,
+        "property": "globalGravity",
+        "value": 5
+      },
+      {
+        "offset": 1875437,
+        "property": "gravity",
+        "value": 5
+      },
+      {
+        "offset": 1875058,
+        "property": "speed",
+        "value": 5
+      },
+      {
+        "offset": 1875028,
+        "property": "health",
+        "value": 20
+      },
+      {
+        "offset": 1874796,
+        "property": "speed",
+        "value": 12
+      },
+      {
+        "offset": 1874766,
+        "property": "strength",
+        "value": 7
+      },
+      {
+        "offset": 1874736,
+        "property": "health",
+        "value": 72
+      },
+      {
+        "offset": 1874434,
+        "property": "speed",
+        "value": 9
+      },
+      {
+        "offset": 1874404,
+        "property": "strength",
+        "value": 8
+      },
+      {
+        "offset": 1874374,
+        "property": "health",
+        "value": 64
+      }
+    ]
+  },
+  "level4b_cobblebot": {
+    "root_frame": 31,
+    "candidates": [
+      {
+        "offset": 2308059,
+        "property": "playerHealth",
+        "value": 100
+      },
+      {
+        "offset": 2307986,
+        "property": "playerWidth",
+        "value": 50
+      },
+      {
+        "offset": 2307969,
+        "property": "playerHeight",
+        "value": 75
+      },
+      {
+        "offset": 2307952,
+        "property": "playerStrength",
+        "value": 10
+      },
+      {
+        "offset": 2307921,
+        "property": "playerLives",
+        "value": 3
+      },
+      {
+        "offset": 2307834,
+        "property": "playerWalkSpeed",
+        "value": 6
+      },
+      {
+        "offset": 2307817,
+        "property": "playerSpeed",
+        "value": 19
+      },
+      {
+        "offset": 2307800,
+        "property": "playerDir",
+        "value": 1
+      },
+      {
+        "offset": 2307783,
+        "property": "playerDy",
+        "value": 3
+      },
+      {
+        "offset": 2307762,
+        "property": "playerDx",
+        "value": 0.0
+      },
+      {
+        "offset": 2307741,
+        "property": "camOffset",
+        "value": 0.0
+      },
+      {
+        "offset": 2307724,
+        "property": "camZoom",
+        "value": 100
+      },
+      {
+        "offset": 2307707,
+        "property": "camMax",
+        "value": 550
+      },
+      {
+        "offset": 2307690,
+        "property": "camMin",
+        "value": 180
+      },
+      {
+        "offset": 2307673,
+        "property": "camJump",
+        "value": 3
+      },
+      {
+        "offset": 2307656,
+        "property": "camHeight",
+        "value": 550
+      },
+      {
+        "offset": 2307529,
+        "property": "globalGravity",
+        "value": 5
+      },
+      {
+        "offset": 2307512,
+        "property": "gravity",
+        "value": 5
+      },
+      {
+        "offset": 2307210,
+        "property": "enemyHeight",
+        "value": 200
+      },
+      {
+        "offset": 2307176,
+        "property": "range",
+        "value": 0.0
+      },
+      {
+        "offset": 2307146,
+        "property": "strength",
+        "value": 15
+      },
+      {
+        "offset": 2307116,
+        "property": "health",
+        "value": 225
+      },
+      {
+        "offset": 2307086,
+        "property": "xMin",
+        "value": 300
+      },
+      {
+        "offset": 2307056,
+        "property": "xMax",
+        "value": 800
+      },
+      {
+        "offset": 2306969,
+        "property": "speed",
+        "value": 5
+      }
+    ]
+  }
+}

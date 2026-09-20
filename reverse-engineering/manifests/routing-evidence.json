@@ -1,0 +1,598 @@
+[
+  {
+    "context": "root",
+    "frame": 15,
+    "tag_offset": 103551,
+    "action_offset": 104061,
+    "values": [
+      2,
+      "gotoLast"
+    ]
+  },
+  {
+    "context": "root",
+    "frame": 15,
+    "tag_offset": 103551,
+    "action_offset": 104040,
+    "values": [
+      2,
+      "gotoLast"
+    ]
+  },
+  {
+    "context": "root",
+    "frame": 15,
+    "tag_offset": 107196,
+    "action_offset": 108203,
+    "values": [
+      2,
+      "gotoNext",
+      "gameover"
+    ]
+  },
+  {
+    "context": "root",
+    "frame": 15,
+    "tag_offset": 107196,
+    "action_offset": 108193,
+    "values": [
+      2,
+      "gotoLast",
+      "start"
+    ]
+  },
+  {
+    "context": "root",
+    "frame": 15,
+    "tag_offset": 107196,
+    "action_offset": 108178,
+    "values": [
+      2,
+      "gotoNext",
+      "continue"
+    ]
+  },
+  {
+    "context": "root",
+    "frame": 15,
+    "tag_offset": 123725,
+    "action_offset": 128128,
+    "values": [
+      2,
+      "gotoNext",
+      "card:escape"
+    ]
+  },
+  {
+    "context": "root",
+    "frame": 15,
+    "tag_offset": 123725,
+    "action_offset": 128118,
+    "values": [
+      2,
+      "gotoLast",
+      "start"
+    ]
+  },
+  {
+    "context": "root",
+    "frame": 15,
+    "tag_offset": 134871,
+    "action_offset": 141967,
+    "values": [
+      2,
+      "gotoNext",
+      "card:end"
+    ]
+  },
+  {
+    "context": "root",
+    "frame": 15,
+    "tag_offset": 144695,
+    "action_offset": 146625,
+    "values": [
+      1,
+      "gotoNext",
+      "level1c"
+    ]
+  },
+  {
+    "context": "root",
+    "frame": 15,
+    "tag_offset": 144695,
+    "action_offset": 145846,
+    "values": [
+      1,
+      "gotoNext",
+      "level4b"
+    ]
+  },
+  {
+    "context": "root",
+    "frame": 15,
+    "tag_offset": 149288,
+    "action_offset": 149980,
+    "values": [
+      2,
+      "gotoNext",
+      "continue"
+    ]
+  },
+  {
+    "context": "root",
+    "frame": 15,
+    "tag_offset": 149288,
+    "action_offset": 149951,
+    "values": [
+      2,
+      "gotoLast",
+      "start"
+    ]
+  },
+  {
+    "context": "root",
+    "frame": 15,
+    "tag_offset": 149288,
+    "action_offset": 149941,
+    "values": [
+      2,
+      "gotoNext",
+      "gameover"
+    ]
+  },
+  {
+    "context": "root",
+    "frame": 15,
+    "tag_offset": 149288,
+    "action_offset": 149628,
+    "values": [
+      2,
+      "gotoLast",
+      "start"
+    ]
+  },
+  {
+    "context": "root",
+    "frame": 15,
+    "tag_offset": 149288,
+    "action_offset": 149618,
+    "values": [
+      2,
+      "gotoNext",
+      "gameover"
+    ]
+  },
+  {
+    "context": "root",
+    "frame": 15,
+    "tag_offset": 149288,
+    "action_offset": 149603,
+    "values": [
+      2,
+      "gotoNext",
+      "continue"
+    ]
+  },
+  {
+    "context": "root",
+    "frame": 16,
+    "tag_offset": 153049,
+    "action_offset": 155059,
+    "values": [
+      1,
+      "gotoNext",
+      "card:end"
+    ]
+  },
+  {
+    "context": "root",
+    "frame": 16,
+    "tag_offset": 153049,
+    "action_offset": 155002,
+    "values": [
+      1,
+      "gotoNext",
+      "card:mansion"
+    ]
+  },
+  {
+    "context": "root",
+    "frame": 16,
+    "tag_offset": 153049,
+    "action_offset": 154945,
+    "values": [
+      1,
+      "gotoNext",
+      "card:kabuki"
+    ]
+  },
+  {
+    "context": "root",
+    "frame": 16,
+    "tag_offset": 153049,
+    "action_offset": 154888,
+    "values": [
+      1,
+      "gotoNext",
+      "card:tv"
+    ]
+  },
+  {
+    "context": "root",
+    "frame": 16,
+    "tag_offset": 153049,
+    "action_offset": 154831,
+    "values": [
+      1,
+      "gotoNext",
+      "card:escape"
+    ]
+  },
+  {
+    "context": "root",
+    "frame": 16,
+    "tag_offset": 153049,
+    "action_offset": 154774,
+    "values": [
+      1,
+      "gotoNext",
+      "intro"
+    ]
+  },
+  {
+    "context": "root",
+    "frame": 16,
+    "tag_offset": 153049,
+    "action_offset": 154719,
+    "values": [
+      1,
+      "gotoNext",
+      "level4b"
+    ]
+  },
+  {
+    "context": "root",
+    "frame": 16,
+    "tag_offset": 153049,
+    "action_offset": 154664,
+    "values": [
+      1,
+      "gotoNext",
+      "level4a"
+    ]
+  },
+  {
+    "context": "root",
+    "frame": 16,
+    "tag_offset": 153049,
+    "action_offset": 154609,
+    "values": [
+      1,
+      "gotoNext",
+      "level3b"
+    ]
+  },
+  {
+    "context": "root",
+    "frame": 16,
+    "tag_offset": 153049,
+    "action_offset": 154554,
+    "values": [
+      1,
+      "gotoNext",
+      "level3a"
+    ]
+  },
+  {
+    "context": "root",
+    "frame": 16,
+    "tag_offset": 153049,
+    "action_offset": 154499,
+    "values": [
+      1,
+      "gotoNext",
+      "level2b"
+    ]
+  },
+  {
+    "context": "root",
+    "frame": 16,
+    "tag_offset": 153049,
+    "action_offset": 154444,
+    "values": [
+      1,
+      "gotoNext",
+      "level2a"
+    ]
+  },
+  {
+    "context": "root",
+    "frame": 16,
+    "tag_offset": 153049,
+    "action_offset": 154389,
+    "values": [
+      1,
+      "gotoNext",
+      "level1c"
+    ]
+  },
+  {
+    "context": "root",
+    "frame": 16,
+    "tag_offset": 153049,
+    "action_offset": 154334,
+    "values": [
+      1,
+      "gotoNext",
+      "level1b"
+    ]
+  },
+  {
+    "context": "root",
+    "frame": 16,
+    "tag_offset": 153049,
+    "action_offset": 154279,
+    "values": [
+      1,
+      "gotoNext",
+      "level1a"
+    ]
+  },
+  {
+    "context": "root",
+    "frame": 16,
+    "tag_offset": 153049,
+    "action_offset": 154224,
+    "values": [
+      1,
+      "gotoNext",
+      "instructions"
+    ]
+  },
+  {
+    "context": "root",
+    "frame": 16,
+    "tag_offset": 153049,
+    "action_offset": 154117,
+    "values": [
+      1,
+      "gotoNext",
+      "intro"
+    ]
+  },
+  {
+    "context": "sprite:34",
+    "frame": 40,
+    "tag_offset": 1099,
+    "action_offset": 1543,
+    "values": [
+      "gotoNext"
+    ]
+  },
+  {
+    "context": "root",
+    "frame": 19,
+    "tag_offset": 399949,
+    "action_offset": 400793,
+    "values": [
+      "gotoLast",
+      "level1a"
+    ]
+  },
+  {
+    "context": "root",
+    "frame": 19,
+    "tag_offset": 401299,
+    "action_offset": 402595,
+    "values": [
+      2,
+      "gotoNext",
+      "level1b"
+    ]
+  },
+  {
+    "context": "root",
+    "frame": 20,
+    "tag_offset": 740341,
+    "action_offset": 742158,
+    "values": [
+      "gotoLast",
+      "level1b"
+    ]
+  },
+  {
+    "context": "root",
+    "frame": 21,
+    "tag_offset": 870309,
+    "action_offset": 871852,
+    "values": [
+      "gotoLast",
+      "level1c"
+    ]
+  },
+  {
+    "context": "sprite:1267",
+    "frame": 224,
+    "tag_offset": 15280,
+    "action_offset": 15334,
+    "values": [
+      "gotoNext",
+      "level2a"
+    ]
+  },
+  {
+    "context": "root",
+    "frame": 23,
+    "tag_offset": 1071146,
+    "action_offset": 1073219,
+    "values": [
+      "gotoLast",
+      "level2a"
+    ]
+  },
+  {
+    "context": "root",
+    "frame": 23,
+    "tag_offset": 1073787,
+    "action_offset": 1074412,
+    "values": [
+      2,
+      "gotoNext",
+      "card:tv"
+    ]
+  },
+  {
+    "context": "sprite:1479",
+    "frame": 151,
+    "tag_offset": 23011,
+    "action_offset": 23064,
+    "values": [
+      "gotoNext",
+      "level2b"
+    ]
+  },
+  {
+    "context": "root",
+    "frame": 25,
+    "tag_offset": 1291875,
+    "action_offset": 1293665,
+    "values": [
+      "gotoLast",
+      "level2b"
+    ]
+  },
+  {
+    "context": "root",
+    "frame": 25,
+    "tag_offset": 1294233,
+    "action_offset": 1294687,
+    "values": [
+      2,
+      "gotoNext",
+      "card:kabuki"
+    ]
+  },
+  {
+    "context": "sprite:1569",
+    "frame": 159,
+    "tag_offset": 20115,
+    "action_offset": 20168,
+    "values": [
+      "gotoNext",
+      "level3a"
+    ]
+  },
+  {
+    "context": "root",
+    "frame": 27,
+    "tag_offset": 1403305,
+    "action_offset": 1405628,
+    "values": [
+      "gotoLast",
+      "level3a"
+    ]
+  },
+  {
+    "context": "root",
+    "frame": 27,
+    "tag_offset": 1406192,
+    "action_offset": 1406678,
+    "values": [
+      2,
+      "gotoNext",
+      "level3b"
+    ]
+  },
+  {
+    "context": "root",
+    "frame": 28,
+    "tag_offset": 1683148,
+    "action_offset": 1685570,
+    "values": [
+      "gotoLast",
+      "level3b"
+    ]
+  },
+  {
+    "context": "root",
+    "frame": 28,
+    "tag_offset": 1683148,
+    "action_offset": 1685438,
+    "values": [
+      1,
+      "gotoNext",
+      "card:mansion"
+    ]
+  },
+  {
+    "context": "root",
+    "frame": 28,
+    "tag_offset": 1686138,
+    "action_offset": 1686380,
+    "values": [
+      2,
+      "gotoNext",
+      "card:bank"
+    ]
+  },
+  {
+    "context": "sprite:1947",
+    "frame": 115,
+    "tag_offset": 27929,
+    "action_offset": 27982,
+    "values": [
+      "gotoNext",
+      "level4a"
+    ]
+  },
+  {
+    "context": "root",
+    "frame": 30,
+    "tag_offset": 1873246,
+    "action_offset": 1875527,
+    "values": [
+      "gotoLast",
+      "level4a"
+    ]
+  },
+  {
+    "context": "root",
+    "frame": 31,
+    "tag_offset": 2306068,
+    "action_offset": 2307602,
+    "values": [
+      "gotoLast",
+      "level4b"
+    ]
+  },
+  {
+    "context": "root",
+    "frame": 31,
+    "tag_offset": 2308189,
+    "action_offset": 2308431,
+    "values": [
+      2,
+      "gotoNext",
+      "card:bank"
+    ]
+  },
+  {
+    "context": "sprite:2216",
+    "frame": 198,
+    "tag_offset": 85894,
+    "action_offset": 85945,
+    "values": [
+      "gotoNext",
+      "start"
+    ]
+  },
+  {
+    "context": "sprite:2226",
+    "frame": 45,
+    "tag_offset": 309,
+    "action_offset": 355,
+    "values": [
+      "gotoLast"
+    ]
+  }
+]

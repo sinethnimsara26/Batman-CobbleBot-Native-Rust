@@ -1,0 +1,11 @@
+{
+  "level1a": {"root_frame":19,"game_symbol":696,"level_symbol":152,"ground_symbol":151,"camera":{"height":150,"jump":1.25,"min":-1350,"max":7650},"entities":{"checkpoints":7,"item_br":7}},
+  "level1b": {"root_frame":20,"game_symbol":1075,"level_symbol":783,"ground_symbol":782,"camera":{"height":125,"jump":3,"min":-6220,"max":600},"entities":{"goon":10,"biker":1,"checkpoints":3,"can":4,"trash":4,"mailbox":1}},
+  "level1c_penguin": {"root_frame":21,"game_symbol":1251,"level_symbol":1095,"ground_symbol":1094,"camera":{"height":270,"jump":4,"min":250,"max":2150},"entities":{"penguin":1}},
+  "level2a": {"root_frame":23,"game_symbol":1402,"level_symbol":1317,"ground_symbol":1316,"camera":{"height":275,"jump":3,"min":200,"max":55252},"entities":{"goon":9,"eagle":1,"door":18,"elevator":3,"camera_trigger":10,"checkpoints":4}},
+  "level2b": {"root_frame":25,"game_symbol":1496,"level_symbol":1485,"ground_symbol":1484,"camera":{"height":275,"jump":3,"min":250,"max":55252},"entities":{"door":16,"elevator":3,"camera_trigger":10,"checkpoints":4,"lava":1,"clock":1}},
+  "level3a": {"root_frame":27,"game_symbol":1779,"level_symbol":1665,"ground_symbol":1664,"camera":{"height":-45,"jump":3,"min":240,"max":50000},"entities":{"fatgoon":7,"goon":6,"belt":3,"lift":8,"stomp":2,"lava":10,"checkpoints":12}},
+  "level3b_kabuki": {"root_frame":28,"game_symbol":1922,"level_symbol":1812,"ground_symbol":1811,"camera":{"height":-10,"jump":3,"min":340,"max":600},"entities":{"kabuki":2,"highway":1},"player_symbol":1862,"player_walk_speed":8},
+  "level4a": {"root_frame":30,"game_symbol":2040,"level_symbol":1962,"ground_symbol":1961,"camera":{"height":600,"jump":3,"min":150,"max":1700},"entities":{"goon":1,"maid":2,"eagle":1,"light":3,"checkpoints":1}},
+  "level4b_cobblebot": {"root_frame":31,"game_symbol":2141,"level_symbol":2051,"ground_symbol":2050,"camera":{"height":550,"jump":3,"min":180,"max":550},"entities":{"cobblebot":1,"cage":4,"checkpoints":1}}
+}

@@ -1,0 +1,2068 @@
+[
+  {
+    "depth": 1,
+    "flags": 6,
+    "character_id": 14,
+    "matrix": {
+      "sx": 0.9918212890625,
+      "sy": 3.38983154296875,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 300.0,
+      "ty": 200.05
+    },
+    "frame": 0
+  },
+  {
+    "depth": 2,
+    "flags": 38,
+    "character_id": 20,
+    "matrix": {
+      "sx": 0.7245025634765625,
+      "sy": 0.7242279052734375,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 177.95,
+      "ty": -31.8
+    },
+    "name": "loader",
+    "frame": 0
+  },
+  {
+    "depth": 26,
+    "flags": 22,
+    "character_id": 21,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 300.0,
+      "ty": 200.05
+    },
+    "ratio": 1,
+    "frame": 1
+  },
+  {
+    "depth": 1,
+    "flags": 7,
+    "character_id": 23,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 0.0,
+      "ty": 0.0
+    },
+    "frame": 16
+  },
+  {
+    "depth": 2,
+    "flags": 6,
+    "character_id": 24,
+    "matrix": {
+      "sx": 0.5924530029296875,
+      "sy": 0.472320556640625,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 500.3,
+      "ty": 355.6
+    },
+    "frame": 16
+  },
+  {
+    "depth": 3,
+    "flags": 6,
+    "character_id": 24,
+    "matrix": {
+      "sx": 0.6850433349609375,
+      "sy": 0.472320556640625,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 499.3,
+      "ty": 386.55
+    },
+    "frame": 16
+  },
+  {
+    "depth": 4,
+    "flags": 54,
+    "character_id": 29,
+    "matrix": {
+      "sx": 0.5831298828125,
+      "sy": 0.5831298828125,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 499.1,
+      "ty": 345.6
+    },
+    "ratio": 16,
+    "name": "startGame",
+    "frame": 16
+  },
+  {
+    "depth": 6,
+    "flags": 54,
+    "character_id": 32,
+    "matrix": {
+      "sx": 0.5831298828125,
+      "sy": 0.5831298828125,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 499.4,
+      "ty": 376.15
+    },
+    "ratio": 16,
+    "name": "instructions",
+    "frame": 16
+  },
+  {
+    "depth": 8,
+    "flags": 54,
+    "character_id": 34,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 301.0,
+      "ty": 205.0
+    },
+    "ratio": 16,
+    "name": "fadeout",
+    "frame": 16
+  },
+  {
+    "depth": 14,
+    "flags": 22,
+    "character_id": 35,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 300.0,
+      "ty": 200.05
+    },
+    "ratio": 16,
+    "frame": 16
+  },
+  {
+    "depth": 1,
+    "flags": 3,
+    "character_id": 38,
+    "frame": 17
+  },
+  {
+    "depth": 2,
+    "flags": 5,
+    "matrix": {
+      "sx": 0.696044921875,
+      "sy": 0.52972412109375,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 103.85,
+      "ty": 374.95
+    },
+    "frame": 17
+  },
+  {
+    "depth": 3,
+    "flags": 22,
+    "character_id": 39,
+    "matrix": {
+      "sx": 0.6669769287109375,
+      "sy": 0.6669769287109375,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 103.2,
+      "ty": 363.8
+    },
+    "ratio": 17,
+    "frame": 17
+  },
+  {
+    "depth": 5,
+    "flags": 54,
+    "character_id": 34,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 301.0,
+      "ty": 205.0
+    },
+    "ratio": 17,
+    "name": "fadeout",
+    "frame": 17
+  },
+  {
+    "depth": 11,
+    "flags": 22,
+    "character_id": 35,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 300.0,
+      "ty": 200.05
+    },
+    "ratio": 17,
+    "frame": 17
+  },
+  {
+    "depth": 1,
+    "flags": 3,
+    "character_id": 40,
+    "frame": 18
+  },
+  {
+    "depth": 2,
+    "flags": 22,
+    "character_id": 122,
+    "matrix": {
+      "sx": 1.08941650390625,
+      "sy": 1.08941650390625,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 167.95,
+      "ty": 203.45
+    },
+    "ratio": 18,
+    "frame": 18
+  },
+  {
+    "depth": 213,
+    "flags": 22,
+    "character_id": 123,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 299.45,
+      "ty": 199.5
+    },
+    "ratio": 18,
+    "frame": 18
+  },
+  {
+    "depth": 216,
+    "flags": 22,
+    "character_id": 126,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 216.3,
+      "ty": 286.5
+    },
+    "ratio": 18,
+    "frame": 18
+  },
+  {
+    "depth": 219,
+    "flags": 22,
+    "character_id": 129,
+    "matrix": {
+      "sx": 0.8740081787109375,
+      "sy": 0.8740081787109375,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 528.75,
+      "ty": 372.15
+    },
+    "ratio": 18,
+    "frame": 18
+  },
+  {
+    "depth": 221,
+    "flags": 6,
+    "character_id": 24,
+    "matrix": {
+      "sx": 0.3158416748046875,
+      "sy": 0.446258544921875,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 546.5,
+      "ty": 385.5
+    },
+    "frame": 18
+  },
+  {
+    "depth": 222,
+    "flags": 54,
+    "character_id": 34,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 301.0,
+      "ty": 205.0
+    },
+    "ratio": 18,
+    "name": "fadeout",
+    "frame": 18
+  },
+  {
+    "depth": 228,
+    "flags": 22,
+    "character_id": 35,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 300.0,
+      "ty": 200.05
+    },
+    "ratio": 18,
+    "frame": 18
+  },
+  {
+    "depth": 1,
+    "flags": 3,
+    "character_id": 131,
+    "frame": 19
+  },
+  {
+    "depth": 2,
+    "flags": 22,
+    "character_id": 134,
+    "matrix": {
+      "sx": 0.76934814453125,
+      "sy": 0.76934814453125,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 300.0,
+      "ty": 130.0
+    },
+    "ratio": 19,
+    "frame": 19
+  },
+  {
+    "depth": 4,
+    "flags": 54,
+    "character_id": 696,
+    "matrix": {
+      "sx": 1.000030517578125,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 26.1,
+      "ty": 15.95
+    },
+    "ratio": 19,
+    "name": "game",
+    "frame": 19
+  },
+  {
+    "depth": 1443,
+    "flags": 54,
+    "character_id": 716,
+    "matrix": {
+      "sx": 0.99981689453125,
+      "sy": 1.001190185546875,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 159.0,
+      "ty": -11.0
+    },
+    "ratio": 19,
+    "name": "HUD",
+    "frame": 19
+  },
+  {
+    "depth": 1490,
+    "flags": 54,
+    "character_id": 737,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 311.4,
+      "ty": 190.0
+    },
+    "ratio": 19,
+    "name": "overlay",
+    "frame": 19
+  },
+  {
+    "depth": 1497,
+    "flags": 54,
+    "character_id": 746,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 318.7,
+      "ty": 76.75
+    },
+    "ratio": 19,
+    "name": "levelTitle",
+    "frame": 19
+  },
+  {
+    "depth": 1502,
+    "flags": 54,
+    "character_id": 747,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 301.0,
+      "ty": 205.0
+    },
+    "ratio": 19,
+    "name": "fadein",
+    "frame": 19
+  },
+  {
+    "depth": 1508,
+    "flags": 54,
+    "character_id": 34,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 301.0,
+      "ty": 205.0
+    },
+    "ratio": 19,
+    "name": "fadeout",
+    "frame": 19
+  },
+  {
+    "depth": 1514,
+    "flags": 150,
+    "character_id": 750,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 304.2,
+      "ty": 37.95
+    },
+    "ratio": 19,
+    "frame": 19
+  },
+  {
+    "depth": 2,
+    "flags": 22,
+    "character_id": 134,
+    "matrix": {
+      "sx": 0.76934814453125,
+      "sy": 0.76934814453125,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 300.0,
+      "ty": 130.0
+    },
+    "ratio": 20,
+    "frame": 20
+  },
+  {
+    "depth": 4,
+    "flags": 54,
+    "character_id": 1075,
+    "matrix": {
+      "sx": 1.000030517578125,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 0.2,
+      "ty": 15.95
+    },
+    "ratio": 20,
+    "name": "game",
+    "frame": 20
+  },
+  {
+    "depth": 1281,
+    "flags": 54,
+    "character_id": 716,
+    "matrix": {
+      "sx": 0.99981689453125,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 159.0,
+      "ty": -11.0
+    },
+    "ratio": 20,
+    "name": "HUD",
+    "frame": 20
+  },
+  {
+    "depth": 1328,
+    "flags": 54,
+    "character_id": 737,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 311.4,
+      "ty": 190.0
+    },
+    "ratio": 20,
+    "name": "overlay",
+    "frame": 20
+  },
+  {
+    "depth": 1335,
+    "flags": 54,
+    "character_id": 747,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 301.0,
+      "ty": 205.0
+    },
+    "ratio": 20,
+    "name": "fadein",
+    "frame": 20
+  },
+  {
+    "depth": 1341,
+    "flags": 54,
+    "character_id": 34,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 301.0,
+      "ty": 205.0
+    },
+    "ratio": 20,
+    "name": "fadeout",
+    "frame": 20
+  },
+  {
+    "depth": 1347,
+    "flags": 150,
+    "character_id": 750,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 304.2,
+      "ty": 37.95
+    },
+    "ratio": 20,
+    "frame": 20
+  },
+  {
+    "depth": 2,
+    "flags": 22,
+    "character_id": 134,
+    "matrix": {
+      "sx": 0.76934814453125,
+      "sy": 0.76934814453125,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 300.0,
+      "ty": 130.0
+    },
+    "ratio": 21,
+    "frame": 21
+  },
+  {
+    "depth": 4,
+    "flags": 54,
+    "character_id": 1251,
+    "matrix": {
+      "sx": 1.000030517578125,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 0.2,
+      "ty": 15.95
+    },
+    "ratio": 21,
+    "name": "game",
+    "frame": 21
+  },
+  {
+    "depth": 254,
+    "flags": 54,
+    "character_id": 716,
+    "matrix": {
+      "sx": 0.8636322021484375,
+      "sy": 0.863800048828125,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 159.0,
+      "ty": -11.0
+    },
+    "ratio": 21,
+    "name": "HUD",
+    "frame": 21
+  },
+  {
+    "depth": 301,
+    "flags": 54,
+    "character_id": 737,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 311.4,
+      "ty": 190.0
+    },
+    "ratio": 21,
+    "name": "overlay",
+    "frame": 21
+  },
+  {
+    "depth": 308,
+    "flags": 54,
+    "character_id": 747,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 301.0,
+      "ty": 205.0
+    },
+    "ratio": 21,
+    "name": "fadein",
+    "frame": 21
+  },
+  {
+    "depth": 314,
+    "flags": 54,
+    "character_id": 34,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 301.0,
+      "ty": 205.0
+    },
+    "ratio": 21,
+    "name": "fadeout",
+    "frame": 21
+  },
+  {
+    "depth": 320,
+    "flags": 150,
+    "character_id": 750,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 304.2,
+      "ty": 37.95
+    },
+    "ratio": 21,
+    "frame": 21
+  },
+  {
+    "depth": 1,
+    "flags": 22,
+    "character_id": 1254,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 505.5,
+      "ty": 286.95
+    },
+    "ratio": 22,
+    "frame": 22
+  },
+  {
+    "depth": 20,
+    "flags": 6,
+    "character_id": 1255,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 0.5011444091796875,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 0.0,
+      "ty": 113.55
+    },
+    "frame": 22
+  },
+  {
+    "depth": 21,
+    "flags": 22,
+    "character_id": 1267,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 301.45,
+      "ty": 201.45
+    },
+    "ratio": 22,
+    "frame": 22
+  },
+  {
+    "depth": 245,
+    "flags": 22,
+    "character_id": 1268,
+    "matrix": {
+      "sx": 0.930206298828125,
+      "sy": 0.930206298828125,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 525.6,
+      "ty": 371.45
+    },
+    "ratio": 22,
+    "frame": 22
+  },
+  {
+    "depth": 247,
+    "flags": 6,
+    "character_id": 24,
+    "matrix": {
+      "sx": 0.3158416748046875,
+      "sy": 0.446258544921875,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 544.9,
+      "ty": 385.5
+    },
+    "frame": 22
+  },
+  {
+    "depth": 248,
+    "flags": 54,
+    "character_id": 34,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 301.0,
+      "ty": 205.0
+    },
+    "ratio": 22,
+    "name": "fadeout",
+    "frame": 22
+  },
+  {
+    "depth": 1,
+    "flags": 6,
+    "character_id": 14,
+    "matrix": {
+      "sx": 0.9918975830078125,
+      "sy": 3.38983154296875,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 300.0,
+      "ty": 200.05
+    },
+    "frame": 23
+  },
+  {
+    "depth": 2,
+    "flags": 54,
+    "character_id": 1402,
+    "matrix": {
+      "sx": 1.000030517578125,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 0.2,
+      "ty": 15.95
+    },
+    "ratio": 23,
+    "name": "game",
+    "frame": 23
+  },
+  {
+    "depth": 739,
+    "flags": 54,
+    "character_id": 716,
+    "matrix": {
+      "sx": 0.8636322021484375,
+      "sy": 0.863800048828125,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 159.0,
+      "ty": -11.0
+    },
+    "ratio": 23,
+    "name": "HUD",
+    "frame": 23
+  },
+  {
+    "depth": 786,
+    "flags": 54,
+    "character_id": 737,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 311.4,
+      "ty": 190.0
+    },
+    "ratio": 23,
+    "name": "overlay",
+    "frame": 23
+  },
+  {
+    "depth": 793,
+    "flags": 54,
+    "character_id": 1408,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 318.7,
+      "ty": 76.75
+    },
+    "ratio": 23,
+    "name": "levelTitle",
+    "frame": 23
+  },
+  {
+    "depth": 798,
+    "flags": 54,
+    "character_id": 747,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 301.0,
+      "ty": 205.0
+    },
+    "ratio": 23,
+    "name": "fadein",
+    "frame": 23
+  },
+  {
+    "depth": 804,
+    "flags": 54,
+    "character_id": 34,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 301.0,
+      "ty": 205.0
+    },
+    "ratio": 23,
+    "name": "fadeout",
+    "frame": 23
+  },
+  {
+    "depth": 810,
+    "flags": 150,
+    "character_id": 750,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 304.2,
+      "ty": 37.95
+    },
+    "ratio": 23,
+    "frame": 23
+  },
+  {
+    "depth": 1,
+    "flags": 22,
+    "character_id": 1479,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 301.45,
+      "ty": 201.45
+    },
+    "ratio": 24,
+    "frame": 24
+  },
+  {
+    "depth": 251,
+    "flags": 22,
+    "character_id": 1480,
+    "matrix": {
+      "sx": 0.94000244140625,
+      "sy": 0.94000244140625,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 525.6,
+      "ty": 371.45
+    },
+    "ratio": 24,
+    "frame": 24
+  },
+  {
+    "depth": 253,
+    "flags": 6,
+    "character_id": 24,
+    "matrix": {
+      "sx": 0.3158416748046875,
+      "sy": 0.446258544921875,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 546.5,
+      "ty": 385.5
+    },
+    "frame": 24
+  },
+  {
+    "depth": 254,
+    "flags": 54,
+    "character_id": 34,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 301.0,
+      "ty": 205.0
+    },
+    "ratio": 24,
+    "name": "fadeout",
+    "frame": 24
+  },
+  {
+    "depth": 1,
+    "flags": 6,
+    "character_id": 14,
+    "matrix": {
+      "sx": 0.9918975830078125,
+      "sy": 3.38983154296875,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 300.0,
+      "ty": 200.05
+    },
+    "frame": 25
+  },
+  {
+    "depth": 2,
+    "flags": 54,
+    "character_id": 1496,
+    "matrix": {
+      "sx": 1.000030517578125,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 0.2,
+      "ty": 15.95
+    },
+    "ratio": 25,
+    "name": "game",
+    "frame": 25
+  },
+  {
+    "depth": 652,
+    "flags": 54,
+    "character_id": 716,
+    "matrix": {
+      "sx": 0.8636322021484375,
+      "sy": 0.863800048828125,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 159.0,
+      "ty": -11.0
+    },
+    "ratio": 25,
+    "name": "HUD",
+    "frame": 25
+  },
+  {
+    "depth": 699,
+    "flags": 54,
+    "character_id": 1503,
+    "matrix": {
+      "sx": 0.8636322021484375,
+      "sy": 0.863800048828125,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": -83.0,
+      "ty": -11.0
+    },
+    "ratio": 25,
+    "name": "clock",
+    "frame": 25
+  },
+  {
+    "depth": 705,
+    "flags": 54,
+    "character_id": 737,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 311.4,
+      "ty": 190.0
+    },
+    "ratio": 25,
+    "name": "overlay",
+    "frame": 25
+  },
+  {
+    "depth": 712,
+    "flags": 54,
+    "character_id": 747,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 301.0,
+      "ty": 205.0
+    },
+    "ratio": 25,
+    "name": "fadein",
+    "frame": 25
+  },
+  {
+    "depth": 718,
+    "flags": 54,
+    "character_id": 34,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 301.0,
+      "ty": 205.0
+    },
+    "ratio": 25,
+    "name": "fadeout",
+    "frame": 25
+  },
+  {
+    "depth": 724,
+    "flags": 150,
+    "character_id": 750,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 304.2,
+      "ty": 37.95
+    },
+    "ratio": 25,
+    "frame": 25
+  },
+  {
+    "depth": 1,
+    "flags": 7,
+    "character_id": 1255,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 0.5011444091796875,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 0.0,
+      "ty": 113.55
+    },
+    "frame": 26
+  },
+  {
+    "depth": 2,
+    "flags": 22,
+    "character_id": 1569,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 301.45,
+      "ty": 201.45
+    },
+    "ratio": 26,
+    "frame": 26
+  },
+  {
+    "depth": 165,
+    "flags": 22,
+    "character_id": 1254,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 505.5,
+      "ty": 286.95
+    },
+    "ratio": 26,
+    "frame": 26
+  },
+  {
+    "depth": 184,
+    "flags": 22,
+    "character_id": 1570,
+    "matrix": {
+      "sx": 0.94000244140625,
+      "sy": 0.94000244140625,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 525.6,
+      "ty": 371.45
+    },
+    "ratio": 26,
+    "frame": 26
+  },
+  {
+    "depth": 186,
+    "flags": 6,
+    "character_id": 24,
+    "matrix": {
+      "sx": 0.3158416748046875,
+      "sy": 0.446258544921875,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 545.7,
+      "ty": 385.5
+    },
+    "frame": 26
+  },
+  {
+    "depth": 187,
+    "flags": 54,
+    "character_id": 34,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 301.0,
+      "ty": 205.0
+    },
+    "ratio": 26,
+    "name": "fadeout",
+    "frame": 26
+  },
+  {
+    "depth": 1,
+    "flags": 7,
+    "character_id": 1571,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 0.0,
+      "ty": 0.0
+    },
+    "frame": 27
+  },
+  {
+    "depth": 2,
+    "flags": 6,
+    "character_id": 1573,
+    "matrix": {
+      "sx": 0.886077880859375,
+      "sy": 0.8859710693359375,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 1.7,
+      "ty": -76.8
+    },
+    "frame": 27
+  },
+  {
+    "depth": 3,
+    "flags": 54,
+    "character_id": 1779,
+    "matrix": {
+      "sx": 1.000030517578125,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 0.2,
+      "ty": 15.95
+    },
+    "ratio": 27,
+    "name": "game",
+    "frame": 27
+  },
+  {
+    "depth": 1466,
+    "flags": 54,
+    "character_id": 716,
+    "matrix": {
+      "sx": 0.8636322021484375,
+      "sy": 0.863800048828125,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 159.0,
+      "ty": -11.0
+    },
+    "ratio": 27,
+    "name": "HUD",
+    "frame": 27
+  },
+  {
+    "depth": 1513,
+    "flags": 54,
+    "character_id": 737,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 311.4,
+      "ty": 190.0
+    },
+    "ratio": 27,
+    "name": "overlay",
+    "frame": 27
+  },
+  {
+    "depth": 1520,
+    "flags": 54,
+    "character_id": 1785,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 318.7,
+      "ty": 76.75
+    },
+    "ratio": 27,
+    "name": "levelTitle",
+    "frame": 27
+  },
+  {
+    "depth": 1525,
+    "flags": 54,
+    "character_id": 747,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 301.0,
+      "ty": 205.0
+    },
+    "ratio": 27,
+    "name": "fadein",
+    "frame": 27
+  },
+  {
+    "depth": 1531,
+    "flags": 54,
+    "character_id": 34,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 301.0,
+      "ty": 205.0
+    },
+    "ratio": 27,
+    "name": "fadeout",
+    "frame": 27
+  },
+  {
+    "depth": 1537,
+    "flags": 150,
+    "character_id": 750,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 304.2,
+      "ty": 37.95
+    },
+    "ratio": 27,
+    "frame": 27
+  },
+  {
+    "depth": 2,
+    "flags": 5,
+    "matrix": {
+      "sx": 0.886077880859375,
+      "sy": 0.8859710693359375,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 1.9,
+      "ty": -57.7
+    },
+    "frame": 28
+  },
+  {
+    "depth": 3,
+    "flags": 22,
+    "character_id": 1793,
+    "matrix": {
+      "sx": 0.96923828125,
+      "sy": 0.96923828125,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": -75.2,
+      "ty": 72.55
+    },
+    "ratio": 28,
+    "frame": 28
+  },
+  {
+    "depth": 9,
+    "flags": 54,
+    "character_id": 1922,
+    "matrix": {
+      "sx": 1.000030517578125,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 0.2,
+      "ty": 15.95
+    },
+    "ratio": 28,
+    "name": "game",
+    "frame": 28
+  },
+  {
+    "depth": 238,
+    "flags": 54,
+    "character_id": 716,
+    "matrix": {
+      "sx": 0.8636322021484375,
+      "sy": 0.863800048828125,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 159.0,
+      "ty": -11.0
+    },
+    "ratio": 28,
+    "name": "HUD",
+    "frame": 28
+  },
+  {
+    "depth": 285,
+    "flags": 54,
+    "character_id": 737,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 311.4,
+      "ty": 190.0
+    },
+    "ratio": 28,
+    "name": "overlay",
+    "frame": 28
+  },
+  {
+    "depth": 292,
+    "flags": 54,
+    "character_id": 747,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 301.0,
+      "ty": 205.0
+    },
+    "ratio": 28,
+    "name": "fadein",
+    "frame": 28
+  },
+  {
+    "depth": 298,
+    "flags": 54,
+    "character_id": 34,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 301.0,
+      "ty": 205.0
+    },
+    "ratio": 28,
+    "name": "fadeout",
+    "frame": 28
+  },
+  {
+    "depth": 304,
+    "flags": 150,
+    "character_id": 750,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 304.2,
+      "ty": 37.95
+    },
+    "ratio": 28,
+    "frame": 28
+  },
+  {
+    "depth": 1,
+    "flags": 7,
+    "character_id": 1255,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 0.5011444091796875,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 0.0,
+      "ty": 113.55
+    },
+    "frame": 29
+  },
+  {
+    "depth": 2,
+    "flags": 22,
+    "character_id": 1947,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 301.45,
+      "ty": 201.45
+    },
+    "ratio": 29,
+    "frame": 29
+  },
+  {
+    "depth": 191,
+    "flags": 22,
+    "character_id": 1254,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 505.5,
+      "ty": 286.95
+    },
+    "ratio": 29,
+    "frame": 29
+  },
+  {
+    "depth": 210,
+    "flags": 22,
+    "character_id": 1948,
+    "matrix": {
+      "sx": 0.9004669189453125,
+      "sy": 0.9004669189453125,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 525.6,
+      "ty": 371.45
+    },
+    "ratio": 29,
+    "frame": 29
+  },
+  {
+    "depth": 212,
+    "flags": 6,
+    "character_id": 24,
+    "matrix": {
+      "sx": 0.3158416748046875,
+      "sy": 0.446258544921875,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 544.9,
+      "ty": 385.5
+    },
+    "frame": 29
+  },
+  {
+    "depth": 213,
+    "flags": 54,
+    "character_id": 34,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 301.0,
+      "ty": 205.0
+    },
+    "ratio": 29,
+    "name": "fadeout",
+    "frame": 29
+  },
+  {
+    "depth": 1,
+    "flags": 7,
+    "character_id": 14,
+    "matrix": {
+      "sx": 0.9918975830078125,
+      "sy": 3.38983154296875,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 300.0,
+      "ty": 200.05
+    },
+    "frame": 30
+  },
+  {
+    "depth": 2,
+    "flags": 54,
+    "character_id": 2040,
+    "matrix": {
+      "sx": 1.000030517578125,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 0.2,
+      "ty": 15.95
+    },
+    "ratio": 30,
+    "name": "game",
+    "frame": 30
+  },
+  {
+    "depth": 421,
+    "flags": 54,
+    "character_id": 716,
+    "matrix": {
+      "sx": 0.8636322021484375,
+      "sy": 0.863800048828125,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 159.0,
+      "ty": -11.0
+    },
+    "ratio": 30,
+    "name": "HUD",
+    "frame": 30
+  },
+  {
+    "depth": 468,
+    "flags": 54,
+    "character_id": 737,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 311.4,
+      "ty": 190.0
+    },
+    "ratio": 30,
+    "name": "overlay",
+    "frame": 30
+  },
+  {
+    "depth": 475,
+    "flags": 54,
+    "character_id": 2045,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 318.7,
+      "ty": 76.75
+    },
+    "ratio": 30,
+    "name": "levelTitle",
+    "frame": 30
+  },
+  {
+    "depth": 480,
+    "flags": 54,
+    "character_id": 747,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 301.0,
+      "ty": 205.0
+    },
+    "ratio": 30,
+    "name": "fadein",
+    "frame": 30
+  },
+  {
+    "depth": 486,
+    "flags": 54,
+    "character_id": 34,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 301.0,
+      "ty": 205.0
+    },
+    "ratio": 30,
+    "name": "fadeout",
+    "frame": 30
+  },
+  {
+    "depth": 492,
+    "flags": 150,
+    "character_id": 750,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 304.2,
+      "ty": 37.95
+    },
+    "ratio": 30,
+    "frame": 30
+  },
+  {
+    "depth": 2,
+    "flags": 54,
+    "character_id": 2141,
+    "matrix": {
+      "sx": 1.000030517578125,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 26.25,
+      "ty": 15.95
+    },
+    "ratio": 31,
+    "name": "game",
+    "frame": 31
+  },
+  {
+    "depth": 277,
+    "flags": 54,
+    "character_id": 716,
+    "matrix": {
+      "sx": 0.8636322021484375,
+      "sy": 0.863800048828125,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 159.0,
+      "ty": -11.0
+    },
+    "ratio": 31,
+    "name": "HUD",
+    "frame": 31
+  },
+  {
+    "depth": 324,
+    "flags": 54,
+    "character_id": 737,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 311.4,
+      "ty": 190.0
+    },
+    "ratio": 31,
+    "name": "overlay",
+    "frame": 31
+  },
+  {
+    "depth": 331,
+    "flags": 54,
+    "character_id": 747,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 301.0,
+      "ty": 205.0
+    },
+    "ratio": 31,
+    "name": "fadein",
+    "frame": 31
+  },
+  {
+    "depth": 337,
+    "flags": 54,
+    "character_id": 34,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 301.0,
+      "ty": 205.0
+    },
+    "ratio": 31,
+    "name": "fadeout",
+    "frame": 31
+  },
+  {
+    "depth": 343,
+    "flags": 150,
+    "character_id": 750,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 304.2,
+      "ty": 37.95
+    },
+    "ratio": 31,
+    "frame": 31
+  },
+  {
+    "depth": 1,
+    "flags": 7,
+    "character_id": 1255,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 0.5011444091796875,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 0.0,
+      "ty": 113.55
+    },
+    "frame": 32
+  },
+  {
+    "depth": 2,
+    "flags": 54,
+    "character_id": 2216,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 301.45,
+      "ty": 201.45
+    },
+    "ratio": 32,
+    "name": "movie",
+    "frame": 32
+  },
+  {
+    "depth": 430,
+    "flags": 54,
+    "character_id": 1254,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 505.5,
+      "ty": 286.95
+    },
+    "ratio": 32,
+    "name": "logo",
+    "frame": 32
+  },
+  {
+    "depth": 449,
+    "flags": 54,
+    "character_id": 34,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 301.0,
+      "ty": 205.0
+    },
+    "ratio": 32,
+    "name": "fadeout",
+    "frame": 32
+  },
+  {
+    "depth": 1,
+    "flags": 5,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 0.0,
+      "ty": 0.0
+    },
+    "frame": 33
+  },
+  {
+    "depth": 2,
+    "flags": 22,
+    "character_id": 2223,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 303.9,
+      "ty": 203.4
+    },
+    "ratio": 33,
+    "frame": 33
+  },
+  {
+    "depth": 147,
+    "flags": 22,
+    "character_id": 2225,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 302.55,
+      "ty": 177.2
+    },
+    "ratio": 33,
+    "frame": 33
+  },
+  {
+    "depth": 149,
+    "flags": 22,
+    "character_id": 2226,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 299.45,
+      "ty": 199.5
+    },
+    "ratio": 33,
+    "frame": 33
+  },
+  {
+    "depth": 152,
+    "flags": 54,
+    "character_id": 34,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 301.0,
+      "ty": 205.0
+    },
+    "ratio": 33,
+    "name": "fadeout",
+    "frame": 33
+  },
+  {
+    "depth": 1,
+    "flags": 3,
+    "character_id": 40,
+    "frame": 34
+  },
+  {
+    "depth": 2,
+    "flags": 22,
+    "character_id": 2239,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 166.55,
+      "ty": 194.3
+    },
+    "ratio": 34,
+    "frame": 34
+  },
+  {
+    "depth": 220,
+    "flags": 22,
+    "character_id": 2240,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 299.45,
+      "ty": 199.5
+    },
+    "ratio": 34,
+    "frame": 34
+  },
+  {
+    "depth": 223,
+    "flags": 22,
+    "character_id": 2245,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 216.3,
+      "ty": 286.5
+    },
+    "ratio": 34,
+    "frame": 34
+  },
+  {
+    "depth": 227,
+    "flags": 22,
+    "character_id": 2247,
+    "matrix": {
+      "sx": 1.0,
+      "sy": 1.0,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 505.5,
+      "ty": 286.95
+    },
+    "ratio": 34,
+    "frame": 34
+  },
+  {
+    "depth": 1,
+    "flags": 54,
+    "character_id": 2141,
+    "matrix": {
+      "sx": 0.2669830322265625,
+      "sy": 0.2669830322265625,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 62.75,
+      "ty": 213.3
+    },
+    "ratio": 35,
+    "name": "game",
+    "frame": 35
+  },
+  {
+    "depth": 276,
+    "flags": 54,
+    "character_id": 2040,
+    "matrix": {
+      "sx": 0.2669830322265625,
+      "sy": 0.2669830322265625,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 62.75,
+      "ty": 213.3
+    },
+    "ratio": 35,
+    "name": "game",
+    "frame": 35
+  },
+  {
+    "depth": 695,
+    "flags": 54,
+    "character_id": 1779,
+    "matrix": {
+      "sx": 0.03692626953125,
+      "sy": 0.03692626953125,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 24.15,
+      "ty": 174.65
+    },
+    "ratio": 35,
+    "name": "game",
+    "frame": 35
+  },
+  {
+    "depth": 2158,
+    "flags": 54,
+    "character_id": 1496,
+    "matrix": {
+      "sx": 0.0351715087890625,
+      "sy": 0.0351715087890625,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 89.7,
+      "ty": 85.25
+    },
+    "ratio": 35,
+    "name": "game",
+    "frame": 35
+  },
+  {
+    "depth": 2808,
+    "flags": 54,
+    "character_id": 1402,
+    "matrix": {
+      "sx": 0.0351715087890625,
+      "sy": 0.0351715087890625,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 89.7,
+      "ty": 85.25
+    },
+    "ratio": 35,
+    "name": "game",
+    "frame": 35
+  },
+  {
+    "depth": 3545,
+    "flags": 54,
+    "character_id": 1251,
+    "matrix": {
+      "sx": 0.1217193603515625,
+      "sy": 0.1217193603515625,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 133.2,
+      "ty": 151.3
+    },
+    "ratio": 35,
+    "name": "game",
+    "frame": 35
+  },
+  {
+    "depth": 3795,
+    "flags": 54,
+    "character_id": 1075,
+    "matrix": {
+      "sx": 0.0546875,
+      "sy": 0.0546875,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 460.95,
+      "ty": 148.2
+    },
+    "ratio": 35,
+    "name": "game",
+    "frame": 35
+  },
+  {
+    "depth": 5072,
+    "flags": 54,
+    "character_id": 696,
+    "matrix": {
+      "sx": 0.0345916748046875,
+      "sy": 0.0345916748046875,
+      "r0": 0.0,
+      "r1": 0.0,
+      "tx": 114.55,
+      "ty": 119.25
+    },
+    "ratio": 35,
+    "name": "game",
+    "frame": 35
+  }
+]
