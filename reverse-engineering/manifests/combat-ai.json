@@ -1,0 +1,39 @@
+{
+  "player_damage_to_enemies": {
+    "batarang": 5,
+    "normal_punch_path": 10,
+    "lowkick": 15,
+    "highpunch": 15,
+    "highkick": 15,
+    "close_range_playerAttacking_knockdown_path": 20,
+    "note": "The 20-damage path is gated by playerAttacking/collision state in the AI; do not simplify it to a single named attack without reproducing the original conditions."
+  },
+  "enemy_damage_to_player": {
+    "default": "subtract enemy.strength and enable playerInvincible",
+    "bird_eagle": 10
+  },
+  "score_awards": {
+    "standard_goon_maid_bird_biker": 100,
+    "penguin_boss_major_death_paths": 500,
+    "kabuki": 100,
+    "cobblebot": 3000
+  },
+  "level_enemy_initialization": {
+    "level1b": {"goon": {"count":10,"health":32,"strength":5,"speed":9}, "biker": {"count":1,"strength":10}},
+    "level1c_penguin": {"penguin": {"health":200,"speed":6,"strength_property_spelling":"stength","strength":5,"enemyHeight":50}},
+    "level2a": {"goon": {"count":9,"health":70,"strength":10,"speed":6}, "eagle": {"count":1,"health":30,"speed":5}},
+    "level2b": {"eagle_group_defaults": {"health":30,"speed":5}},
+    "level3a": {"fatgoon": {"count":7,"health":75,"strength":8,"speed":12}, "goon": {"count":6,"health":75,"strength":11,"speed":6}},
+    "level3b_kabuki": {"kabuki1": {"health":300,"strength":12,"speed":11,"enemyHeight":50}, "kabuki2": {"health":300,"strength":12,"speed":17,"enemyHeight":50,"activation":"separate tracker state machine enables kabukiAI later in fight"}},
+    "level4a": {"goon": {"count":1,"health":64,"strength":8,"speed":9}, "maid": {"count":2,"health":72,"strength":7,"speed":12}, "eagle": {"count":1,"health":20,"speed":5}},
+    "level4b_cobblebot": {"robo": {"health":225,"strength":15,"speed":5,"enemyHeight":200,"xMin":300,"xMax":800}}
+  },
+  "ai_functions": ["bikerAI","goonAI","maidAI","penguinAI","kabukiAI","roboAI","birdAI"],
+  "important_state_sets": {
+    "goon": ["stand","walk","retreat","attack","hurt","fall","die","idle","intro"],
+    "penguin": ["stand","walk","jump","dodge","block","attack","attack2","hurt","fall","die"],
+    "kabuki": ["idle","greet","stand","walk","jump","jumpOver","land","retreat","block","duck","attack","attackLand","attackHit","hurt","fall","die"],
+    "cobblebot": ["idle","stand","walk","retreat","block","attack","attack2","attack3","hurt","dying","die"]
+  },
+  "completion_routes": {"penguin":"card:escape","cobblebot":"card:end"}
+}

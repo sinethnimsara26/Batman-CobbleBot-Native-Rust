@@ -1,0 +1,706 @@
+{
+  "batman": {
+    "symbol_id": 691,
+    "frames": 271,
+    "labels": [
+      {
+        "frame": 0,
+        "label": "stand"
+      },
+      {
+        "frame": 9,
+        "label": "walk"
+      },
+      {
+        "frame": 19,
+        "label": "run"
+      },
+      {
+        "frame": 29,
+        "label": "jump"
+      },
+      {
+        "frame": 39,
+        "label": "fall"
+      },
+      {
+        "frame": 49,
+        "label": "glide"
+      },
+      {
+        "frame": 59,
+        "label": "land"
+      },
+      {
+        "frame": 69,
+        "label": "duck"
+      },
+      {
+        "frame": 79,
+        "label": "up"
+      },
+      {
+        "frame": 89,
+        "label": "punch"
+      },
+      {
+        "frame": 99,
+        "label": "highpunch"
+      },
+      {
+        "frame": 110,
+        "label": "lowpunch"
+      },
+      {
+        "frame": 120,
+        "label": "jumppunch"
+      },
+      {
+        "frame": 129,
+        "label": "kick"
+      },
+      {
+        "frame": 139,
+        "label": "highkick"
+      },
+      {
+        "frame": 149,
+        "label": "lowkick"
+      },
+      {
+        "frame": 159,
+        "label": "jumpkick"
+      },
+      {
+        "frame": 169,
+        "label": "batarang"
+      },
+      {
+        "frame": 179,
+        "label": "duckbatarang"
+      },
+      {
+        "frame": 189,
+        "label": "jumpbatarang"
+      },
+      {
+        "frame": 199,
+        "label": "grapplingup"
+      },
+      {
+        "frame": 209,
+        "label": "grappling"
+      },
+      {
+        "frame": 219,
+        "label": "capespin"
+      },
+      {
+        "frame": 229,
+        "label": "hurt2"
+      },
+      {
+        "frame": 239,
+        "label": "hurt"
+      },
+      {
+        "frame": 249,
+        "label": "electro"
+      },
+      {
+        "frame": 260,
+        "label": "die"
+      }
+    ]
+  },
+  "batman_highway": {
+    "symbol_id": 1862,
+    "frames": 291,
+    "labels": [
+      {
+        "frame": 0,
+        "label": "stand"
+      },
+      {
+        "frame": 9,
+        "label": "walk"
+      },
+      {
+        "frame": 19,
+        "label": "run"
+      },
+      {
+        "frame": 29,
+        "label": "jump"
+      },
+      {
+        "frame": 39,
+        "label": "jumpup"
+      },
+      {
+        "frame": 49,
+        "label": "fall"
+      },
+      {
+        "frame": 59,
+        "label": "glide"
+      },
+      {
+        "frame": 69,
+        "label": "land"
+      },
+      {
+        "frame": 79,
+        "label": "duck"
+      },
+      {
+        "frame": 89,
+        "label": "up"
+      },
+      {
+        "frame": 99,
+        "label": "punch"
+      },
+      {
+        "frame": 109,
+        "label": "highpunch"
+      },
+      {
+        "frame": 120,
+        "label": "lowpunch"
+      },
+      {
+        "frame": 130,
+        "label": "jumppunch"
+      },
+      {
+        "frame": 139,
+        "label": "kick"
+      },
+      {
+        "frame": 149,
+        "label": "highkick"
+      },
+      {
+        "frame": 159,
+        "label": "lowkick"
+      },
+      {
+        "frame": 169,
+        "label": "jumpkick"
+      },
+      {
+        "frame": 179,
+        "label": "batarang"
+      },
+      {
+        "frame": 189,
+        "label": "duckbatarang"
+      },
+      {
+        "frame": 199,
+        "label": "jumpbatarang"
+      },
+      {
+        "frame": 209,
+        "label": "grapplingtemp"
+      },
+      {
+        "frame": 219,
+        "label": "grapplingup"
+      },
+      {
+        "frame": 229,
+        "label": "grappling"
+      },
+      {
+        "frame": 239,
+        "label": "capespin"
+      },
+      {
+        "frame": 249,
+        "label": "hurt2"
+      },
+      {
+        "frame": 259,
+        "label": "hurt"
+      },
+      {
+        "frame": 269,
+        "label": "electro"
+      },
+      {
+        "frame": 280,
+        "label": "die"
+      }
+    ]
+  },
+  "tutorial_overlay": {
+    "symbol_id": 737,
+    "frames": 149,
+    "labels": [
+      {
+        "frame": 0,
+        "label": "blank"
+      },
+      {
+        "frame": 1,
+        "label": "goRight"
+      },
+      {
+        "frame": 10,
+        "label": "goLeft"
+      },
+      {
+        "frame": 20,
+        "label": "jump"
+      },
+      {
+        "frame": 30,
+        "label": "wrongway"
+      },
+      {
+        "frame": 39,
+        "label": "glidedown"
+      },
+      {
+        "frame": 48,
+        "label": "gameover"
+      },
+      {
+        "frame": 58,
+        "label": "walk"
+      },
+      {
+        "frame": 66,
+        "label": "findLab"
+      },
+      {
+        "frame": 75,
+        "label": "fightBtns"
+      },
+      {
+        "frame": 84,
+        "label": "escapeLab"
+      },
+      {
+        "frame": 93,
+        "label": "useShaft"
+      },
+      {
+        "frame": 102,
+        "label": "fight"
+      },
+      {
+        "frame": 140,
+        "label": "toStreet"
+      }
+    ]
+  },
+  "goon_a": {
+    "symbol_id": 880,
+    "frames": 89,
+    "labels": [
+      {
+        "frame": 0,
+        "label": "stand"
+      },
+      {
+        "frame": 9,
+        "label": "walk"
+      },
+      {
+        "frame": 19,
+        "label": "retreat"
+      },
+      {
+        "frame": 29,
+        "label": "attack"
+      },
+      {
+        "frame": 39,
+        "label": "hurt"
+      },
+      {
+        "frame": 49,
+        "label": "fall"
+      },
+      {
+        "frame": 59,
+        "label": "die"
+      },
+      {
+        "frame": 69,
+        "label": "idle"
+      },
+      {
+        "frame": 79,
+        "label": "intro"
+      }
+    ]
+  },
+  "goon_b": {
+    "symbol_id": 964,
+    "frames": 89,
+    "labels": [
+      {
+        "frame": 0,
+        "label": "stand"
+      },
+      {
+        "frame": 9,
+        "label": "walk"
+      },
+      {
+        "frame": 19,
+        "label": "retreat"
+      },
+      {
+        "frame": 29,
+        "label": "attack"
+      },
+      {
+        "frame": 39,
+        "label": "hurt"
+      },
+      {
+        "frame": 49,
+        "label": "fall"
+      },
+      {
+        "frame": 59,
+        "label": "die"
+      },
+      {
+        "frame": 69,
+        "label": "idle"
+      },
+      {
+        "frame": 79,
+        "label": "intro"
+      }
+    ]
+  },
+  "goon_c": {
+    "symbol_id": 1365,
+    "frames": 89,
+    "labels": [
+      {
+        "frame": 0,
+        "label": "stand"
+      },
+      {
+        "frame": 9,
+        "label": "walk"
+      },
+      {
+        "frame": 19,
+        "label": "retreat"
+      },
+      {
+        "frame": 29,
+        "label": "attack"
+      },
+      {
+        "frame": 39,
+        "label": "hurt"
+      },
+      {
+        "frame": 49,
+        "label": "fall"
+      },
+      {
+        "frame": 59,
+        "label": "die"
+      },
+      {
+        "frame": 69,
+        "label": "idle"
+      },
+      {
+        "frame": 79,
+        "label": "intro"
+      }
+    ]
+  },
+  "fatgoon": {
+    "symbol_id": 1772,
+    "frames": 89,
+    "labels": [
+      {
+        "frame": 0,
+        "label": "stand"
+      },
+      {
+        "frame": 9,
+        "label": "walk"
+      },
+      {
+        "frame": 19,
+        "label": "retreat"
+      },
+      {
+        "frame": 29,
+        "label": "attack"
+      },
+      {
+        "frame": 39,
+        "label": "hurt"
+      },
+      {
+        "frame": 49,
+        "label": "fall"
+      },
+      {
+        "frame": 59,
+        "label": "die"
+      },
+      {
+        "frame": 69,
+        "label": "idle"
+      },
+      {
+        "frame": 79,
+        "label": "intro"
+      }
+    ]
+  },
+  "penguin": {
+    "symbol_id": 1250,
+    "frames": 99,
+    "labels": [
+      {
+        "frame": 0,
+        "label": "stand"
+      },
+      {
+        "frame": 9,
+        "label": "walk"
+      },
+      {
+        "frame": 19,
+        "label": "jump"
+      },
+      {
+        "frame": 29,
+        "label": "dodge"
+      },
+      {
+        "frame": 39,
+        "label": "block"
+      },
+      {
+        "frame": 49,
+        "label": "attack"
+      },
+      {
+        "frame": 59,
+        "label": "attack2"
+      },
+      {
+        "frame": 69,
+        "label": "hurt"
+      },
+      {
+        "frame": 78,
+        "label": "fall"
+      },
+      {
+        "frame": 88,
+        "label": "die"
+      }
+    ]
+  },
+  "bird_eagle": {
+    "symbol_id": 1393,
+    "frames": 50,
+    "labels": [
+      {
+        "frame": 0,
+        "label": "fly"
+      },
+      {
+        "frame": 9,
+        "label": "glide"
+      },
+      {
+        "frame": 20,
+        "label": "attack"
+      },
+      {
+        "frame": 30,
+        "label": "hurt"
+      },
+      {
+        "frame": 40,
+        "label": "die"
+      }
+    ]
+  },
+  "kabuki": {
+    "symbol_id": 1919,
+    "frames": 154,
+    "labels": [
+      {
+        "frame": 0,
+        "label": "idle"
+      },
+      {
+        "frame": 9,
+        "label": "greet"
+      },
+      {
+        "frame": 18,
+        "label": "stand"
+      },
+      {
+        "frame": 27,
+        "label": "walk"
+      },
+      {
+        "frame": 37,
+        "label": "jump"
+      },
+      {
+        "frame": 47,
+        "label": "jumpOver"
+      },
+      {
+        "frame": 57,
+        "label": "land"
+      },
+      {
+        "frame": 67,
+        "label": "retreat"
+      },
+      {
+        "frame": 77,
+        "label": "block"
+      },
+      {
+        "frame": 87,
+        "label": "duck"
+      },
+      {
+        "frame": 97,
+        "label": "attack"
+      },
+      {
+        "frame": 107,
+        "label": "attackLand"
+      },
+      {
+        "frame": 116,
+        "label": "attackHit"
+      },
+      {
+        "frame": 126,
+        "label": "hurt"
+      },
+      {
+        "frame": 135,
+        "label": "fall"
+      },
+      {
+        "frame": 145,
+        "label": "die"
+      }
+    ]
+  },
+  "maid": {
+    "symbol_id": 2037,
+    "frames": 99,
+    "labels": [
+      {
+        "frame": 0,
+        "label": "stand"
+      },
+      {
+        "frame": 9,
+        "label": "walk"
+      },
+      {
+        "frame": 19,
+        "label": "retreat"
+      },
+      {
+        "frame": 29,
+        "label": "attack"
+      },
+      {
+        "frame": 39,
+        "label": "attack2"
+      },
+      {
+        "frame": 49,
+        "label": "hurt"
+      },
+      {
+        "frame": 59,
+        "label": "fall"
+      },
+      {
+        "frame": 69,
+        "label": "die"
+      },
+      {
+        "frame": 79,
+        "label": "idle"
+      },
+      {
+        "frame": 89,
+        "label": "intro"
+      }
+    ]
+  },
+  "cobblebot": {
+    "symbol_id": 2135,
+    "frames": 104,
+    "labels": [
+      {
+        "frame": 0,
+        "label": "idle"
+      },
+      {
+        "frame": 9,
+        "label": "stand"
+      },
+      {
+        "frame": 18,
+        "label": "walk"
+      },
+      {
+        "frame": 28,
+        "label": "retreat"
+      },
+      {
+        "frame": 38,
+        "label": "block"
+      },
+      {
+        "frame": 48,
+        "label": "attack"
+      },
+      {
+        "frame": 58,
+        "label": "attack2"
+      },
+      {
+        "frame": 67,
+        "label": "attack3"
+      },
+      {
+        "frame": 76,
+        "label": "hurt"
+      },
+      {
+        "frame": 85,
+        "label": "dying"
+      },
+      {
+        "frame": 95,
+        "label": "die"
+      }
+    ]
+  }
+}

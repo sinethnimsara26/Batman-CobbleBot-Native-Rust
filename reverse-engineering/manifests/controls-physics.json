@@ -1,0 +1,38 @@
+{
+  "simulation": {"stage_px": [600, 400], "fps": 25, "fixed_step_seconds": 0.04},
+  "controls": {
+    "left": {"key_code": 37, "purpose": "move left"},
+    "right": {"key_code": 39, "purpose": "move right"},
+    "up": {"key_code": 38, "purpose": "high attack modifier / context movement"},
+    "down": {"key_code": 40, "purpose": "low attack modifier / duck"},
+    "space": {"key_code": 32, "purpose": "jump; while descending, enter glide when allowed"},
+    "A": {"key_code": 65, "purpose": "current gadget: Batarang or grappling"},
+    "D": {"key_code": 68, "purpose": "kick; air/high/low variants by state and modifiers"},
+    "S": {"key_code": 83, "purpose": "punch; air/high/low variants by state and modifiers"},
+    "D+S": {"purpose": "cape spin when state permits"},
+    "LIFE": {"key_codes": [76,73,70,69], "purpose": "hidden cheat; sets lives to 99"}
+  },
+  "player": {
+    "health": 100,
+    "strength": 10,
+    "collision_width": 50,
+    "collision_height": 75,
+    "normal_speed": 19,
+    "initial_walk_speed": 6,
+    "kabuki_stage_walk_speed": 8,
+    "jump_velocity": -42,
+    "gravity": 5,
+    "glide_gravity": 1,
+    "glide_entry": "when descending fast enough (playerDy > 5) and glide is allowed, playerDy is multiplied by 0.5 and gravity becomes 1"
+  },
+  "global_start": {"score": 0, "lives": 5, "hit_count": 0, "batarangs": 0},
+  "level_life_state": {"playerLives": 3, "note": "level-local respawn/life counter is initialized separately from root lives"},
+  "attack_animation_states": ["punch","highpunch","lowpunch","jumppunch","kick","highkick","lowkick","jumpkick","batarang","duckbatarang","jumpbatarang","capespin","grapplingup","grappling"],
+  "evidence": {
+    "playerLogic_body_offset": 108000,
+    "key_isDown_offsets": {"up":109749,"down":109950,"left":110272,"right":110302,"D":111808,"S":111838,"A":112726,"space":113345,"L":113601,"I":113673,"F":113754,"E":113835},
+    "jump_velocity_offset": 113417,
+    "glide_gravity_offset": 113557,
+    "LIFE_99_lives_offset": 113880
+  }
+}
