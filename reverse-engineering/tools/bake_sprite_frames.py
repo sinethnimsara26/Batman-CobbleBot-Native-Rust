@@ -2,8 +2,8 @@
 """Bake one SWF sprite frame into a PNG for native-runtime asset generation.
 
 This is development-only tooling. It interprets the source display list and
-vector solid fills; the resulting PNG is intended to be embedded by Rust, not
-loaded from Flash at runtime. Bitmap/gradient fills are reported as unsupported.
+vector/bitmap/gradient fills and embedded DefineText glyphs; the resulting PNG
+is intended to be embedded by Rust, not loaded from Flash at runtime.
 """
 from __future__ import annotations
 
@@ -18,8 +18,12 @@ from PIL import Image, ImageChops, ImageDraw
 
 from swf_re import Bits, read_matrix, read_rect, tags
 from render_collision_masks import affine, compose, point, rasterize_winding
+from bake_static_text import parse_define_text, parse_font2
 
 SHAPE_TAGS = {2, 22, 32, 83}
+
+TEXT_DEFS = {}
+FONT_DEFS = {}
 
 
 def _read_fill_style(data: bytes, pos: int, alpha: bool, unsupported: set[str]):
@@ -275,6 +279,75 @@ def load_shapes(swf_path: Path, unsupported: set[str]):
     return shapes
 
 
+
+def load_text_defs(swf_path: Path):
+    global TEXT_DEFS, FONT_DEFS
+    data = swf_path.read_bytes()
+    _, pos = read_rect(data, 8)
+    pos += 4
+    font_payloads = {}
+    text_payloads = {}
+    for code, payload, _, _ in tags(data, pos, len(data)):
+        if code == 48:  # DefineFont2
+            font_payloads[struct.unpack_from("<H", payload, 0)[0]] = payload
+        elif code == 11:  # DefineText
+            text_payloads[struct.unpack_from("<H", payload, 0)[0]] = payload
+    FONT_DEFS = {}
+    for font_id, payload in font_payloads.items():
+        parsed_id, font = parse_font2(payload)
+        FONT_DEFS[parsed_id] = font
+    TEXT_DEFS = {}
+    for char_id, payload in text_payloads.items():
+        parsed_id, bounds, matrix, records = parse_define_text(payload)
+        TEXT_DEFS[parsed_id] = {"bounds": bounds, "matrix": matrix, "records": records}
+
+
+def render_text(character_id, transform, canvas, missing):
+    item = TEXT_DEFS[character_id]
+    text_transform = compose(transform, affine(item["matrix"]))
+    for record in item["records"]:
+        font = FONT_DEFS.get(record["font"])
+        if font is None:
+            missing.add(record["font"] or -1)
+            continue
+        cursor_x = record["x"] / 20.0
+        baseline_y = record["y"] / 20.0
+        glyph_scale = record["height"] / (1024.0 * 20.0)
+        for glyph_index, advance in record["glyphs"]:
+            contours = []
+            if glyph_index >= len(font["glyphs"]):
+                missing.add(character_id)
+                continue
+            for contour in font["glyphs"][glyph_index]:
+                transformed = []
+                for gx, gy in contour:
+                    px = cursor_x + gx * glyph_scale
+                    py = baseline_y + gy * glyph_scale
+                    transformed.append(point(text_transform, (px, py)))
+                if transformed:
+                    contours.append(transformed)
+            if contours:
+                mask = Image.new("1", canvas.size, 0)
+                rasterize_winding(mask, contours, 0.0, 0.0, False)
+                ink = Image.new("RGBA", canvas.size, record["color"])
+                clear = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+                canvas.alpha_composite(Image.composite(ink, clear, mask))
+            cursor_x += advance / 20.0
+
+
+def text_bounds(character_id, transform):
+    bounds = TEXT_DEFS[character_id]["bounds"]
+    xmin, xmax, ymin, ymax = [v / 20.0 for v in bounds]
+    pts = [
+        point(transform, (xmin, ymin)), point(transform, (xmax, ymin)),
+        point(transform, (xmin, ymax)), point(transform, (xmax, ymax)),
+    ]
+    return [
+        min(p[0] for p in pts), min(p[1] for p in pts),
+        max(p[0] for p in pts), max(p[1] for p in pts),
+    ]
+
+
 def display_list(symbol: dict, frame: int):
     frame = frame % max(1, symbol.get("frames", 1))
     depths = {}
@@ -519,6 +592,10 @@ def render_symbol(symbol_id, frame, transform, canvas, symbols, shapes, bitmaps,
                     draw.line([(round(x), round(y)) for x, y in points], fill=style["color"], width=width)
         return
 
+    if symbol_id in TEXT_DEFS:
+        render_text(symbol_id, transform, canvas, missing)
+        return
+
     symbol = symbols.get(str(symbol_id))
     if symbol is None:
         missing.add(symbol_id)
@@ -602,6 +679,9 @@ def symbol_bounds(symbol_id, frame, transform, symbols, shapes, depth=0, exclude
             bounds[3] = max(bounds[3], max(p[1] for p in line_points))
         return bounds
 
+    if symbol_id in TEXT_DEFS:
+        return text_bounds(symbol_id, transform)
+
     symbol = symbols.get(str(symbol_id))
     if symbol is None:
         return bounds
@@ -641,6 +721,7 @@ def main():
     symbols = json.loads(args.symbols_json.read_text(encoding="utf-8"))
     unsupported: set[str] = set()
     shapes = load_shapes(args.swf, unsupported)
+    load_text_defs(args.swf)
     bitmap_dir = args.bitmaps or args.swf.resolve().parent.parent / "bitmaps"
     bitmap_manifest = json.loads((bitmap_dir / "manifest.json").read_text(encoding="utf-8"))
     bitmaps = {}
@@ -683,10 +764,12 @@ def main():
         outdir.mkdir(parents=True, exist_ok=True)
         labels = sorted(symbol.get("labels", []), key=lambda item: item.get("frame", 0))
         manifest_frames = []
+        all_missing: set[int] = set()
         for frame in range(frame_count):
             canvas = Image.new("RGBA", (width, height), background)
             missing: set[int] = set()
             render_symbol(args.symbol, frame, transform, canvas, symbols, shapes, bitmaps, unsupported, missing)
+            all_missing.update(missing)
             filename = f"{frame:03}.png"
             canvas.save(outdir / filename)
             active_label = None
@@ -704,7 +787,7 @@ def main():
             "source_bounds": [min_x, min_y, max_x, max_y],
             "anchor_in_bitmap": [tx, ty],
             "unsupported_fills": sorted(unsupported),
-            "missing_bitmap_ids": sorted(missing),
+            "missing_bitmap_ids": sorted(all_missing),
             "frames": manifest_frames,
         }
         (outdir / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
