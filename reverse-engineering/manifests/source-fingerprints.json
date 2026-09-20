@@ -1,0 +1,13 @@
+{
+  "projector_size": 3111471,
+  "projector_sha256": "03bb56b8e88345ef80c2e2e7b896195fb53c53d3d6ebb9a44a3c6487d7c4f9cf",
+  "outer_zlib_offset_decimal": 1044550,
+  "outer_zlib_offset_hex": "0xff046",
+  "outer_zlib_consumed_bytes": 2066909,
+  "cws_size": 2078586,
+  "cws_sha256": "92a803fe7958cae87dcc6b610d78b716d09bc545331830a16d7158c39c312dcf",
+  "fws_size": 2819100,
+  "fws_sha256": "3d9e1992404313bc2e2652d46a5838160ef721e2ad559fdd7455f3c54f8ac1ed",
+  "swf_version": 7,
+  "declared_fws_size": 2819100
+}

@@ -1,0 +1,23 @@
+{
+  "main_route": [
+    {"root_frame":19,"state":"level1a"},
+    {"root_frame":20,"state":"level1b"},
+    {"root_frame":21,"state":"level1c_penguin"},
+    {"root_frame":22,"state":"card:escape","card_symbol":1267,"card_last_action":"level2a"},
+    {"root_frame":23,"state":"level2a"},
+    {"root_frame":24,"state":"card:tv","card_symbol":1479,"card_last_action":"level2b"},
+    {"root_frame":25,"state":"level2b"},
+    {"root_frame":26,"state":"card:kabuki","card_symbol":1569,"card_last_action":"level3a"},
+    {"root_frame":27,"state":"level3a"},
+    {"root_frame":28,"state":"level3b_kabuki","completion_route":"card:mansion"},
+    {"root_frame":29,"state":"card:mansion","card_symbol":1947,"card_last_action":"level4a"},
+    {"root_frame":30,"state":"level4a"},
+    {"root_frame":31,"state":"level4b_cobblebot","completion_route":"card:end"},
+    {"root_frame":32,"state":"ending","movie_symbol":2216,"movie_last_action":"start"}
+  ],
+  "dispatcher_routes_also_present": ["intro","instructions","level1a","level1b","level1c","level2a","level2b","level3a","level3b","level4a","level4b","card:bank","card:escape","card:tv","card:kabuki","card:mansion","card:end","continue","gameover","start"],
+  "notes": [
+    "card:bank exists in the root dispatcher/checkpoint logic but is not inserted as a separate step in the verified main linear route above.",
+    "level4a to level4b is driven by the global respawn/progression function; its bytecode contains gotoNext=level4b."
+  ]
+}
