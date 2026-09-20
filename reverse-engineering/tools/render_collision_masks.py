@@ -83,7 +83,7 @@ def append_fill_edge(active,paths,style,edge,reverse=False):
 
 def parse_shape_paths(payload:bytes,tag:int):
     # payload starts with ShapeId, RECT, ShapeWithStyle.
-    _,p=ui16(payload,0); _,p=read_rect(payload,p); alpha=(tag in (32,83)); even_odd=False
+    _,p=ui16(payload,0); _,p=read_rect(payload,p); alpha=(tag in (32,83)); even_odd=True
     if tag==83:
         _,p=read_rect(payload,p)
         uses_fill_winding=bool(payload[p]&0x04)
