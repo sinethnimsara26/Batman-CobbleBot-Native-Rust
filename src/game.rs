@@ -55,6 +55,12 @@ const CP_JUMP1:CheckpointRect=CheckpointRect{min_x:-611.231,min_y:-133.575,max_x
 const CP_JUMP2:CheckpointRect=CheckpointRect{min_x:527.019,min_y:-133.575,max_x:689.250,max_y:162.048};
 const CP_WALK:CheckpointRect=CheckpointRect{min_x:128.644,min_y:-129.575,max_x:401.112,max_y:166.048};
 
+// Exact bounds of level-local pit symbol 149 after its original placement
+// matrix (sx=2.1762237549, sy=5.7515563965, tx=-392.1, ty=1025.6).
+const PIT_1A:CheckpointRect=CheckpointRect{
+    min_x:-5246.276,min_y:450.444,max_x:4461.967,max_y:1601.043
+};
+
 // Original overlay (symbol 737) label starts, converted to zero-based frames.
 const OVERLAY_BLANK:usize=0;
 const OVERLAY_GO_RIGHT:usize=1;
@@ -253,7 +259,7 @@ impl Game{
         }
 
         self.ticks+=1;
-        self.advance_level_exit();
+        if self.advance_level_exit(){input.clear_pressed();return;}
         if self.level1a_complete{input.clear_pressed();return;}
         self.advance_tutorial_overlay();
         let state_at_tick_start=self.player.state;
@@ -575,15 +581,44 @@ impl Game{
         }
     }
 
-    fn advance_level_exit(&mut self){
-        if let Some(t)=self.fadeout_tick{
-            if t>=40{
-                self.fadeout_tick=Some(40);
-                self.level1a_complete=true;
-            }else{
-                self.fadeout_tick=Some(t+1);
-            }
+    fn advance_level_exit(&mut self)->bool{
+        let Some(t)=self.fadeout_tick else{return false;};
+        if t<40{
+            self.fadeout_tick=Some(t+1);
+            return false;
         }
+
+        self.fadeout_tick=Some(40);
+        if self.respawn_after_fade{
+            // pitLogic routes through root "continue" with gotoLast="start".
+            // The campaign dispatcher is intentionally outside this Level 1A
+            // slice, so restart the same stage while preserving root values.
+            let lives=self.lives;
+            let score=self.score;
+            let batarangs=self.batarangs;
+            let events=std::mem::take(&mut self.audio_events);
+            let mut fresh=Game::new();
+            fresh.screen=AppScreen::Playing;
+            fresh.lives=lives;
+            fresh.score=score;
+            fresh.batarangs=batarangs;
+            fresh.audio_events=events;
+            fresh.update_camera();
+            *self=fresh;
+            return true;
+        }
+        if self.gameover_after_fade{
+            self.audio_events.push(AudioEvent::MusicStop);
+            self.screen=AppScreen::Title;
+            self.fadeout_tick=None;
+            self.gameover_after_fade=false;
+            self.ticks=0;
+            return true;
+        }
+
+        self.audio_events.push(AudioEvent::MusicStop);
+        self.level1a_complete=true;
+        true
     }
 
     fn overlay_goto_and_play(&mut self,frame:usize){
@@ -607,6 +642,30 @@ impl Game{
     fn level_title_finished(&self)->bool{
         // Native frame 99 is Flash _currentframe 100 and Stop()s there.
         self.ticks>=99
+    }
+
+    fn update_pit_logic(&mut self){
+        let hit=PIT_1A.hits_player(self.player.x,self.player.y);
+        if !hit{
+            self.pit_done=false;
+            return;
+        }
+        if self.pit_done||self.fadeout_tick.is_some(){return;}
+
+        // Exact pitLogic routing recovered from AVM1:
+        // if (_root.lives > 0) { lives--; gotoNext="continue"; }
+        // else { gotoNext="gameover"; }
+        // gotoLast="start"; fadeout.play();
+        self.pit_done=true;
+        if self.lives>0{
+            self.lives-=1;
+            self.respawn_after_fade=true;
+        }else{
+            self.gameover_after_fade=true;
+        }
+        self.fadeout_tick=Some(0);
+        self.player.dx=0.0;
+        self.player.dy=0.0;
     }
 
     fn update_tutorial_checkpoints(&mut self){
