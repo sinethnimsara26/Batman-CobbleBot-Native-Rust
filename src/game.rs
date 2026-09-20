@@ -68,6 +68,9 @@ const OVERLAY_TO_STREET:usize=140;
 pub enum AppScreen{Title,Instructions,Playing}
 
 #[derive(Copy,Clone,Debug,PartialEq,Eq)]
+pub enum AudioEvent{MusicStart,MusicStop,Jump,Item}
+
+#[derive(Copy,Clone,Debug,PartialEq,Eq)]
 pub enum PlayerState{
     Stand,Walk,Run,Jump,Fall,Glide,Land,Duck,Up,
     Punch,HighPunch,LowPunch,JumpPunch,
@@ -178,6 +181,10 @@ pub struct Game{
     pub pickups:[bool;7],
     pub shots:Vec<Shot>,
     pub ticks:u64,
+    audio_events:Vec<AudioEvent>,
+    pit_done:bool,
+    respawn_after_fade:bool,
+    gameover_after_fade:bool,
 }
 
 impl Game{
@@ -199,12 +206,16 @@ impl Game{
             gravity:GLOBAL_GRAVITY,
             batarangs:0,score:0,lives:5,health:100,player_attacking:false,
             overlay_frame:OVERLAY_BLANK,overlay_playing:false,walk_checkpoint_started_tick:None,level1a_exit_reached:false,fadeout_tick:None,level1a_complete:false,
-            pickups:[false;7],shots:Vec::new(),ticks:0,
+            pickups:[false;7],shots:Vec::new(),ticks:0,audio_events:Vec::new(),pit_done:false,respawn_after_fade:false,gameover_after_fade:false,
         }
     }
 
     pub fn animation_frame(&self)->usize{
         self.player.state.display_tick(self.player.state_tick)
+    }
+
+    pub fn take_audio_events(&mut self)->Vec<AudioEvent>{
+        std::mem::take(&mut self.audio_events)
     }
 
     fn enter(&mut self,state:PlayerState){
@@ -220,6 +231,7 @@ impl Game{
                 if input.pressed(VK_I){self.screen=AppScreen::Instructions}
                 else if input.pressed(VK_ENTER)||input.pressed(VK_SPACE){
                     self.screen=AppScreen::Playing;
+                    self.audio_events.push(AudioEvent::MusicStart);
                     // The original level begins with playerJumping=true, so
                     // cameraLogic snaps vertically on its first enterFrame.
                     self.update_camera();
@@ -231,6 +243,7 @@ impl Game{
                 if input.pressed(VK_ESCAPE){self.screen=AppScreen::Title}
                 else if input.pressed(VK_ENTER)||input.pressed(VK_SPACE){
                     self.screen=AppScreen::Playing;
+                    self.audio_events.push(AudioEvent::MusicStart);
                     self.update_camera();
                 }
                 input.clear_pressed();
@@ -269,11 +282,16 @@ impl Game{
 
         self.collect_pickups();
         self.update_shots();
+        self.update_pit_logic();
         self.update_tutorial_checkpoints();
         self.update_camera();
 
         if self.player.state==state_at_tick_start{
             self.player.state_tick=self.player.state_tick.saturating_add(1);
+        }
+        // Sprite 262 contains StartSound 248 on local frame 1.
+        if self.player.state==PlayerState::Jump&&self.player.state_tick==1{
+            self.audio_events.push(AudioEvent::Jump);
         }
         input.clear_pressed();
     }
@@ -645,6 +663,7 @@ impl Game{
                 self.pickups[i]=true;
                 self.batarangs+=5;
                 self.score+=5;
+                self.audio_events.push(AudioEvent::Item);
             }
         }
     }
