@@ -74,6 +74,9 @@ pub fn render(fb:&mut[u32],game:&Game,assets:&Assets){
     // timelines play at the movie's 25 Hz and Stop() on their final frame.
     draw_root_timeline(fb,&assets.level_title_frames,game.ticks,318.7,76.75);
     draw_root_timeline(fb,&assets.fadein_frames,game.ticks,301.0,205.0);
+    if let Some(t)=game.fadeout_tick{
+        draw_root_timeline(fb,&assets.fadeout_frames,t as u64,301.0,205.0);
+    }
 }
 fn draw_hud(fb:&mut[u32],game:&Game,assets:&Assets){
     // Root frame 19 placement of symbol 716.
