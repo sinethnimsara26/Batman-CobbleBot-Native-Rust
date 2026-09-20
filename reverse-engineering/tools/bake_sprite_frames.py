@@ -206,9 +206,10 @@ def parse_shape(payload: bytes, tag: int, unsupported: set[str]):
     _, pos = struct.unpack_from("<H", payload, 0)[0], 2
     _, pos = read_rect(payload, pos)
     has_alpha = tag in (32, 83)
-    # DefineShape/2/3 use the historical even-odd fill rule. DefineShape4's
-    # UsesFillWindingRule bit switches to the non-zero winding rule.
-    even_odd = True
+    # Legacy DefineShape/2/3 in this title render correctly with Flash's
+    # historical winding behavior. DefineShape4 explicitly carries the
+    # UsesFillWindingRule switch, so only Shape4 selects even-odd when false.
+    even_odd = False
     if tag == 83:
         _, pos = read_rect(payload, pos)  # EdgeBounds
         uses_fill_winding = bool(payload[pos] & 0x04)
