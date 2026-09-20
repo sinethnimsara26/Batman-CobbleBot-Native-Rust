@@ -60,6 +60,7 @@ jobs:
 
           python "$tools/bake_player_states.py" "$swf" "$work/reports/symbols.json" "$work/batman-frames" --bitmaps "$work/bitmaps" --symbol 691 --scale 0.163742
           python "$tools/pack_sprite_frames.py" "$work/batman-frames" "assets/batman_frames.bin"
+          python "$tools/extract_player_sound_events.py" "$swf" "$work/reports/symbols.json" "$work/batman-frames/manifest.json" "reverse-engineering/manifests/sound-manifest.json" "$work/player_sound_events.json"
 
           python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/pickup-frames" --bitmaps "$work/bitmaps" --symbol 695 --scale 1.130691 --all-frames
           python "$tools/pack_sprite_frames.py" "$work/pickup-frames" "assets/pickup_frames.bin"
