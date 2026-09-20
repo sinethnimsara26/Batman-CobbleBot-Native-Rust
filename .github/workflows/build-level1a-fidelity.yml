@@ -50,7 +50,7 @@ jobs:
           $tools = "reverse-engineering/tools"
           $work = ".generated"
           $swf = "$work/cobblebot.swf"
-          New-Item -ItemType Directory -Force -Path "$work/reports","$work/bitmaps","$work/batman-frames","$work/pickup-frames","$work/batarang-frames","$work/level-title","$work/fadein","$work/tutorial-overlay","$work/hud","$work/level1a-tiles","assets","reverse-engineering/generated/collision_masks" | Out-Null
+          New-Item -ItemType Directory -Force -Path "$work/reports","$work/bitmaps","$work/batman-frames","$work/pickup-frames","$work/batarang-frames","$work/level-title","$work/fadein","$work/fadeout","$work/tutorial-overlay","$work/hud","$work/level1a-tiles","assets","reverse-engineering/generated/collision_masks" | Out-Null
 
           python "$tools/swf_re.py" "$swf" "$work/reports"
           python "$tools/extract_bitmaps.py" "$swf" "$work/bitmaps"
@@ -73,6 +73,8 @@ jobs:
           python "$tools/pack_sprite_frames.py" "$work/level-title" "assets/level_title_frames.bin"
           python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/fadein" --bitmaps "$work/bitmaps" --symbol 747 --scale 1.0 --all-frames
           python "$tools/pack_sprite_frames.py" "$work/fadein" "assets/fadein_frames.bin"
+          python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/fadeout" --bitmaps "$work/bitmaps" --symbol 34 --scale 1.0 --all-frames
+          python "$tools/pack_sprite_frames.py" "$work/fadeout" "assets/fadeout_frames.bin"
 
           python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/tutorial-overlay" --bitmaps "$work/bitmaps" --symbol 737 --scale 1.0 --all-frames
           python "$tools/pack_sprite_frames.py" "$work/tutorial-overlay" "assets/tutorial_overlay_frames.bin"
@@ -121,7 +123,7 @@ jobs:
           assert hud["variables"] == {"702":"_root.batarangs","713":"_root.score","714":"_root.lives"}, hud["variables"]
           assert hud["static_text"] == {"700":"BATARANG","710":"HEALTH","711":"SCORE","715":"lives x"}, hud["static_text"]
 
-          for name,count in [("level-title",100),("fadein",43)]:
+          for name,count in [("level-title",100),("fadein",43),("fadeout",41)]:
               ui=json.loads(Path(f".generated/{name}/manifest.json").read_text())
               assert ui["frame_count"] == count
               assert ui["unsupported_fills"] == []
