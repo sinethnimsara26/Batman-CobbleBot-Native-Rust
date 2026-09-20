@@ -155,7 +155,8 @@ jobs:
           if (!(Test-Path $exe)) { throw "EXE missing" }
           Get-Item $exe | Format-List Name,Length,LastWriteTime
           Get-FileHash $exe -Algorithm SHA256
-          & $exe --render-smoke ".generated/visual-smoke"
+          $proc = Start-Process -FilePath $exe -ArgumentList @("--render-smoke", ".generated/visual-smoke") -Wait -PassThru
+          if ($proc.ExitCode -ne 0) { throw "Visual smoke process failed with exit code $($proc.ExitCode)" }
           $shots = Get-ChildItem ".generated/visual-smoke/*.png"
           if ($shots.Count -lt 9) { throw "Visual smoke checkpoints were not generated" }
           $shots | Format-Table Name,Length
