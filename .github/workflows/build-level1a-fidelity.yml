@@ -75,8 +75,6 @@ jobs:
 
           python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/tutorial-overlay" --bitmaps "$work/bitmaps" --symbol 737 --scale 1.0 --all-frames
           python "$tools/pack_sprite_frames.py" "$work/tutorial-overlay" "assets/tutorial_overlay_frames.bin"
-          python "$tools/bake_static_text.py" "$swf" "assets/tutorial_tostreet_text.png" --character 736
-
           python "$tools/bake_level_tiles.py" "$swf" "$work/reports/symbols.json" "$work/level1a-tiles" --bitmaps "$work/bitmaps" --symbol 152 --place-x 2467.65 --place-y 239.25 --exclude-symbol 149 --exclude-symbol 151 --exclude-symbol 153
           python "$tools/pack_level_tiles.py" "$work/level1a-tiles" "assets/level1a_tiles.bin"
 
@@ -106,14 +104,9 @@ jobs:
           tutorial=json.loads(Path(".generated/tutorial-overlay/manifest.json").read_text())
           assert tutorial["frame_count"] == 149
           assert tutorial["unsupported_fills"] == []
-          assert tutorial["missing_bitmap_ids"] in ([736],[])
-
-          static_text=json.loads(Path("assets/tutorial_tostreet_text.json").read_text())
-          assert static_text["character_id"] == 736
-          assert static_text["fonts"] == [{"id":25,"name":"Impact"}]
-          assert static_text["text_records"][0] == "USE TO GLIDE TO DESCEND"
-          assert "TO THE STREET LEVEL" in static_text["text_records"][1]
-          assert static_text["size"] == [257,49]
+          # The generic sprite baker now renders every embedded DefineText
+          # record using the SWF's own embedded font glyphs.
+          assert tutorial["missing_bitmap_ids"] == [], tutorial["missing_bitmap_ids"]
 
           for name,count in [("level-title",100),("fadein",43)]:
               ui=json.loads(Path(f".generated/{name}/manifest.json").read_text())
