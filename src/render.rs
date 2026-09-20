@@ -66,21 +66,6 @@ pub fn render(fb:&mut[u32],game:&Game,assets:&Assets){
         );
     }
 
-    // DefineText 736 is placed by tutorial sprite 737 only for the
-    // toStreet segment (frames 140..148). The main vector sprite baker does
-    // not rasterize SWF text, so bake its embedded Impact glyphs separately.
-    if (140..=148).contains(&game.overlay_frame){
-        // root overlay (311.4,190) + child placement (-201.3,-26.25)
-        // + DefineText crop origin (81.0,2.85).
-        blit(
-            fb,&assets.tutorial_tostreet_text,
-            191,167,
-            assets.tutorial_tostreet_text.w as i32,
-            assets.tutorial_tostreet_text.h as i32,
-            false
-        );
-    }
-
     // Root frame 19 places the original level-title clip at (318.7,76.75)
     // and the original fade-in clip above it at (301,205). Both child
     // timelines play at the movie's 25 Hz and Stop() on their final frame.
