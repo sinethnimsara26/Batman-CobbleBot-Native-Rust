@@ -166,6 +166,8 @@ pub struct Game{
     gravity:f32,
     pub batarangs:i32,
     pub score:i32,
+    pub lives:i32,
+    pub health:i32,
     pub player_attacking:bool,
     pub overlay_frame:usize,
     overlay_playing:bool,
@@ -193,7 +195,7 @@ impl Game{
             camera_x:GAME_ROOT_X,camera_y:GAME_ROOT_Y,
             background_x:0.0,background_y:BG_INITIAL_Y,
             gravity:GLOBAL_GRAVITY,
-            batarangs:0,score:0,player_attacking:false,
+            batarangs:0,score:0,lives:5,health:100,player_attacking:false,
             overlay_frame:OVERLAY_BLANK,overlay_playing:false,walk_checkpoint_started_tick:None,level1a_exit_reached:false,
             pickups:[false;7],shots:Vec::new(),ticks:0,
         }
