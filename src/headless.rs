@@ -1,6 +1,6 @@
 use crate::assets::Assets;
 use crate::collision::CollisionMask;
-use crate::game::{AppScreen,Game,InputState,LOGICAL_H,LOGICAL_W,VK_D,VK_ENTER,VK_RIGHT,VK_S,VK_SPACE};
+use crate::game::{AppScreen,Game,InputState,LEVEL_X,LEVEL_Y,LOGICAL_H,LOGICAL_W,VK_D,VK_ENTER,VK_RIGHT,VK_S,VK_SPACE};
 use crate::render;
 use png::{BitDepth,ColorType,Encoder};
 use std::fs::{self,File};
@@ -104,6 +104,21 @@ pub fn render_smoke(out:&str){
     // checkpoint; gameplay checkpoint logic is separately exercised above.
     game.overlay_frame=140;
     snapshot(&out,"09_to_street.png",&mut game,&assets);
+
+    // Hit the exact recovered Level 1A exit checkpoint and prove the original
+    // root fadeout timeline runs to completion without entering Level 1B.
+    game.player.x=7600.0-LEVEL_X;
+    game.player.y=520.0-LEVEL_Y;
+    game.tick(&mut input,&ground);
+    assert!(game.level1a_exit_reached);
+    assert_eq!(game.fadeout_tick,Some(0));
+    snapshot(&out,"10_exit_fade_start.png",&mut game,&assets);
+    for _ in 0..20 { game.tick(&mut input,&ground); }
+    snapshot(&out,"11_exit_fade_mid.png",&mut game,&assets);
+    for _ in 0..25 { game.tick(&mut input,&ground); }
+    assert!(game.level1a_complete);
+    assert_eq!(game.fadeout_tick,Some(40));
+    snapshot(&out,"12_level1a_complete.png",&mut game,&assets);
 }
 
 fn snapshot(out:&Path,name:&str,game:&mut Game,assets:&Assets){
