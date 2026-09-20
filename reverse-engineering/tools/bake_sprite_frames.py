@@ -168,6 +168,12 @@ def _append_edge(active, paths, style_index, edge, reverse=False):
     current = active.get(key)
     if current is None:
         active[key] = list(contour)
+    elif reverse and contour[-1] == current[0]:
+        # FillStyle0 owns the left side of an edge, so its directed edge is
+        # reversed. Preserve that direction by prepending it to the current
+        # contour; appending breaks multi-edge outlines and their winding.
+        contour.extend(current[1:])
+        active[key] = list(contour)
     elif current[-1] == contour[0]:
         current.extend(contour[1:])
     else:
@@ -176,7 +182,7 @@ def _append_edge(active, paths, style_index, edge, reverse=False):
 
 
 def _stitch_contours(contours):
-    """Join SWF fill-edge fragments into complete contours by exact twip endpoints."""
+    """Join directed SWF fill fragments without changing their winding."""
     remaining=[list(c) for c in contours if len(c)>=2]
     out=[]
     while remaining:
@@ -186,13 +192,11 @@ def _stitch_contours(contours):
             changed=False
             for i,candidate in enumerate(remaining):
                 if chain[-1] == candidate[0]:
-                    chain.extend(candidate[1:]); remaining.pop(i); changed=True; break
-                if chain[-1] == candidate[-1]:
-                    rev=list(reversed(candidate)); chain.extend(rev[1:]); remaining.pop(i); changed=True; break
-                if chain[0] == candidate[-1]:
-                    chain=candidate[:-1]+chain; remaining.pop(i); changed=True; break
-                if chain[0] == candidate[0]:
-                    rev=list(reversed(candidate)); chain=rev[:-1]+chain; remaining.pop(i); changed=True; break
+                    chain.extend(candidate[1:])
+                    remaining.pop(i); changed=True; break
+                if candidate[-1] == chain[0]:
+                    chain=candidate[:-1] + chain
+                    remaining.pop(i); changed=True; break
         if len(chain)>=3:
             out.append(chain)
     return out
@@ -202,10 +206,13 @@ def parse_shape(payload: bytes, tag: int, unsupported: set[str]):
     _, pos = struct.unpack_from("<H", payload, 0)[0], 2
     _, pos = read_rect(payload, pos)
     has_alpha = tag in (32, 83)
-    even_odd = False
+    # DefineShape/2/3 use the historical even-odd fill rule. DefineShape4's
+    # UsesFillWindingRule bit switches to the non-zero winding rule.
+    even_odd = True
     if tag == 83:
         _, pos = read_rect(payload, pos)  # EdgeBounds
-        even_odd = bool(payload[pos] & 0x04)  # UsesFillWindingRule selects even-odd.
+        uses_fill_winding = bool(payload[pos] & 0x04)
+        even_odd = not uses_fill_winding
         pos += 1
     fills, pos = _read_fill_array(payload, pos, has_alpha, unsupported)
     lines, pos = _read_line_array(payload, pos, has_alpha, tag == 83, unsupported)
@@ -290,7 +297,8 @@ def parse_shape(payload: bytes, tag: int, unsupported: set[str]):
     # here prevents complex fills (HUD wings, rounded panels, etc.) from
     # collapsing into outlines or corner shards.
     paths = {key: _stitch_contours(contours) for key, contours in paths.items()}
-    line_paths = {key: _stitch_contours(contours) for key, contours in line_paths.items()}
+    # Stroke fragments do not participate in fill winding. Keep their original
+    # record segmentation instead of reconnecting unrelated touching strokes.
     return fills, paths, lines, line_paths, even_odd
 
 
