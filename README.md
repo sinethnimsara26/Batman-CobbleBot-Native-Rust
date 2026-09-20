@@ -35,3 +35,7 @@ CI reconstructs development assets from a verified source SWF during the build. 
 Original project code is MIT licensed. Batman/DC/Warner/Cartoon Network game content is **not** covered by the MIT license.
 
 This is an unofficial preservation/reimplementation experiment and is not affiliated with or endorsed by the original rights holders.
+
+## Public CI status
+
+The public repository is now the active build host for the Level 1A fidelity slice. Generated third-party game assets stay out of Git history and are reconstructed during CI.
