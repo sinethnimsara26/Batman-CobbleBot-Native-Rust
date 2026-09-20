@@ -53,6 +53,9 @@ pub fn render(fb:&mut[u32],game:&Game,assets:&Assets){
     let ax=if flip{frame.image.w as f32-frame.anchor_x}else{frame.anchor_x};
     blit(fb,&frame.image,sx-ax.round() as i32,sy-frame.anchor_y.round() as i32,frame.image.w as i32,frame.image.h as i32,flip);
 
+    // Root depth 1443: original HUD symbol 716.
+    draw_hud(fb,game,assets);
+
     // Root depth 1490: original tutorial overlay symbol 737.
     // Its frame is controlled by the recovered checkpoint scripts.
     if !assets.tutorial_overlay_frames.is_empty(){
@@ -72,6 +75,68 @@ pub fn render(fb:&mut[u32],game:&Game,assets:&Assets){
     draw_root_timeline(fb,&assets.level_title_frames,game.ticks,318.7,76.75);
     draw_root_timeline(fb,&assets.fadein_frames,game.ticks,301.0,205.0);
 }
+fn draw_hud(fb:&mut[u32],game:&Game,assets:&Assets){
+    // Root frame 19 placement of symbol 716.
+    const ROOT_X:f32=159.0;
+    const ROOT_Y:f32=-11.0;
+    // Deterministic native-bounds anchor produced from symbol 716.
+    const ANCHOR_X:f32=0.48106384;
+    const ANCHOR_Y:f32=1.1601379;
+    let x=(ROOT_X-ANCHOR_X).round() as i32;
+    let y=(ROOT_Y-ANCHOR_Y).round() as i32;
+    blit(
+        fb,&assets.hud_base,x,y,
+        assets.hud_base.w as i32,assets.hud_base.h as i32,false
+    );
+
+    // Dynamic DefineEditText fields from the original HUD:
+    // 702 = _root.batarangs, 713 = _root.score, 714 = _root.lives.
+    draw_number_centered(fb,&assets.hud_digits_small,x+53,y+68,game.batarangs.max(0));
+    draw_number_centered(fb,&assets.hud_digits_large,x+228,y+47,game.score.max(0));
+    draw_number_centered(fb,&assets.hud_digits_small,x+155,y+69,game.lives.max(0));
+}
+
+fn draw_number_centered(fb:&mut[u32],atlas:&Image,cx:i32,cy:i32,value:i32){
+    if atlas.w<10 || atlas.h==0{return;}
+    let cell_w=atlas.w/10;
+    if cell_w==0{return;}
+    let text=value.to_string();
+    let total=(cell_w*text.len()) as i32;
+    let mut x=cx-total/2;
+    let y=cy-atlas.h as i32/2;
+    for byte in text.bytes(){
+        if !(b'0'..=b'9').contains(&byte){continue;}
+        let digit=(byte-b'0') as usize;
+        blit_region(
+            fb,atlas,
+            digit*cell_w,0,cell_w,atlas.h,
+            x,y,cell_w as i32,atlas.h as i32
+        );
+        x+=cell_w as i32;
+    }
+}
+
+fn blit_region(
+    dst:&mut[u32],src:&Image,
+    sx0:usize,sy0:usize,sw:usize,sh:usize,
+    x:i32,y:i32,rw:i32,rh:i32
+){
+    if sw==0||sh==0||rw<=0||rh<=0{return;}
+    for oy in 0..rh{
+        let dy=y+oy;
+        if dy<0||dy>=LOGICAL_H as i32{continue;}
+        let sy=sy0+(oy as usize*sh/rh as usize).min(sh-1);
+        for ox in 0..rw{
+            let dx=x+ox;
+            if dx<0||dx>=LOGICAL_W as i32{continue;}
+            let sx=sx0+(ox as usize*sw/rw as usize).min(sw-1);
+            if sx>=src.w||sy>=src.h{continue;}
+            let sp=src.pixels[sy*src.w+sx];
+            blend(&mut dst[dy as usize*LOGICAL_W+dx as usize],sp);
+        }
+    }
+}
+
 fn draw_root_timeline(fb:&mut[u32],frames:&[crate::assets::SpriteFrame],tick:u64,x:f32,y:f32){
     if frames.is_empty(){return;}
     let i=(tick as usize).min(frames.len()-1);
