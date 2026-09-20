@@ -1,0 +1,11 @@
+/target/
+/assets/
+/.generated/
+*.swf
+*.exe
+/reverse-engineering/generated/
+/reverse-engineering/proofs/*.png
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db
