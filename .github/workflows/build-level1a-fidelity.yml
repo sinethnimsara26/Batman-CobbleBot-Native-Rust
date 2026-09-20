@@ -1,0 +1,173 @@
+name: build-level1a-fidelity
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: batman-level1a-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-x64:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Python asset dependency
+        run: python -m pip install --disable-pip-version-check Pillow
+
+      - name: Fetch and verify canonical CobbleBot SWF
+        shell: pwsh
+        run: |
+          $url = "https://archive.org/download/the-batman-cobblebot-caper/The%20Batman%20-%20The%20Cobblebot%20Caper.swf"
+          Invoke-WebRequest -Uri $url -OutFile cobblebot-source.swf
+          @'
+          import hashlib, zlib
+          from pathlib import Path
+          src=Path("cobblebot-source.swf").read_bytes()
+          if src[:3] == b"CWS":
+              fws=b"FWS"+src[3:8]+zlib.decompress(src[8:])
+          elif src[:3] == b"FWS":
+              fws=src
+          else:
+              raise SystemExit(f"bad SWF signature {src[:3]!r}")
+          expected="3d9e1992404313bc2e2652d46a5838160ef721e2ad559fdd7455f3c54f8ac1ed"
+          got=hashlib.sha256(fws).hexdigest()
+          print("canonical FWS SHA-256:",got)
+          if got != expected:
+              raise SystemExit(f"source mismatch: {got}")
+          out=Path(".generated")
+          out.mkdir(parents=True,exist_ok=True)
+          (out/"cobblebot.swf").write_bytes(fws)
+          '@ | python -
+
+      - name: Rebuild original Level 1A assets from SWF
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $tools = "reverse-engineering/tools"
+          $work = ".generated"
+          $swf = "$work/cobblebot.swf"
+          New-Item -ItemType Directory -Force -Path "$work/reports","$work/bitmaps","$work/batman-frames","$work/pickup-frames","$work/batarang-frames","$work/level-title","$work/fadein","$work/tutorial-overlay","$work/level1a-tiles","assets","reverse-engineering/generated/collision_masks" | Out-Null
+
+          python "$tools/swf_re.py" "$swf" "$work/reports"
+          python "$tools/extract_bitmaps.py" "$swf" "$work/bitmaps"
+          python "$tools/stage_ui_screens.py" "$work/bitmaps" "assets"
+
+          python "$tools/render_collision_masks.py" "$swf" "$work/reports/symbols.json" "reverse-engineering/manifests/level-instances.json" "reverse-engineering/generated/collision_masks" --level level1a
+
+          python "$tools/bake_player_states.py" "$swf" "$work/reports/symbols.json" "$work/batman-frames" --bitmaps "$work/bitmaps" --symbol 691 --scale 0.163742
+          python "$tools/pack_sprite_frames.py" "$work/batman-frames" "assets/batman_frames.bin"
+
+          python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/pickup-frames" --bitmaps "$work/bitmaps" --symbol 695 --scale 1.130691 --all-frames
+          python "$tools/pack_sprite_frames.py" "$work/pickup-frames" "assets/pickup_frames.bin"
+          python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/batarang-frames" --bitmaps "$work/bitmaps" --symbol 694 --scale 0.364471 --all-frames
+          python "$tools/pack_sprite_frames.py" "$work/batarang-frames" "assets/batarang_frames.bin"
+
+          python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "assets/level1a_bg.png" --bitmaps "$work/bitmaps" --symbol 142 --frame 0 --scale 1.0 --native-bounds
+
+          python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/level-title" --bitmaps "$work/bitmaps" --symbol 746 --scale 1.0 --all-frames
+          python "$tools/pack_sprite_frames.py" "$work/level-title" "assets/level_title_frames.bin"
+          python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/fadein" --bitmaps "$work/bitmaps" --symbol 747 --scale 1.0 --all-frames
+          python "$tools/pack_sprite_frames.py" "$work/fadein" "assets/fadein_frames.bin"
+
+          python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/tutorial-overlay" --bitmaps "$work/bitmaps" --symbol 737 --scale 1.0 --all-frames
+          python "$tools/pack_sprite_frames.py" "$work/tutorial-overlay" "assets/tutorial_overlay_frames.bin"
+          python "$tools/bake_static_text.py" "$swf" "assets/tutorial_tostreet_text.png" --character 736
+
+          python "$tools/bake_level_tiles.py" "$swf" "$work/reports/symbols.json" "$work/level1a-tiles" --bitmaps "$work/bitmaps" --symbol 152 --place-x 2467.65 --place-y 239.25 --exclude-symbol 149 --exclude-symbol 151 --exclude-symbol 153
+          python "$tools/pack_level_tiles.py" "$work/level1a-tiles" "assets/level1a_tiles.bin"
+
+      - name: Validate recovered assets and reject leaked control geometry
+        shell: python
+        run: |
+          import json
+          from pathlib import Path
+          from PIL import Image
+
+          player=json.loads(Path(".generated/batman-frames/manifest.json").read_text())
+          expected=[
+              ("stand",9),("walk",12),("run",10),("jump",4),("fall",5),("glide",2),
+              ("land",2),("duck",5),("up",2),("punch",11),("highpunch",11),
+              ("lowpunch",9),("jumppunch",9),("kick",8),("highkick",8),
+              ("lowkick",15),("jumpkick",10),("batarang",9),("duckbatarang",12),
+              ("jumpbatarang",7),("grapplingup",10),("grappling",28),
+              ("capespin",9),("hurt2",17),("hurt",11),("electro",21),("die",23),
+          ]
+          actual=[(x["name"],x["frame_count"]) for x in player["states"]]
+          print("Batman child timelines:",actual,"total",player["frame_count"])
+          assert player["frame_count"] == 279
+          assert actual == expected
+          assert player["unsupported_fills"] == []
+          assert player["missing_bitmap_ids"] == []
+
+          tutorial=json.loads(Path(".generated/tutorial-overlay/manifest.json").read_text())
+          assert tutorial["frame_count"] == 149
+          assert tutorial["unsupported_fills"] == []
+          assert tutorial["missing_bitmap_ids"] in ([736],[])
+
+          static_text=json.loads(Path("assets/tutorial_tostreet_text.json").read_text())
+          assert static_text["character_id"] == 736
+          assert static_text["fonts"] == [{"id":25,"name":"Impact"}]
+          assert static_text["text_records"][0] == "USE TO GLIDE TO DESCEND"
+          assert "TO THE STREET LEVEL" in static_text["text_records"][1]
+          assert static_text["size"] == [257,49]
+
+          for name,count in [("level-title",100),("fadein",43)]:
+              ui=json.loads(Path(f".generated/{name}/manifest.json").read_text())
+              assert ui["frame_count"] == count
+              assert ui["unsupported_fills"] == []
+              assert ui["missing_bitmap_ids"] == []
+
+          root=Path(".generated/level1a-tiles")
+          manifest=json.loads((root/"manifest.json").read_text())
+          assert manifest["excluded_symbols"] == [149,151,153]
+          assert manifest["unsupported_fills"] == []
+
+          total=red=blue=0
+          for item in manifest["tiles"]:
+              with Image.open(root/item["file"]) as im:
+                  for r,g,b,a in im.convert("RGBA").getdata():
+                      if a < 16:
+                          continue
+                      total += 1
+                      red += int(r > 160 and g < 80 and b < 80)
+                      blue += int(b > 120 and r < 90 and g < 120)
+          red_ratio=red/max(1,total)
+          blue_ratio=blue/max(1,total)
+          print("visible pixels",total,"red ratio",red_ratio,"blue ratio",blue_ratio)
+          if red_ratio > 0.005 or blue_ratio > 0.001:
+              raise SystemExit("control geometry leaked into visible Level 1A tiles")
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Build Level 1A fidelity slice
+        run: cargo build --release --target x86_64-pc-windows-msvc
+
+      - name: Smoke-check executable and render visual checkpoints
+        shell: pwsh
+        run: |
+          $exe = "target/x86_64-pc-windows-msvc/release/batman_cobblebot_native.exe"
+          if (!(Test-Path $exe)) { throw "EXE missing" }
+          Get-Item $exe | Format-List Name,Length,LastWriteTime
+          Get-FileHash $exe -Algorithm SHA256
+          & $exe --render-smoke ".generated/visual-smoke"
+          $shots = Get-ChildItem ".generated/visual-smoke/*.png"
+          if ($shots.Count -lt 9) { throw "Visual smoke checkpoints were not generated" }
+          $shots | Format-Table Name,Length
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Batman-CobbleBot-Level1A-Fidelity-Windows-x64
+          path: target/x86_64-pc-windows-msvc/release/batman_cobblebot_native.exe
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Batman-CobbleBot-Level1A-Visual-Smoke
+          path: .generated/visual-smoke/*.png
+          if-no-files-found: error
