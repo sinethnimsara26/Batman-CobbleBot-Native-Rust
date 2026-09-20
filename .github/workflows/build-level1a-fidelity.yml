@@ -50,7 +50,7 @@ jobs:
           $tools = "reverse-engineering/tools"
           $work = ".generated"
           $swf = "$work/cobblebot.swf"
-          New-Item -ItemType Directory -Force -Path "$work/reports","$work/bitmaps","$work/batman-frames","$work/pickup-frames","$work/batarang-frames","$work/level-title","$work/fadein","$work/tutorial-overlay","$work/level1a-tiles","assets","reverse-engineering/generated/collision_masks" | Out-Null
+          New-Item -ItemType Directory -Force -Path "$work/reports","$work/bitmaps","$work/batman-frames","$work/pickup-frames","$work/batarang-frames","$work/level-title","$work/fadein","$work/tutorial-overlay","$work/hud","$work/level1a-tiles","assets","reverse-engineering/generated/collision_masks" | Out-Null
 
           python "$tools/swf_re.py" "$swf" "$work/reports"
           python "$tools/extract_bitmaps.py" "$swf" "$work/bitmaps"
@@ -75,6 +75,12 @@ jobs:
 
           python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/tutorial-overlay" --bitmaps "$work/bitmaps" --symbol 737 --scale 1.0 --all-frames
           python "$tools/pack_sprite_frames.py" "$work/tutorial-overlay" "assets/tutorial_overlay_frames.bin"
+
+          # Original HUD shell (symbol 716). Flash _sans resolves to Arial on
+          # Windows; bake only the static labels and a numeric atlas. Rust owns
+          # the changing Batarang/Score/Lives values at runtime.
+          python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/hud" --bitmaps "$work/bitmaps" --symbol 716 --scale 1.0 --all-frames
+          python "$tools/bake_hud_assets.py" "$swf" "$work/reports/symbols.json" "$work/hud" "assets" --font "C:/Windows/Fonts/arial.ttf"
           python "$tools/bake_level_tiles.py" "$swf" "$work/reports/symbols.json" "$work/level1a-tiles" --bitmaps "$work/bitmaps" --symbol 152 --place-x 2467.65 --place-y 239.25 --exclude-symbol 149 --exclude-symbol 151 --exclude-symbol 153
           python "$tools/pack_level_tiles.py" "$work/level1a-tiles" "assets/level1a_tiles.bin"
 
@@ -107,6 +113,12 @@ jobs:
           # The generic sprite baker now renders every embedded DefineText
           # record using the SWF's own embedded font glyphs.
           assert tutorial["missing_bitmap_ids"] == [], tutorial["missing_bitmap_ids"]
+
+          hud=json.loads(Path("assets/hud.json").read_text())
+          print("HUD:",hud)
+          assert hud["hud_size"] == [283,86], hud["hud_size"]
+          assert hud["variables"] == {"702":"_root.batarangs","713":"_root.score","714":"_root.lives"}, hud["variables"]
+          assert hud["static_text"] == {"700":"BATARANG","710":"HEALTH","711":"SCORE","715":"lives x"}, hud["static_text"]
 
           for name,count in [("level-title",100),("fadein",43)]:
               ui=json.loads(Path(f".generated/{name}/manifest.json").read_text())
