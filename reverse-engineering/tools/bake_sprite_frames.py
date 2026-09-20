@@ -175,6 +175,29 @@ def _append_edge(active, paths, style_index, edge, reverse=False):
         active[key] = list(contour)
 
 
+def _stitch_contours(contours):
+    """Join SWF fill-edge fragments into complete contours by exact twip endpoints."""
+    remaining=[list(c) for c in contours if len(c)>=2]
+    out=[]
+    while remaining:
+        chain=remaining.pop(0)
+        changed=True
+        while changed and remaining:
+            changed=False
+            for i,candidate in enumerate(remaining):
+                if chain[-1] == candidate[0]:
+                    chain.extend(candidate[1:]); remaining.pop(i); changed=True; break
+                if chain[-1] == candidate[-1]:
+                    rev=list(reversed(candidate)); chain.extend(rev[1:]); remaining.pop(i); changed=True; break
+                if chain[0] == candidate[-1]:
+                    chain=candidate[:-1]+chain; remaining.pop(i); changed=True; break
+                if chain[0] == candidate[0]:
+                    rev=list(reversed(candidate)); chain=rev[:-1]+chain; remaining.pop(i); changed=True; break
+        if len(chain)>=3:
+            out.append(chain)
+    return out
+
+
 def parse_shape(payload: bytes, tag: int, unsupported: set[str]):
     _, pos = struct.unpack_from("<H", payload, 0)[0], 2
     _, pos = read_rect(payload, pos)
@@ -262,6 +285,12 @@ def parse_shape(payload: bytes, tag: int, unsupported: set[str]):
                 bits.bit = pos * 8
                 fill_bits = bits.u(4)
                 line_bits = bits.u(4)
+    # SWF fill edges may be emitted as multiple open fragments. Flash joins
+    # fragments by endpoint before applying the winding rule; doing the same
+    # here prevents complex fills (HUD wings, rounded panels, etc.) from
+    # collapsing into outlines or corner shards.
+    paths = {key: _stitch_contours(contours) for key, contours in paths.items()}
+    line_paths = {key: _stitch_contours(contours) for key, contours in line_paths.items()}
     return fills, paths, lines, line_paths, even_odd
 
 
