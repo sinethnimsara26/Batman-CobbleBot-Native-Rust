@@ -1,0 +1,62 @@
+#![allow(non_snake_case)]
+use crate::assets::Assets;
+use crate::collision::CollisionMask;
+use crate::game::{Game,InputState,FIXED_STEP,LOGICAL_H,LOGICAL_W,VK_A,VK_D,VK_DOWN,VK_ENTER,VK_ESCAPE,VK_I,VK_LEFT,VK_RIGHT,VK_S,VK_SPACE,VK_UP};
+use crate::render;
+use std::ffi::c_void;
+use std::mem::{size_of,zeroed};
+use std::ptr::{null,null_mut};
+use std::time::Instant;
+
+const WM_DESTROY:u32=0x0002; const WM_SETFOCUS:u32=0x0007; const WM_KILLFOCUS:u32=0x0008; const WM_PAINT:u32=0x000F; const WM_CLOSE:u32=0x0010; const WM_ERASEBKGND:u32=0x0014; const WM_ACTIVATE:u32=0x0006; const WM_LBUTTONDOWN:u32=0x0201; const WM_TIMER:u32=0x0113;
+const CS_HREDRAW:u32=2; const CS_VREDRAW:u32=1; const IDC_ARROW:*const u16=32512usize as *const u16; const WS_OVERLAPPEDWINDOW:u32=0x00CF0000; const WS_VISIBLE:u32=0x10000000; const CW_USEDEFAULT:i32=i32::MIN; const SW_SHOW:i32=5; const SRCCOPY:u32=0x00CC0020; const BLACKNESS:u32=0x00000042; const DIB_RGB_COLORS:u32=0; const BI_RGB:u32=0; const WA_INACTIVE:usize=0;
+type HWND=*mut c_void; type HINSTANCE=*mut c_void; type HICON=*mut c_void; type HCURSOR=*mut c_void; type HBRUSH=*mut c_void; type HDC=*mut c_void; type WPARAM=usize; type LPARAM=isize; type LRESULT=isize;
+#[repr(C)]struct POINT{x:i32,y:i32} #[repr(C)]struct RECT{left:i32,top:i32,right:i32,bottom:i32}
+#[repr(C)]struct MSG{hwnd:HWND,message:u32,wParam:WPARAM,lParam:LPARAM,time:u32,pt:POINT,lPrivate:u32}
+#[repr(C)]struct PAINTSTRUCT{hdc:HDC,fErase:i32,rcPaint:RECT,fRestore:i32,fIncUpdate:i32,rgbReserved:[u8;32]}
+#[repr(C)]struct WNDCLASSW{style:u32,lpfnWndProc:Option<unsafe extern "system" fn(HWND,u32,WPARAM,LPARAM)->LRESULT>,cbClsExtra:i32,cbWndExtra:i32,hInstance:HINSTANCE,hIcon:HICON,hCursor:HCURSOR,hbrBackground:HBRUSH,lpszMenuName:*const u16,lpszClassName:*const u16}
+#[repr(C)]struct BITMAPINFOHEADER{biSize:u32,biWidth:i32,biHeight:i32,biPlanes:u16,biBitCount:u16,biCompression:u32,biSizeImage:u32,biXPelsPerMeter:i32,biYPelsPerMeter:i32,biClrUsed:u32,biClrImportant:u32}
+#[repr(C)]struct RGBQUAD{rgbBlue:u8,rgbGreen:u8,rgbRed:u8,rgbReserved:u8} #[repr(C)]struct BITMAPINFO{bmiHeader:BITMAPINFOHEADER,bmiColors:[RGBQUAD;1]}
+#[link(name="user32")]extern "system"{
+ fn RegisterClassW(c:*const WNDCLASSW)->u16; fn CreateWindowExW(ex:u32,class:*const u16,title:*const u16,style:u32,x:i32,y:i32,w:i32,h:i32,parent:HWND,menu:*mut c_void,inst:HINSTANCE,param:*mut c_void)->HWND; fn DefWindowProcW(hwnd:HWND,msg:u32,w:WPARAM,l:LPARAM)->LRESULT;
+ fn ShowWindow(hwnd:HWND,cmd:i32)->i32; fn UpdateWindow(hwnd:HWND)->i32; fn GetMessageW(msg:*mut MSG,hwnd:HWND,min:u32,max:u32)->i32; fn TranslateMessage(msg:*const MSG)->i32; fn DispatchMessageW(msg:*const MSG)->LRESULT; fn PostQuitMessage(code:i32);
+ fn BeginPaint(hwnd:HWND,ps:*mut PAINTSTRUCT)->HDC; fn EndPaint(hwnd:HWND,ps:*const PAINTSTRUCT)->i32; fn GetClientRect(hwnd:HWND,r:*mut RECT)->i32; fn InvalidateRect(hwnd:HWND,r:*const RECT,erase:i32)->i32; fn LoadCursorW(inst:HINSTANCE,name:*const u16)->HCURSOR;
+ fn SetTimer(hwnd:HWND,id:usize,ms:u32,proc_:*const c_void)->usize; fn KillTimer(hwnd:HWND,id:usize)->i32; fn DestroyWindow(hwnd:HWND)->i32; fn SetProcessDPIAware()->i32;
+ fn SetForegroundWindow(hwnd:HWND)->i32; fn SetActiveWindow(hwnd:HWND)->HWND; fn SetFocus(hwnd:HWND)->HWND; fn GetForegroundWindow()->HWND; fn GetAsyncKeyState(vkey:i32)->i16;
+}
+#[link(name="gdi32")]extern "system"{fn StretchDIBits(hdc:HDC,x:i32,y:i32,dw:i32,dh:i32,sx:i32,sy:i32,sw:i32,sh:i32,bits:*const c_void,bmi:*const BITMAPINFO,usage:u32,rop:u32)->i32;fn PatBlt(hdc:HDC,x:i32,y:i32,w:i32,h:i32,rop:u32)->i32;}
+#[link(name="kernel32")]extern "system"{fn GetModuleHandleW(name:*const u16)->HINSTANCE;}
+
+const KEYS:[usize;10]=[VK_LEFT,VK_RIGHT,VK_UP,VK_DOWN,VK_SPACE,VK_ENTER,VK_ESCAPE,VK_I,VK_A,VK_D];
+const EXTRA_KEYS:[usize;1]=[VK_S];
+
+struct App{fb:Vec<u32>,assets:Assets,ground:CollisionMask,game:Game,input:InputState,last:Instant,acc:f32,active:bool}
+impl App{
+ fn new()->Self{Self{fb:vec![0;LOGICAL_W*LOGICAL_H],assets:Assets::load(),ground:CollisionMask::level1a(),game:Game::new(),input:InputState::default(),last:Instant::now(),acc:0.0,active:true}}
+ unsafe fn poll_keyboard(&mut self,hwnd:HWND){
+  // WM_ACTIVATE / WM_SETFOCUS are authoritative. GetForegroundWindow is
+  // allowed to promote us to active, but a transient mismatch must not undo
+  // a focus message and recreate the old "click around before keys work" bug.
+  if GetForegroundWindow()==hwnd{self.active=true;}
+  if !self.active{self.input.release_all();return;}
+  for &k in KEYS.iter().chain(EXTRA_KEYS.iter()){
+   self.input.set(k,(GetAsyncKeyState(k as i32) as u16&0x8000)!=0);
+  }
+ }
+ fn timer(&mut self,hwnd:HWND)->bool{unsafe{self.poll_keyboard(hwnd);}let now=Instant::now();let dt=(now-self.last).as_secs_f32().min(0.2);self.last=now;if !self.active{return false;}self.acc+=dt;let mut stepped=false;while self.acc>=FIXED_STEP{self.game.tick(&mut self.input,&self.ground);self.acc-=FIXED_STEP;stepped=true;}stepped}
+ fn render(&mut self){render::render(&mut self.fb,&self.game,&self.assets);}
+}
+static mut APP:*mut App=null_mut();
+fn wide(s:&str)->Vec<u16>{s.encode_utf16().chain(Some(0)).collect()}
+unsafe fn viewport(hwnd:HWND)->(i32,i32,i32,i32){let mut r:RECT=zeroed();GetClientRect(hwnd,&mut r);let cw=(r.right-r.left).max(1);let ch=(r.bottom-r.top).max(1);let(dw,dh)=if(cw as i64)*(LOGICAL_H as i64)<=(ch as i64)*(LOGICAL_W as i64){(cw,((cw as i64)*(LOGICAL_H as i64)/(LOGICAL_W as i64))as i32)}else{(((ch as i64)*(LOGICAL_W as i64)/(LOGICAL_H as i64))as i32,ch)};((cw-dw)/2,(ch-dh)/2,dw,dh)}
+unsafe extern "system" fn wndproc(hwnd:HWND,msg:u32,w:WPARAM,l:LPARAM)->LRESULT{match msg{
+ WM_ERASEBKGND=>1,
+ WM_PAINT=>{let mut ps:PAINTSTRUCT=zeroed();let hdc=BeginPaint(hwnd,&mut ps);if !APP.is_null(){let app=&mut*APP;app.render();let mut r:RECT=zeroed();GetClientRect(hwnd,&mut r);let cw=(r.right-r.left).max(1);let ch=(r.bottom-r.top).max(1);let(vx,vy,vw,vh)=viewport(hwnd);if vy>0{PatBlt(hdc,0,0,cw,vy,BLACKNESS);PatBlt(hdc,0,vy+vh,cw,ch-vy-vh,BLACKNESS);}if vx>0{PatBlt(hdc,0,vy,vx,vh,BLACKNESS);PatBlt(hdc,vx+vw,vy,cw-vx-vw,vh,BLACKNESS);}let bmi=BITMAPINFO{bmiHeader:BITMAPINFOHEADER{biSize:size_of::<BITMAPINFOHEADER>()as u32,biWidth:LOGICAL_W as i32,biHeight:-(LOGICAL_H as i32),biPlanes:1,biBitCount:32,biCompression:BI_RGB,biSizeImage:(LOGICAL_W*LOGICAL_H*4)as u32,biXPelsPerMeter:0,biYPelsPerMeter:0,biClrUsed:0,biClrImportant:0},bmiColors:[RGBQUAD{rgbBlue:0,rgbGreen:0,rgbRed:0,rgbReserved:0}]};StretchDIBits(hdc,vx,vy,vw,vh,0,0,LOGICAL_W as i32,LOGICAL_H as i32,app.fb.as_ptr()as*const c_void,&bmi,DIB_RGB_COLORS,SRCCOPY);}EndPaint(hwnd,&ps);0},
+ WM_TIMER=>{if !APP.is_null()&&(&mut*APP).timer(hwnd){InvalidateRect(hwnd,null(),0);}0},
+ WM_SETFOCUS=>{if !APP.is_null(){(&mut*APP).active=true;}0},
+ WM_KILLFOCUS=>{if !APP.is_null(){let app=&mut*APP;app.active=false;app.input.release_all();}0},
+ WM_ACTIVATE=>{if !APP.is_null(){let active=(w&0xffff)!=WA_INACTIVE;let app=&mut*APP;app.active=active;if !active{app.input.release_all();}}0},
+ WM_LBUTTONDOWN=>{SetActiveWindow(hwnd);SetFocus(hwnd);0},
+ WM_CLOSE=>{DestroyWindow(hwnd);0}, WM_DESTROY=>{KillTimer(hwnd,1);PostQuitMessage(0);0}, _=>DefWindowProcW(hwnd,msg,w,l)}}
+
+pub fn run(){unsafe{SetProcessDPIAware();APP=Box::into_raw(Box::new(App::new()));let inst=GetModuleHandleW(null());let cls=wide("BatmanCobbleBotLevel1AFidelity");let title=wide("The Batman - CobbleBot Caper - Level 1A Fidelity Slice");let wc=WNDCLASSW{style:CS_HREDRAW|CS_VREDRAW,lpfnWndProc:Some(wndproc),cbClsExtra:0,cbWndExtra:0,hInstance:inst,hIcon:null_mut(),hCursor:LoadCursorW(null_mut(),IDC_ARROW),hbrBackground:null_mut(),lpszMenuName:null(),lpszClassName:cls.as_ptr()};if RegisterClassW(&wc)==0{return;}let hwnd=CreateWindowExW(0,cls.as_ptr(),title.as_ptr(),WS_OVERLAPPEDWINDOW|WS_VISIBLE,CW_USEDEFAULT,CW_USEDEFAULT,930,660,null_mut(),null_mut(),inst,null_mut());if hwnd.is_null(){return;}ShowWindow(hwnd,SW_SHOW);SetActiveWindow(hwnd);SetForegroundWindow(hwnd);SetFocus(hwnd);UpdateWindow(hwnd);SetTimer(hwnd,1,8,null());let mut msg:MSG=zeroed();while GetMessageW(&mut msg,null_mut(),0,0)>0{TranslateMessage(&msg);DispatchMessageW(&msg);}let _=Box::from_raw(APP);APP=null_mut();}}
