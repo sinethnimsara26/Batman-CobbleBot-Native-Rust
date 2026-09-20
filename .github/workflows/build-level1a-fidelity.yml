@@ -50,10 +50,14 @@ jobs:
           $tools = "reverse-engineering/tools"
           $work = ".generated"
           $swf = "$work/cobblebot.swf"
-          New-Item -ItemType Directory -Force -Path "$work/reports","$work/bitmaps","$work/batman-frames","$work/pickup-frames","$work/batarang-frames","$work/level-title","$work/fadein","$work/fadeout","$work/tutorial-overlay","$work/hud","$work/level1a-tiles","assets","reverse-engineering/generated/collision_masks" | Out-Null
+          New-Item -ItemType Directory -Force -Path "$work/reports","$work/bitmaps","$work/sounds","$work/batman-frames","$work/pickup-frames","$work/batarang-frames","$work/level-title","$work/fadein","$work/fadeout","$work/tutorial-overlay","$work/hud","$work/level1a-tiles","assets","reverse-engineering/generated/collision_masks" | Out-Null
 
           python "$tools/swf_re.py" "$swf" "$work/reports"
           python "$tools/extract_bitmaps.py" "$swf" "$work/bitmaps"
+          python "$tools/extract_sounds.py" "$swf" "$work/sounds"
+          Copy-Item "$work/sounds/0751_sound_0751.mp3" "assets/level1a_music.mp3"
+          Copy-Item "$work/sounds/0248_sound_0248.mp3" "assets/jump.mp3"
+          Copy-Item "$work/sounds/0004_item.mp3" "assets/item.mp3"
           python "$tools/stage_ui_screens.py" "$work/bitmaps" "assets"
 
           python "$tools/render_collision_masks.py" "$swf" "$work/reports/symbols.json" "reverse-engineering/manifests/level-instances.json" "reverse-engineering/generated/collision_masks" --level level1a
@@ -93,6 +97,47 @@ jobs:
           import json
           from pathlib import Path
           from PIL import Image
+
+          sounds=json.loads(Path(".generated/sounds/manifest.json").read_text())
+          byid={x["id"]:x for x in sounds}
+          expected_sounds={
+              4:("item","mp3",1961),
+              248:("sound_0248","mp3",5482),
+              751:("sound_0751","mp3",83335),
+          }
+          for sid,(name,fmt,samples) in expected_sounds.items():
+              rec=byid[sid]
+              assert rec["export_name"]==name,rec
+              assert rec["format_name"]==fmt,rec
+              assert rec["sample_count"]==samples,rec
+          print("Level 1A sound assets:",{sid:byid[sid]["file"] for sid in expected_sounds})
+
+          player_audio=json.loads(Path(".generated/player_sound_events.json").read_text())
+          nonempty=[x for x in player_audio if x["events"]]
+          assert nonempty == [{
+              "name":"jump","child_symbol":262,
+              "events":[{"frame":1,"sound_id":248,"name":"sound_0248"}]
+          }],nonempty
+
+          # Root frame 19 starts the Level 1A loop: sound 751, loopCount 32767.
+          import struct,sys
+          sys.path.insert(0,"reverse-engineering/tools")
+          from swf_re import read_rect,tags
+          swf=Path(".generated/cobblebot.swf").read_bytes()
+          _,p=read_rect(swf,8);p+=4
+          frame=0;root_event=None
+          for code,payload,_,_ in tags(swf,p,len(swf)):
+              if code==1: frame+=1
+              elif code==15 and frame==19:
+                  sid=struct.unpack_from("<H",payload,0)[0]
+                  flags=payload[2]
+                  q=3
+                  if flags&1:q+=4
+                  if flags&2:q+=4
+                  loops=struct.unpack_from("<H",payload,q)[0] if flags&4 else 1
+                  root_event=(sid,loops)
+                  break
+          assert root_event==(751,32767),root_event
 
           player=json.loads(Path(".generated/batman-frames/manifest.json").read_text())
           expected=[
