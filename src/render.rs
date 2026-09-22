@@ -8,6 +8,24 @@ pub fn render(fb:&mut[u32],game:&Game,assets:&Assets){
         AppScreen::Instructions=>{blit(fb,&assets.instructions_screen,0,0,600,400,false);return},
         AppScreen::Playing=>{}
     }
+    // Original root gameplay backdrop, frame 19:
+    // depth 1 = symbol 131 at the inherited identity transform;
+    // depth 2 = symbol 134 at (300,130), scale 0.769348.
+    // These are stage-fixed and therefore do NOT move with the game camera.
+    // Both images are native-bounds crops, so subtract their baked anchors.
+    blit(
+        fb,&assets.root_sky,
+        -1,-1,
+        assets.root_sky.w as i32,assets.root_sky.h as i32,false
+    );
+    const MOON_SCALE:f32=0.76934814453125;
+    const MOON_ANCHOR:f32=195.95;
+    let moon_w=(assets.root_moon.w as f32*MOON_SCALE).round() as i32;
+    let moon_h=(assets.root_moon.h as f32*MOON_SCALE).round() as i32;
+    let moon_x=(300.0-MOON_ANCHOR*MOON_SCALE).round() as i32;
+    let moon_y=(130.0-MOON_ANCHOR*MOON_SCALE).round() as i32;
+    blit(fb,&assets.root_moon,moon_x,moon_y,moon_w,moon_h,false);
+
     // Original game-sprite placement for background symbol 142:
     // sx=1.029632568359375, sy=1.029754638671875, tx=0, ty=-13.1.
     // The baked PNG is native-bounds cropped; its top-left represents
