@@ -222,6 +222,22 @@ jobs:
           assert hud["variables"] == {"702":"_root.batarangs","713":"_root.score","714":"_root.lives"}, hud["variables"]
           assert hud["static_text"] == {"700":"BATARANG","710":"HEALTH","711":"SCORE","715":"lives x"}, hud["static_text"]
 
+          # Image-level gates for the placement color transforms. The HUD's
+          # panel is intentionally translucent (alpha multiplier 82/256), and
+          # the level-title clip fades through exact 204/153/102/51 steps.
+          # These checks prevent a parser that merely records CXFORM values
+          # without applying them from passing CI.
+          with Image.open("assets/hud_base.png") as im:
+              alpha=im.convert("RGBA").getchannel("A")
+              hist=alpha.histogram()
+              partial=sum(hist[1:255])
+              print("HUD partial-alpha pixels:",partial)
+              assert partial > 10000, partial
+          for frame,expected in [(44,204),(45,153),(46,102),(47,51),(50,51)]:
+              with Image.open(Path(".generated/level-title")/f"{frame:03}.png") as im:
+                  maximum=im.convert("RGBA").getchannel("A").getextrema()[1]
+                  assert maximum == expected, (frame,maximum,expected)
+
           for name,count in [("level-title",100),("fadein",43),("fadeout",41)]:
               ui=json.loads(Path(f".generated/{name}/manifest.json").read_text())
               assert ui["frame_count"] == count
