@@ -343,7 +343,7 @@ jobs:
                   "pub const fn high_quality()",
                   "pub fn render_high_quality",
                   "pub fn upscale_opaque_base",
-                  "destination pixel (3*x+1,3*y+1)",
+                  "pixel (3*x+1,3*y+1)",
               ],
               "win32":[
                   "base_fb:RenderSurface",
