@@ -2,7 +2,7 @@ name: build-level1a-fidelity
 
 on:
   push:
-    branches: [main]
+    branches: [main, level1a-cxform-fidelity]
   workflow_dispatch:
 
 concurrency:
@@ -47,6 +47,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
+          $PSNativeCommandUseErrorActionPreference = $true
           $tools = "reverse-engineering/tools"
           $work = ".generated"
           $swf = "$work/cobblebot.swf"
@@ -58,8 +59,11 @@ jobs:
           from pathlib import Path
 
           symbols=json.loads(Path(".generated/reports/symbols.json").read_text())
+          root_placements=json.loads(Path(".generated/reports/root_placements.json").read_text())
           def frame0(sid):
-              s=symbols[str(sid)]
+              s=symbols.get(str(sid))
+              if s is None:
+                  return {"symbol":sid,"kind":"static_definition"}
               return {
                   "symbol":sid,
                   "frames":s.get("frames"),
@@ -67,7 +71,10 @@ jobs:
                   "placements":[p for p in s.get("placements",[]) if p.get("frame",0)==0],
               }
           # Include the game clip, background clip, and first visible-level clip.
-          report={str(sid):frame0(sid) for sid in (131,134,696,142,152)}
+          report={
+              "root_frame_19":[p for p in root_placements if p.get("frame",0)<=19],
+              "symbols":{str(sid):frame0(sid) for sid in (131,134,696,142,152)},
+          }
           Path(".generated/background-tree.json").write_text(json.dumps(report,indent=2))
           actions=json.loads(Path(".generated/reports/actions.json").read_text())
           title_actions=[
@@ -175,6 +182,18 @@ jobs:
           assert root_event==(751,32767),root_event
 
           player=json.loads(Path(".generated/batman-frames/manifest.json").read_text())
+          symbols=json.loads(Path(".generated/reports/symbols.json").read_text())
+          relevant=(142,716,737,746,169,242)
+          cxform_counts={sid:sum("cxform" in p for p in symbols[str(sid)]["placements"])
+                         for sid in relevant}
+          print("Recovered CXFORMWITHALPHA placements:",cxform_counts)
+          assert cxform_counts == {142:56,716:1,737:7,746:21,169:1,242:19}, cxform_counts
+          for sid in relevant:
+              for placement in symbols[str(sid)]["placements"]:
+                  if placement.get("flags",0)&0x08:
+                      assert set(placement["cxform"]) == {"mult","add"}, placement
+                      assert len(placement["cxform"]["mult"]) == 4, placement
+                      assert len(placement["cxform"]["add"]) == 4, placement
           expected=[
               ("stand",9),("walk",12),("run",10),("jump",4),("fall",5),("glide",2),
               ("land",2),("duck",5),("up",2),("punch",11),("highpunch",11),
