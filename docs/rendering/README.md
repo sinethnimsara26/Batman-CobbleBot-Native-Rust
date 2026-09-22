@@ -10,6 +10,7 @@ This folder contains the research and implementation blueprint for improving the
 - [HQ_ROUND1_HALFTONE_RESULTS.md](HQ_ROUND1_HALFTONE_RESULTS.md) — executed Phase 1 result, CI proof and manual acceptance gate.
 - [HQ_ROUND2_SURFACE_RESULTS.md](HQ_ROUND2_SURFACE_RESULTS.md) — executed Phase 2 render-surface refactor and exact legacy pixel-identity proof.
 - [HQ_ROUND3_3X_SURFACE_RESULTS.md](HQ_ROUND3_3X_SURFACE_RESULTS.md) — executed Phase 3 1800×1200 HQ surface, alignment proof, and render benchmark.
+- [HQ_ROUND4_SPRITE_PACK_V2_RESULTS.md](HQ_ROUND4_SPRITE_PACK_V2_RESULTS.md) — executed Phase 4 BCBFRM02 scale metadata, backward compatibility, and exact visual-regression proof.
 
 ## Decision summary
 
