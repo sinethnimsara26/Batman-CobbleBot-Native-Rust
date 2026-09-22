@@ -1,7 +1,36 @@
 use crate::assets::{Assets,Image,LevelTileSet};
 use crate::game::{AppScreen,Game,LEVEL_X,LEVEL_Y,LOGICAL_H,LOGICAL_W};
+use crate::surface::RenderSurface;
 
-pub fn render(fb:&mut[u32],game:&Game,assets:&Assets){
+#[derive(Copy,Clone,Debug,PartialEq,Eq)]
+pub enum RenderMode{Legacy1x,HighQuality}
+
+#[derive(Copy,Clone,Debug)]
+pub struct RenderConfig{pub logical_w:usize,pub logical_h:usize,pub hq_scale:usize,pub mode:RenderMode}
+impl RenderConfig{
+    pub const fn legacy()->Self{Self{logical_w:LOGICAL_W,logical_h:LOGICAL_H,hq_scale:1,mode:RenderMode::Legacy1x}}
+}
+
+
+pub fn render(fb:&mut RenderSurface,game:&Game,assets:&Assets){
+    render_with_config(fb,game,assets,RenderConfig::legacy());
+}
+
+pub fn render_with_config(fb:&mut RenderSurface,game:&Game,assets:&Assets,config:RenderConfig){
+    assert_eq!(config.logical_w,LOGICAL_W);
+    assert_eq!(config.logical_h,LOGICAL_H);
+    match config.mode{
+        RenderMode::Legacy1x=>{
+            assert_eq!(config.hq_scale,1);
+            assert_eq!(fb.w,LOGICAL_W);
+            assert_eq!(fb.h,LOGICAL_H);
+            render_legacy(fb,game,assets);
+        }
+        RenderMode::HighQuality=>panic!("HQ render mode is intentionally not implemented until Phase 3"),
+    }
+}
+
+fn render_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     fb.fill(0xff000000);
     match game.screen{
         AppScreen::Title=>{blit(fb,&assets.title_screen,0,0,600,400,false);return},
@@ -96,7 +125,7 @@ pub fn render(fb:&mut[u32],game:&Game,assets:&Assets){
         draw_root_timeline(fb,&assets.fadeout_frames,t as u64,301.0,205.0);
     }
 }
-fn draw_hud(fb:&mut[u32],game:&Game,assets:&Assets){
+fn draw_hud(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     // Root frame 19 placement of symbol 716.
     const ROOT_X:f32=159.0;
     const ROOT_Y:f32=-11.0;
@@ -117,7 +146,7 @@ fn draw_hud(fb:&mut[u32],game:&Game,assets:&Assets){
     draw_number_centered(fb,&assets.hud_digits_small,x+155,y+69,game.lives.max(0));
 }
 
-fn draw_number_centered(fb:&mut[u32],atlas:&Image,cx:i32,cy:i32,value:i32){
+fn draw_number_centered(fb:&mut RenderSurface,atlas:&Image,cx:i32,cy:i32,value:i32){
     if atlas.w<10 || atlas.h==0{return;}
     let cell_w=atlas.w/10;
     if cell_w==0{return;}
@@ -138,27 +167,27 @@ fn draw_number_centered(fb:&mut[u32],atlas:&Image,cx:i32,cy:i32,value:i32){
 }
 
 fn blit_region(
-    dst:&mut[u32],src:&Image,
+    dst:&mut RenderSurface,src:&Image,
     sx0:usize,sy0:usize,sw:usize,sh:usize,
     x:i32,y:i32,rw:i32,rh:i32
 ){
     if sw==0||sh==0||rw<=0||rh<=0{return;}
     for oy in 0..rh{
         let dy=y+oy;
-        if dy<0||dy>=LOGICAL_H as i32{continue;}
+        if dy<0||dy>=dst.h as i32{continue;}
         let sy=sy0+(oy as usize*sh/rh as usize).min(sh-1);
         for ox in 0..rw{
             let dx=x+ox;
-            if dx<0||dx>=LOGICAL_W as i32{continue;}
+            if dx<0||dx>=dst.w as i32{continue;}
             let sx=sx0+(ox as usize*sw/rw as usize).min(sw-1);
             if sx>=src.w||sy>=src.h{continue;}
             let sp=src.pixels[sy*src.w+sx];
-            blend(&mut dst[dy as usize*LOGICAL_W+dx as usize],sp);
+            blend(&mut dst.pixels[dy as usize*dst.w+dx as usize],sp);
         }
     }
 }
 
-fn draw_root_timeline(fb:&mut[u32],frames:&[crate::assets::SpriteFrame],tick:u64,x:f32,y:f32){
+fn draw_root_timeline(fb:&mut RenderSurface,frames:&[crate::assets::SpriteFrame],tick:u64,x:f32,y:f32){
     if frames.is_empty(){return;}
     let i=(tick as usize).min(frames.len()-1);
     let f=&frames[i];
@@ -169,10 +198,10 @@ fn draw_root_timeline(fb:&mut[u32],frames:&[crate::assets::SpriteFrame],tick:u64
         f.image.w as i32,f.image.h as i32,false
     );
 }
-fn draw_tiles(fb:&mut[u32],game:&Game,tiles:&LevelTileSet){
+fn draw_tiles(fb:&mut RenderSurface,game:&Game,tiles:&LevelTileSet){
     let fw=(( -game.camera_x/600.0).floor() as i32)*600; let lw=(((600.0-game.camera_x)/600.0).floor() as i32)*600;
     let fh=(( -game.camera_y/400.0).floor() as i32)*400; let lh=(((400.0-game.camera_y)/400.0).floor() as i32)*400;
     let mut y=fh;while y<=lh{let mut x=fw;while x<=lw{if let Some(t)=tiles.tile(x,y){blit(fb,&t,(x as f32+game.camera_x).round() as i32,(y as f32+game.camera_y).round() as i32,600,400,false)}x+=600;}y+=400;}
 }
 fn blend(dst:&mut u32,src:u32){let a=(src>>24)&255;if a==0{return}let sr=(src>>16)&255;let sg=(src>>8)&255;let sb=src&255;if a==255{*dst=(sr<<16)|(sg<<8)|sb;return}let inv=255-a;let dr=(*dst>>16)&255;let dg=(*dst>>8)&255;let db=*dst&255;*dst=(((sr*a+dr*inv+127)/255)<<16)|(((sg*a+dg*inv+127)/255)<<8)|((sb*a+db*inv+127)/255);}
-fn blit(dst:&mut[u32],src:&Image,x:i32,y:i32,rw:i32,rh:i32,flip:bool){if rw<=0||rh<=0{return}for oy in 0..rh{let dy=y+oy;if dy<0||dy>=LOGICAL_H as i32{continue}let sy=(oy as usize*src.h/rh as usize).min(src.h-1);for ox in 0..rw{let dx=x+ox;if dx<0||dx>=LOGICAL_W as i32{continue}let raw=(ox as usize*src.w/rw as usize).min(src.w-1);let sx=if flip{src.w-1-raw}else{raw};let sp=src.pixels[sy*src.w+sx];blend(&mut dst[dy as usize*LOGICAL_W+dx as usize],sp);}}}
+fn blit(dst:&mut RenderSurface,src:&Image,x:i32,y:i32,rw:i32,rh:i32,flip:bool){if rw<=0||rh<=0{return}for oy in 0..rh{let dy=y+oy;if dy<0||dy>=dst.h as i32{continue}let sy=(oy as usize*src.h/rh as usize).min(src.h-1);for ox in 0..rw{let dx=x+ox;if dx<0||dx>=dst.w as i32{continue}let raw=(ox as usize*src.w/rw as usize).min(src.w-1);let sx=if flip{src.w-1-raw}else{raw};let sp=src.pixels[sy*src.w+sx];blend(&mut dst.pixels[dy as usize*dst.w+dx as usize],sp);}}}
