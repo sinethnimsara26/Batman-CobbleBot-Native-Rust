@@ -53,6 +53,25 @@ jobs:
           New-Item -ItemType Directory -Force -Path "$work/reports","$work/bitmaps","$work/sounds","$work/batman-frames","$work/pickup-frames","$work/batarang-frames","$work/level-title","$work/fadein","$work/fadeout","$work/tutorial-overlay","$work/hud","$work/level1a-tiles","assets","reverse-engineering/generated/collision_masks" | Out-Null
 
           python "$tools/swf_re.py" "$swf" "$work/reports"
+          @'
+          import json
+          from pathlib import Path
+
+          symbols=json.loads(Path(".generated/reports/symbols.json").read_text())
+          def frame0(sid):
+              s=symbols[str(sid)]
+              return {
+                  "symbol":sid,
+                  "frames":s.get("frames"),
+                  "labels":s.get("labels",[]),
+                  "placements":[p for p in s.get("placements",[]) if p.get("frame",0)==0],
+              }
+          # Include the game clip, background clip, and first visible-level clip.
+          report={str(sid):frame0(sid) for sid in (696,142,152)}
+          Path(".generated/background-tree.json").write_text(json.dumps(report,indent=2))
+          print("Level 1A background tree:")
+          print(json.dumps(report,indent=2))
+          '@ | python -
           python "$tools/extract_bitmaps.py" "$swf" "$work/bitmaps"
           python "$tools/extract_sounds.py" "$swf" "$work/sounds"
           Copy-Item "$work/sounds/0751_sound_0751.mp3" "assets/level1a_music.mp3"
@@ -224,4 +243,13 @@ jobs:
         with:
           name: Batman-CobbleBot-Level1A-Visual-Smoke
           path: .generated/visual-smoke/*.png
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Batman-CobbleBot-Level1A-Renderer-Diagnostics
+          path: |
+            .generated/background-tree.json
+            assets/level1a_bg.png
+            assets/hud_base.png
           if-no-files-found: error
