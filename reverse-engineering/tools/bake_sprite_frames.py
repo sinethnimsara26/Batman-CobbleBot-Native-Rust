@@ -509,10 +509,21 @@ def display_list(symbol: dict, frame: int):
         if kind == "remove":
             depths.pop(depth, None)
             continue
-        current = depths.get(depth, {}).copy()
+        previous = depths.get(depth)
+        current = previous.copy() if previous else {}
         if "character_id" in item:
-            current = {"character_id": item["character_id"], "born": event_frame}
-        for field in ("matrix", "ratio", "name", "clip_depth"):
+            # PlaceObject2 Move+HasCharacter replaces the character while
+            # inheriting unspecified properties (matrix/cxform/name/etc.) from
+            # the object already at that depth. A non-Move placement starts
+            # from defaults instead.
+            if not (item.get("flags", 0) & 0x01) or previous is None:
+                current = {}
+            current["character_id"] = item["character_id"]
+            current["born"] = event_frame
+        elif previous is None:
+            # A Move without an existing object is malformed/no-op.
+            continue
+        for field in ("matrix", "ratio", "name", "clip_depth", "cxform"):
             if field in item:
                 current[field] = item[field]
         if current:
