@@ -69,6 +69,16 @@ jobs:
           # Include the game clip, background clip, and first visible-level clip.
           report={str(sid):frame0(sid) for sid in (131,134,696,142,152)}
           Path(".generated/background-tree.json").write_text(json.dumps(report,indent=2))
+          actions=json.loads(Path(".generated/reports/actions.json").read_text())
+          title_actions=[
+              block for block in actions
+              if "746" in str(block.get("context",""))
+              or any("levelTitle" in str(x) or "visible" in str(x) or "_alpha" in str(x)
+                     for x in block.get("strings",[]))
+          ]
+          Path(".generated/title-actions.json").write_text(json.dumps(title_actions,indent=2))
+          print("Level-title related action blocks:")
+          print(json.dumps(title_actions,indent=2))
           print("Level 1A background tree:")
           print(json.dumps(report,indent=2))
           '@ | python -
@@ -256,6 +266,7 @@ jobs:
           name: Batman-CobbleBot-Level1A-Renderer-Diagnostics
           path: |
             .generated/background-tree.json
+            .generated/title-actions.json
             assets/root_bg_131.png
             assets/root_bg_134.png
             assets/level1a_bg.png
