@@ -2,6 +2,7 @@ use crate::assets::Assets;
 use crate::collision::CollisionMask;
 use crate::game::{AppScreen,AudioEvent,Game,InputState,LEVEL_X,LEVEL_Y,LOGICAL_H,LOGICAL_W,PICKUPS,VK_D,VK_ENTER,VK_RIGHT,VK_S,VK_SPACE};
 use crate::render;
+use crate::surface::RenderSurface;
 use png::{BitDepth,ColorType,Encoder};
 use std::fs::{self,File};
 use std::io::BufWriter;
@@ -150,20 +151,20 @@ pub fn render_smoke(out:&str){
 }
 
 fn snapshot(out:&Path,name:&str,game:&mut Game,assets:&Assets){
-    let mut fb=vec![0u32;LOGICAL_W*LOGICAL_H];
+    let mut fb=RenderSurface::new(LOGICAL_W,LOGICAL_H);
     render::render(&mut fb,game,assets);
     write_png(&out.join(name),&fb);
 }
 
-fn write_png(path:&Path,fb:&[u32]){
+fn write_png(path:&Path,fb:&RenderSurface){
     let file=File::create(path).expect("create PNG");
     let writer=BufWriter::new(file);
-    let mut encoder=Encoder::new(writer,LOGICAL_W as u32,LOGICAL_H as u32);
+    let mut encoder=Encoder::new(writer,fb.w as u32,fb.h as u32);
     encoder.set_color(ColorType::Rgba);
     encoder.set_depth(BitDepth::Eight);
     let mut writer=encoder.write_header().expect("PNG header");
-    let mut bytes=Vec::with_capacity(LOGICAL_W*LOGICAL_H*4);
-    for &px in fb {
+    let mut bytes=Vec::with_capacity(fb.byte_len());
+    for &px in &fb.pixels {
         bytes.push(((px>>16)&255) as u8);
         bytes.push(((px>>8)&255) as u8);
         bytes.push((px&255) as u8);
