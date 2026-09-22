@@ -2,7 +2,7 @@ name: build-level1a-fidelity
 
 on:
   push:
-    branches: [main, level1a-cxform-fidelity]
+    branches: [main, level1a-cxform-fidelity, hq-rendering-phase1-halftone]
   workflow_dispatch:
 
 concurrency:
@@ -263,6 +263,24 @@ jobs:
           print("visible pixels",total,"red ratio",red_ratio,"blue ratio",blue_ratio)
           if red_ratio > 0.005 or blue_ratio > 0.001:
               raise SystemExit("control geometry leaked into visible Level 1A tiles")
+
+      - name: Validate Round 1 presentation contract
+        shell: python
+        run: |
+          from pathlib import Path
+          src=Path("src/win32.rs").read_text()
+          required=[
+              "const HALFTONE:i32=4",
+              "SetStretchBltMode(hdc,HALFTONE)",
+              "SetBrushOrgEx(hdc,0,0,null_mut())",
+              "biWidth:LOGICAL_W as i32",
+              "biHeight:-(LOGICAL_H as i32)",
+          ]
+          missing=[x for x in required if x not in src]
+          if missing:
+              raise SystemExit(f"Round 1 presenter contract missing: {missing}")
+          # Phase 1 must remain presentation-only: logical framebuffer is still 600x400.
+          print("Round 1 contract OK: HALFTONE + brush-origin reset; logical framebuffer unchanged.")
 
       - uses: dtolnay/rust-toolchain@stable
         with:

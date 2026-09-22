@@ -7,6 +7,7 @@ This folder contains the research and implementation blueprint for improving the
 - [HQ_RENDERING_RESEARCH.md](HQ_RENDERING_RESEARCH.md) — diagnosis, external research, alternatives and decisions.
 - [HQ_RENDERING_ARCHITECTURE.md](HQ_RENDERING_ARCHITECTURE.md) — selected 3× presentation architecture and asset strategy.
 - [HQ_RENDERING_EXECUTION_PLAN.md](HQ_RENDERING_EXECUTION_PLAN.md) — phase-by-phase file changes, CI gates, budgets and rollback plan.
+- [HQ_ROUND1_HALFTONE_RESULTS.md](HQ_ROUND1_HALFTONE_RESULTS.md) — executed Phase 1 result, CI proof and manual acceptance gate.
 
 ## Decision summary
 
