@@ -69,6 +69,21 @@ pub fn upscale_opaque_base(src:&RenderSurface,dst:&mut RenderSurface){
     // pixel (3*x+1,3*y+1) lands exactly on source pixel (x,y), which gives us
     // a strong no-drift CI invariant while smoothing the two pixels between
     // neighboring logical samples.
+    //
+    // Precompute the horizontal lookup/weights once. The original proof
+    // kernel recomputed div_euclid/clamping for every one of the 2.16M output
+    // pixels; this keeps those divisions out of the hot inner loop while
+    // preserving the exact same integer-weighted result.
+    let mut xmap=Vec::with_capacity(dst.w);
+    for dx in 0..dst.w{
+        let xn=dx as isize-1;
+        let xq=xn.div_euclid(3);
+        let xr=xn.rem_euclid(3) as u32;
+        let x0=xq.clamp(0,src.w as isize-1) as usize;
+        let x1=(xq+1).clamp(0,src.w as isize-1) as usize;
+        xmap.push((x0,x1,3-xr,xr));
+    }
+
     for dy in 0..dst.h{
         let yn=dy as isize-1;
         let yq=yn.div_euclid(3);
@@ -77,20 +92,15 @@ pub fn upscale_opaque_base(src:&RenderSurface,dst:&mut RenderSurface){
         let y1=(yq+1).clamp(0,src.h as isize-1) as usize;
         let wy0=3-yr;
         let wy1=yr;
+        let row0=y0*src.w;
+        let row1=y1*src.w;
+        let dst_row=dy*dst.w;
 
-        for dx in 0..dst.w{
-            let xn=dx as isize-1;
-            let xq=xn.div_euclid(3);
-            let xr=xn.rem_euclid(3) as u32;
-            let x0=xq.clamp(0,src.w as isize-1) as usize;
-            let x1=(xq+1).clamp(0,src.w as isize-1) as usize;
-            let wx0=3-xr;
-            let wx1=xr;
-
-            let p00=src.pixels[y0*src.w+x0];
-            let p10=src.pixels[y0*src.w+x1];
-            let p01=src.pixels[y1*src.w+x0];
-            let p11=src.pixels[y1*src.w+x1];
+        for (dx,&(x0,x1,wx0,wx1)) in xmap.iter().enumerate(){
+            let p00=src.pixels[row0+x0];
+            let p10=src.pixels[row0+x1];
+            let p01=src.pixels[row1+x0];
+            let p11=src.pixels[row1+x1];
 
             let w00=wx0*wy0;
             let w10=wx1*wy0;
@@ -101,7 +111,7 @@ pub fn upscale_opaque_base(src:&RenderSurface,dst:&mut RenderSurface){
             let g=((((p00>>8)&255)*w00+((p10>>8)&255)*w10+((p01>>8)&255)*w01+((p11>>8)&255)*w11+4)/9)&255;
             let b=((p00&255)*w00+(p10&255)*w10+(p01&255)*w01+(p11&255)*w11+4)/9;
 
-            dst.pixels[dy*dst.w+dx]=(r<<16)|(g<<8)|b;
+            dst.pixels[dst_row+dx]=(r<<16)|(g<<8)|b;
         }
     }
 }
