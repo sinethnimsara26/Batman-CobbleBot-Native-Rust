@@ -2,7 +2,7 @@ name: build-level1a-fidelity
 
 on:
   push:
-    branches: [main, level1a-cxform-fidelity, hq-rendering-phase1-halftone, hq-rendering-phase2-surfaces, hq-rendering-phase3-3x-surface]
+    branches: [main, level1a-cxform-fidelity, hq-rendering-phase1-halftone, hq-rendering-phase2-surfaces, hq-rendering-phase3-3x-surface, hq-rendering-phase4-sprite-pack-v2]
   workflow_dispatch:
 
 concurrency:
@@ -99,13 +99,13 @@ jobs:
           python "$tools/render_collision_masks.py" "$swf" "$work/reports/symbols.json" "reverse-engineering/manifests/level-instances.json" "reverse-engineering/generated/collision_masks" --level level1a
 
           python "$tools/bake_player_states.py" "$swf" "$work/reports/symbols.json" "$work/batman-frames" --bitmaps "$work/bitmaps" --symbol 691 --scale 0.163742
-          python "$tools/pack_sprite_frames.py" "$work/batman-frames" "assets/batman_frames.bin"
+          python "$tools/pack_sprite_frames.py" "$work/batman-frames" "assets/batman_frames.bin" --logical-pixel-scale 1.0
           python "$tools/extract_player_sound_events.py" "$swf" "$work/reports/symbols.json" "$work/batman-frames/manifest.json" "reverse-engineering/manifests/sound-manifest.json" "$work/player_sound_events.json"
 
           python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/pickup-frames" --bitmaps "$work/bitmaps" --symbol 695 --scale 1.130691 --all-frames
-          python "$tools/pack_sprite_frames.py" "$work/pickup-frames" "assets/pickup_frames.bin"
+          python "$tools/pack_sprite_frames.py" "$work/pickup-frames" "assets/pickup_frames.bin" --logical-pixel-scale 1.0
           python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/batarang-frames" --bitmaps "$work/bitmaps" --symbol 694 --scale 0.364471 --all-frames
-          python "$tools/pack_sprite_frames.py" "$work/batarang-frames" "assets/batarang_frames.bin"
+          python "$tools/pack_sprite_frames.py" "$work/batarang-frames" "assets/batarang_frames.bin" --logical-pixel-scale 1.0
 
           # Root gameplay frame 19 has two backdrop layers below game:
           # depth 1 = character 131, depth 2 = character 134 at (300,130)
@@ -116,14 +116,14 @@ jobs:
           python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "assets/level1a_bg.png" --bitmaps "$work/bitmaps" --symbol 142 --frame 0 --scale 1.0 --native-bounds
 
           python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/level-title" --bitmaps "$work/bitmaps" --symbol 746 --scale 1.0 --all-frames
-          python "$tools/pack_sprite_frames.py" "$work/level-title" "assets/level_title_frames.bin"
+          python "$tools/pack_sprite_frames.py" "$work/level-title" "assets/level_title_frames.bin" --logical-pixel-scale 1.0
           python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/fadein" --bitmaps "$work/bitmaps" --symbol 747 --scale 1.0 --all-frames
-          python "$tools/pack_sprite_frames.py" "$work/fadein" "assets/fadein_frames.bin"
+          python "$tools/pack_sprite_frames.py" "$work/fadein" "assets/fadein_frames.bin" --logical-pixel-scale 1.0
           python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/fadeout" --bitmaps "$work/bitmaps" --symbol 34 --scale 1.0 --all-frames
-          python "$tools/pack_sprite_frames.py" "$work/fadeout" "assets/fadeout_frames.bin"
+          python "$tools/pack_sprite_frames.py" "$work/fadeout" "assets/fadeout_frames.bin" --logical-pixel-scale 1.0
 
           python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/tutorial-overlay" --bitmaps "$work/bitmaps" --symbol 737 --scale 1.0 --all-frames
-          python "$tools/pack_sprite_frames.py" "$work/tutorial-overlay" "assets/tutorial_overlay_frames.bin"
+          python "$tools/pack_sprite_frames.py" "$work/tutorial-overlay" "assets/tutorial_overlay_frames.bin" --logical-pixel-scale 1.0
 
           # Original HUD shell (symbol 716). Flash _sans resolves to Arial on
           # Windows; bake only the static labels and a numeric atlas. Rust owns
@@ -370,9 +370,69 @@ jobs:
               raise SystemExit(f"Round 3 HQ contract missing: {missing}")
           print("Round 3 contract OK: 600x400 logical + 1800x1200 HQ presentation path is wired.")
 
+      - name: Validate Round 4 sprite-pack v2 contract
+        shell: python
+        run: |
+          import json, struct
+          from pathlib import Path
+
+          packer=Path("reverse-engineering/tools/pack_sprite_frames.py").read_text()
+          assets=Path("src/assets.rs").read_text()
+
+          required_packer=[
+              'MAGIC_V1 = b"BCBFRM01"',
+              'MAGIC_V2 = b"BCBFRM02"',
+              '"--logical-pixel-scale"',
+              '"--legacy-v1"',
+              'struct.pack("<f", scale)',
+          ]
+          required_assets=[
+              "pub struct SpriteSet",
+              "pub logical_pixel_scale: f32",
+              'b"BCBFRM01"',
+              'b"BCBFRM02"',
+              "decode_sprite_pack_header",
+              "require_sprite_scale",
+              "logical pixel scale mismatch",
+          ]
+          missing=[x for x in required_packer if x not in packer]
+          missing += [x for x in required_assets if x not in assets]
+          if missing:
+              raise SystemExit(f"Round 4 source contract missing: {missing}")
+
+          names=[
+              "batman_frames",
+              "pickup_frames",
+              "batarang_frames",
+              "level_title_frames",
+              "fadein_frames",
+              "fadeout_frames",
+              "tutorial_overlay_frames",
+          ]
+          for name in names:
+              binary=Path("assets")/(name+".bin")
+              sidecar=Path("assets")/(name+".json")
+              raw=binary.read_bytes()
+              if raw[:8] != b"BCBFRM02":
+                  raise SystemExit(f"{name}: expected BCBFRM02, got {raw[:8]!r}")
+              count=struct.unpack_from("<I",raw,8)[0]
+              scale=struct.unpack_from("<f",raw,12)[0]
+              meta=json.loads(sidecar.read_text())
+              assert meta["format"] == "BCBFRM02", (name,meta["format"])
+              assert meta["header_bytes"] == 16, (name,meta["header_bytes"])
+              assert meta["frame_count"] == count, (name,meta["frame_count"],count)
+              assert abs(meta["logical_pixel_scale"]-1.0) < 1e-7, (name,meta["logical_pixel_scale"])
+              assert abs(scale-1.0) < 1e-7, (name,scale)
+              print(name,{"frames":count,"scale":scale,"bytes":len(raw)})
+
+          print("Round 4 pack contract OK: every current runtime sprite pack is BCBFRM02 at explicit scale 1.0.")
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-pc-windows-msvc
+
+      - name: Test BCBFRM01 and BCBFRM02 compatibility
+        run: cargo test --release --target x86_64-pc-windows-msvc
 
       - name: Build Level 1A fidelity slice
         run: cargo build --release --target x86_64-pc-windows-msvc
