@@ -6,6 +6,7 @@ mod collision;
 mod game;
 mod headless;
 mod render;
+mod surface;
 mod win32;
 
 fn main() {

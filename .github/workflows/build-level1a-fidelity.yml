@@ -2,7 +2,7 @@ name: build-level1a-fidelity
 
 on:
   push:
-    branches: [main, level1a-cxform-fidelity, hq-rendering-phase1-halftone]
+    branches: [main, level1a-cxform-fidelity, hq-rendering-phase1-halftone, hq-rendering-phase2-surfaces]
   workflow_dispatch:
 
 concurrency:
@@ -273,14 +273,59 @@ jobs:
               "const HALFTONE:i32=4",
               "SetStretchBltMode(hdc,HALFTONE)",
               "SetBrushOrgEx(hdc,0,0,null_mut())",
-              "biWidth:LOGICAL_W as i32",
-              "biHeight:-(LOGICAL_H as i32)",
+              "RenderSurface::new(LOGICAL_W,LOGICAL_H)",
+              "biWidth:app.fb.w as i32",
+              "biHeight:-(app.fb.h as i32)",
           ]
           missing=[x for x in required if x not in src]
           if missing:
               raise SystemExit(f"Round 1 presenter contract missing: {missing}")
-          # Phase 1 must remain presentation-only: logical framebuffer is still 600x400.
-          print("Round 1 contract OK: HALFTONE + brush-origin reset; logical framebuffer unchanged.")
+          # Phase 1 behavior survives the Phase 2 abstraction: the active
+          # legacy surface is still exactly the original logical 600x400.
+          print("Round 1 contract OK: HALFTONE retained; legacy surface remains LOGICAL_W x LOGICAL_H.")
+
+      - name: Validate Round 2 surface abstraction contract
+        shell: python
+        run: |
+          from pathlib import Path
+          surface=Path("src/surface.rs").read_text()
+          render=Path("src/render.rs").read_text()
+          win32=Path("src/win32.rs").read_text()
+          headless=Path("src/headless.rs").read_text()
+          required={
+              "surface":[
+                  "pub struct RenderSurface",
+                  "pub w: usize",
+                  "pub h: usize",
+                  "pub pixels: Vec<u32>",
+                  "pub fn byte_len(&self)",
+              ],
+              "render":[
+                  "pub enum RenderMode{Legacy1x,HighQuality}",
+                  "pub struct RenderConfig",
+                  "pub fn render_with_config",
+                  "RenderMode::Legacy1x",
+                  "dst.pixels[dy as usize*dst.w+dx as usize]",
+              ],
+              "win32":[
+                  "fb:RenderSurface",
+                  "RenderSurface::new(LOGICAL_W,LOGICAL_H)",
+                  "biWidth:app.fb.w as i32",
+                  "app.fb.pixels.as_ptr()",
+              ],
+              "headless":[
+                  "RenderSurface::new(LOGICAL_W,LOGICAL_H)",
+                  "fb.w as u32,fb.h as u32",
+                  "for &px in &fb.pixels",
+              ],
+          }
+          texts={"surface":surface,"render":render,"win32":win32,"headless":headless}
+          missing={name:[needle for needle in needles if needle not in texts[name]]
+                   for name,needles in required.items()}
+          missing={k:v for k,v in missing.items() if v}
+          if missing:
+              raise SystemExit(f"Round 2 surface contract missing: {missing}")
+          print("Round 2 contract OK: render target dimensions/stride are explicit; gameplay stays logical.")
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -301,6 +346,38 @@ jobs:
           $shots = Get-ChildItem ".generated/visual-smoke/*.png"
           if ($shots.Count -lt 9) { throw "Visual smoke checkpoints were not generated" }
           $shots | Format-Table Name,Length
+
+      - name: Verify Round 2 legacy pixels against renderer-repair baseline
+        shell: python
+        run: |
+          import hashlib
+          from pathlib import Path
+
+          expected={
+              "00_fade_start.png":"fe797743d114f6f3dba95067b563387e6140ba3fcd5ec4eed5800255aaec9989",
+              "01_fade_mid.png":"ade9c3ea39207d5cc87b015984244aba475a22e244f097ae1d4321f4874cef58",
+              "02_level_title.png":"23a7032a2cb838e100aab401ae119e1ea61b0a2589b115871abc3df83879cc73",
+              "03_go_right_tutorial.png":"35b06c2f8a5dac22c1e6a2cbee1c6d3f456c7567dd46f010258bcbd5faf511c7",
+              "03_landed.png":"35b06c2f8a5dac22c1e6a2cbee1c6d3f456c7567dd46f010258bcbd5faf511c7",
+              "03_walk_tutorial.png":"18998d6019b12cd4eb8cce4e795890ade261ebee3df093955ca6f75cd32373ea",
+              "04_running.png":"2751693c5ad9ed5aeb4cc2716b536a00f24def31cacdf384e4869f644359052e",
+              "05_jump.png":"0ec4c094ba0a337976ab82e2b8ff2d327ad9579dbcebb036df30292306d06b11",
+              "06_glide.png":"e58f955f561a176314586b204216dfeee772b5f4fd1e3b9defa2bf611b5656c9",
+              "07_kick.png":"4613710ab343cf053be51d7a49bcd216f3adad98de6e7792f891823a502346b1",
+              "08_held_punch.png":"32d6727d8ae85784ecae615b9492e7346f5fddf397d31c258bbd4737c3179499",
+              "09_to_street.png":"3b75f3eb28d18caebf710a771d0b6537952ac8b677da18e0c1a2c0865b656c95",
+              "10_exit_fade_start.png":"a5dfb4ae32bb94afee2d4d0f1f85d1bb099f400aca68d7c5818e81517c419efb",
+              "11_exit_fade_mid.png":"427e8c1108ba69fc86acf7b72abde0f4bf48d25521946070987fe545f11ea558",
+              "12_level1a_complete.png":"fe797743d114f6f3dba95067b563387e6140ba3fcd5ec4eed5800255aaec9989",
+          }
+          root=Path(".generated/visual-smoke")
+          actual={p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in root.glob("*.png")}
+          if set(actual)!=set(expected):
+              raise SystemExit(f"Round 2 screenshot set changed: expected {sorted(expected)}, got {sorted(actual)}")
+          bad={name:(expected[name],actual[name]) for name in expected if actual[name]!=expected[name]}
+          if bad:
+              raise SystemExit(f"Round 2 changed legacy pixels: {bad}")
+          print(f"Round 2 pixel identity PASS: {len(expected)}/{len(expected)} screenshots match Run 45 exactly.")
 
       - uses: actions/upload-artifact@v4
         with:

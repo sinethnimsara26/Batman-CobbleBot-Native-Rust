@@ -4,6 +4,7 @@ use crate::audio::Audio;
 use crate::collision::CollisionMask;
 use crate::game::{Game,InputState,FIXED_STEP,LOGICAL_H,LOGICAL_W,VK_A,VK_D,VK_DOWN,VK_ENTER,VK_ESCAPE,VK_I,VK_LEFT,VK_RIGHT,VK_S,VK_SPACE,VK_UP};
 use crate::render;
+use crate::surface::RenderSurface;
 use std::ffi::c_void;
 use std::mem::{size_of,zeroed};
 use std::ptr::{null,null_mut};
@@ -31,9 +32,9 @@ type HWND=*mut c_void; type HINSTANCE=*mut c_void; type HICON=*mut c_void; type 
 const KEYS:[usize;10]=[VK_LEFT,VK_RIGHT,VK_UP,VK_DOWN,VK_SPACE,VK_ENTER,VK_ESCAPE,VK_I,VK_A,VK_D];
 const EXTRA_KEYS:[usize;1]=[VK_S];
 
-struct App{fb:Vec<u32>,assets:Assets,audio:Audio,ground:CollisionMask,game:Game,input:InputState,last:Instant,acc:f32,active:bool}
+struct App{fb:RenderSurface,assets:Assets,audio:Audio,ground:CollisionMask,game:Game,input:InputState,last:Instant,acc:f32,active:bool}
 impl App{
- fn new()->Self{Self{fb:vec![0;LOGICAL_W*LOGICAL_H],assets:Assets::load(),audio:Audio::new(),ground:CollisionMask::level1a(),game:Game::new(),input:InputState::default(),last:Instant::now(),acc:0.0,active:true}}
+ fn new()->Self{Self{fb:RenderSurface::new(LOGICAL_W,LOGICAL_H),assets:Assets::load(),audio:Audio::new(),ground:CollisionMask::level1a(),game:Game::new(),input:InputState::default(),last:Instant::now(),acc:0.0,active:true}}
  unsafe fn poll_keyboard(&mut self,hwnd:HWND){
   // WM_ACTIVATE / WM_SETFOCUS are authoritative. GetForegroundWindow is
   // allowed to promote us to active, but a transient mismatch must not undo
@@ -52,7 +53,7 @@ fn wide(s:&str)->Vec<u16>{s.encode_utf16().chain(Some(0)).collect()}
 unsafe fn viewport(hwnd:HWND)->(i32,i32,i32,i32){let mut r:RECT=zeroed();GetClientRect(hwnd,&mut r);let cw=(r.right-r.left).max(1);let ch=(r.bottom-r.top).max(1);let(dw,dh)=if(cw as i64)*(LOGICAL_H as i64)<=(ch as i64)*(LOGICAL_W as i64){(cw,((cw as i64)*(LOGICAL_H as i64)/(LOGICAL_W as i64))as i32)}else{(((ch as i64)*(LOGICAL_W as i64)/(LOGICAL_H as i64))as i32,ch)};((cw-dw)/2,(ch-dh)/2,dw,dh)}
 unsafe extern "system" fn wndproc(hwnd:HWND,msg:u32,w:WPARAM,l:LPARAM)->LRESULT{match msg{
  WM_ERASEBKGND=>1,
- WM_PAINT=>{let mut ps:PAINTSTRUCT=zeroed();let hdc=BeginPaint(hwnd,&mut ps);if !APP.is_null(){let app=&mut*APP;app.render();let mut r:RECT=zeroed();GetClientRect(hwnd,&mut r);let cw=(r.right-r.left).max(1);let ch=(r.bottom-r.top).max(1);let(vx,vy,vw,vh)=viewport(hwnd);if vy>0{PatBlt(hdc,0,0,cw,vy,BLACKNESS);PatBlt(hdc,0,vy+vh,cw,ch-vy-vh,BLACKNESS);}if vx>0{PatBlt(hdc,0,vy,vx,vh,BLACKNESS);PatBlt(hdc,vx+vw,vy,cw-vx-vw,vh,BLACKNESS);}let bmi=BITMAPINFO{bmiHeader:BITMAPINFOHEADER{biSize:size_of::<BITMAPINFOHEADER>()as u32,biWidth:LOGICAL_W as i32,biHeight:-(LOGICAL_H as i32),biPlanes:1,biBitCount:32,biCompression:BI_RGB,biSizeImage:(LOGICAL_W*LOGICAL_H*4)as u32,biXPelsPerMeter:0,biYPelsPerMeter:0,biClrUsed:0,biClrImportant:0},bmiColors:[RGBQUAD{rgbBlue:0,rgbGreen:0,rgbRed:0,rgbReserved:0}]};/* Phase 1 HQ proof: improve only final GDI presentation. Microsoft requires SetBrushOrgEx after HALFTONE. Gameplay and the 600x400 framebuffer remain unchanged. */SetStretchBltMode(hdc,HALFTONE);SetBrushOrgEx(hdc,0,0,null_mut());StretchDIBits(hdc,vx,vy,vw,vh,0,0,LOGICAL_W as i32,LOGICAL_H as i32,app.fb.as_ptr()as*const c_void,&bmi,DIB_RGB_COLORS,SRCCOPY);}EndPaint(hwnd,&ps);0},
+ WM_PAINT=>{let mut ps:PAINTSTRUCT=zeroed();let hdc=BeginPaint(hwnd,&mut ps);if !APP.is_null(){let app=&mut*APP;app.render();let mut r:RECT=zeroed();GetClientRect(hwnd,&mut r);let cw=(r.right-r.left).max(1);let ch=(r.bottom-r.top).max(1);let(vx,vy,vw,vh)=viewport(hwnd);if vy>0{PatBlt(hdc,0,0,cw,vy,BLACKNESS);PatBlt(hdc,0,vy+vh,cw,ch-vy-vh,BLACKNESS);}if vx>0{PatBlt(hdc,0,vy,vx,vh,BLACKNESS);PatBlt(hdc,vx+vw,vy,cw-vx-vw,vh,BLACKNESS);}let bmi=BITMAPINFO{bmiHeader:BITMAPINFOHEADER{biSize:size_of::<BITMAPINFOHEADER>()as u32,biWidth:app.fb.w as i32,biHeight:-(app.fb.h as i32),biPlanes:1,biBitCount:32,biCompression:BI_RGB,biSizeImage:app.fb.byte_len() as u32,biXPelsPerMeter:0,biYPelsPerMeter:0,biClrUsed:0,biClrImportant:0},bmiColors:[RGBQUAD{rgbBlue:0,rgbGreen:0,rgbRed:0,rgbReserved:0}]};/* Phase 1 HQ proof retained: high-quality final GDI presentation. Phase 2 makes source dimensions explicit without changing them yet. */SetStretchBltMode(hdc,HALFTONE);SetBrushOrgEx(hdc,0,0,null_mut());StretchDIBits(hdc,vx,vy,vw,vh,0,0,app.fb.w as i32,app.fb.h as i32,app.fb.pixels.as_ptr()as*const c_void,&bmi,DIB_RGB_COLORS,SRCCOPY);}EndPaint(hwnd,&ps);0},
  WM_TIMER=>{if !APP.is_null()&&(&mut*APP).timer(hwnd){InvalidateRect(hwnd,null(),0);}0},
  WM_SETFOCUS=>{if !APP.is_null(){(&mut*APP).active=true;}0},
  WM_KILLFOCUS=>{if !APP.is_null(){let app=&mut*APP;app.active=false;app.input.release_all();}0},
