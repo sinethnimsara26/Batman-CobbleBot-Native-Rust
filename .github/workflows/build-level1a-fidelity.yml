@@ -67,7 +67,7 @@ jobs:
                   "placements":[p for p in s.get("placements",[]) if p.get("frame",0)==0],
               }
           # Include the game clip, background clip, and first visible-level clip.
-          report={str(sid):frame0(sid) for sid in (696,142,152)}
+          report={str(sid):frame0(sid) for sid in (131,134,696,142,152)}
           Path(".generated/background-tree.json").write_text(json.dumps(report,indent=2))
           print("Level 1A background tree:")
           print(json.dumps(report,indent=2))
@@ -89,6 +89,12 @@ jobs:
           python "$tools/pack_sprite_frames.py" "$work/pickup-frames" "assets/pickup_frames.bin"
           python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/batarang-frames" --bitmaps "$work/bitmaps" --symbol 694 --scale 0.364471 --all-frames
           python "$tools/pack_sprite_frames.py" "$work/batarang-frames" "assets/batarang_frames.bin"
+
+          # Root gameplay frame 19 has two backdrop layers below game:
+          # depth 1 = character 131, depth 2 = character 134 at (300,130)
+          # scaled 0.769348. Preserve both; omitting them leaves a black sky.
+          python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "assets/root_bg_131.png" --bitmaps "$work/bitmaps" --symbol 131 --frame 0 --scale 1.0 --native-bounds
+          python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "assets/root_bg_134.png" --bitmaps "$work/bitmaps" --symbol 134 --frame 0 --scale 1.0 --native-bounds
 
           python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "assets/level1a_bg.png" --bitmaps "$work/bitmaps" --symbol 142 --frame 0 --scale 1.0 --native-bounds
 
@@ -250,6 +256,8 @@ jobs:
           name: Batman-CobbleBot-Level1A-Renderer-Diagnostics
           path: |
             .generated/background-tree.json
+            assets/root_bg_131.png
+            assets/root_bg_134.png
             assets/level1a_bg.png
             assets/hud_base.png
           if-no-files-found: error
