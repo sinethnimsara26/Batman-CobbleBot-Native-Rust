@@ -174,7 +174,7 @@ def main(src,outdir):
     counts=Counter(); exports={}; symbols={}; actions=[]; sounds=[]; images=[]; root_labels=[]; placements=[]
 
     def scan_tag_stream(data,start,end,context):
-        frame=0; local_labels=[]; local_places=[]; local_actions=[]
+        frame=0; local_labels=[]; local_places=[]; local_removals=[]; local_actions=[]
         for code,pl,toff,poff in tags(data,start,end):
             counts[code]+=1
             if code==1: frame+=1
@@ -182,15 +182,21 @@ def main(src,outdir):
                 lab,_=cstr(pl,0); local_labels.append({'frame':frame,'label':lab})
             elif code==26:
                 x=parse_place2(pl)
-                if x: x['frame']=frame; local_places.append(x)
+                if x: x['frame']=frame; x['tag_offset']=toff; local_places.append(x)
+            elif code==28 and len(pl)>=2:
+                local_removals.append({
+                    'depth':struct.unpack_from('<H',pl,0)[0],
+                    'frame':frame,
+                    'tag_offset':toff,
+                })
             elif code==12:
                 aa=disasm_actions(pl,poff); local_actions.append({'frame':frame,'tag_offset':toff,'actions':aa,'strings':collect_strings_actions(aa)})
                 actions.append({'context':context,'frame':frame,'tag_offset':toff,'actions':aa,'strings':collect_strings_actions(aa)})
             elif code==39 and len(pl)>=4:
                 sid=struct.unpack_from('<H',pl,0)[0]; fc=struct.unpack_from('<H',pl,2)[0]
                 sub={'id':sid,'frames':fc}; symbols[sid]=sub
-                labs,pls,acts=scan_tag_stream(pl,4,len(pl),f'sprite:{sid}')
-                sub['labels']=labs;sub['placements']=pls;sub['action_blocks']=len(acts)
+                labs,pls,rems,acts=scan_tag_stream(pl,4,len(pl),f'sprite:{sid}')
+                sub['labels']=labs;sub['placements']=pls;sub['removals']=rems;sub['action_blocks']=len(acts)
             elif code==56:
                 q=0;n=struct.unpack_from('<H',pl,q)[0];q+=2
                 for _ in range(n):
@@ -200,9 +206,9 @@ def main(src,outdir):
                 sounds.append({'id':sid,'format':fmt,'rate_code':rate,'bits16':bool(size),'stereo':bool(typ),'samples':samples,'tag_offset':toff,'payload_offset':poff+7,'payload_len':len(pl)-7})
             elif code in (6,20,21,35,36):
                 cid=struct.unpack_from('<H',pl,0)[0] if len(pl)>=2 else None; images.append({'id':cid,'tag':code,'tag_offset':toff,'payload_offset':poff,'payload_len':len(pl)})
-        return local_labels,local_places,local_actions
+        return local_labels,local_places,local_removals,local_actions
 
-    rl,rp,ra=scan_tag_stream(b,pos,len(b),'root'); root_labels.extend(rl); placements.extend(rp)
+    rl,rp,rr,ra=scan_tag_stream(b,pos,len(b),'root'); root_labels.extend(rl); placements.extend(rp)
     report['tag_counts']={str(k):v for k,v in sorted(counts.items())};report['root_labels']=root_labels;report['exports']=exports
     (out/'movie.json').write_text(json.dumps(report,indent=2))
     (out/'symbols.json').write_text(json.dumps({str(k):v for k,v in sorted(symbols.items())},indent=2))
@@ -210,6 +216,7 @@ def main(src,outdir):
     (out/'sounds.json').write_text(json.dumps(sounds,indent=2))
     (out/'images.json').write_text(json.dumps(images,indent=2))
     (out/'root_placements.json').write_text(json.dumps(placements,indent=2))
+    (out/'root_removals.json').write_text(json.dumps(rr,indent=2))
     # index interesting symbols by labels/strings
     interesting=[]
     keys=re.compile(r'walk|run|jump|glide|punch|kick|batarang|grappl|penguin|kabuki|robo|goon|maid|biker|eagle|ground|level[1-4]|checkpoint|gameover|capespin|electro|hurt|die',re.I)
