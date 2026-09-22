@@ -533,6 +533,23 @@ def display_list(symbol: dict, frame: int):
     return depths
 
 
+def _apply_cxform(image, cxform):
+    """Apply a Flash placement CXFORMWITHALPHA to an RGBA child layer."""
+    if not cxform:
+        return image
+    mult = cxform.get("mult", [256, 256, 256, 256])
+    add = cxform.get("add", [0, 0, 0, 0])
+    if mult == [256, 256, 256, 256] and add == [0, 0, 0, 0]:
+        return image
+    channels = image.split()
+    transformed = []
+    for channel, multiplier, offset in zip(channels, mult, add):
+        lut = [max(0, min(255, (value * multiplier + 128) // 256 + offset))
+               for value in range(256)]
+        transformed.append(channel.point(lut))
+    return Image.merge("RGBA", transformed)
+
+
 def _inverse(matrix):
     a, b, c, d, e, f = matrix
     determinant = a * d - b * c
@@ -831,16 +848,19 @@ def render_symbol(symbol_id, frame, transform, canvas, symbols, shapes, bitmaps,
             )
 
         clip_depth = placement.get("clip_depth")
+        cxform = placement.get("cxform")
         if clip_depth is not None:
             mask_layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
             render_child(mask_layer)
+            mask_layer = _apply_cxform(mask_layer, cxform)
             mask = mask_layer.getchannel("A")
             for _, parent_mask in active_masks:
                 mask = ImageChops.multiply(mask, parent_mask)
             active_masks.append((clip_depth, mask))
-        elif active_masks:
+        elif active_masks or cxform:
             layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
             render_child(layer)
+            layer = _apply_cxform(layer, cxform)
             alpha = layer.getchannel("A")
             for _, mask in active_masks:
                 alpha = ImageChops.multiply(alpha, mask)
