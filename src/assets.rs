@@ -11,6 +11,8 @@ pub struct SpriteFrame { pub image: Image, pub anchor_x: f32, pub anchor_y: f32 
 
 pub struct Assets {
     pub batman_frames: Vec<SpriteFrame>,
+    pub root_sky: Image,
+    pub root_moon: Image,
     pub city_background: Image,
     pub pickup_frames: Vec<SpriteFrame>,
     pub batarang_frames: Vec<SpriteFrame>,
@@ -30,6 +32,8 @@ impl Assets {
     pub fn load() -> Self {
         Self {
             batman_frames: decode_sprite_frames(include_bytes!("../assets/batman_frames.bin")),
+            root_sky: decode_png(include_bytes!("../assets/root_bg_131.png")),
+            root_moon: decode_png(include_bytes!("../assets/root_bg_134.png")),
             city_background: decode_png(include_bytes!("../assets/level1a_bg.png")),
             pickup_frames: decode_sprite_frames(include_bytes!("../assets/pickup_frames.bin")),
             batarang_frames: decode_sprite_frames(include_bytes!("../assets/batarang_frames.bin")),
