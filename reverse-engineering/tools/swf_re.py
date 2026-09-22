@@ -30,6 +30,19 @@ def read_matrix(b,pos):
     n=br.u(5); tx=br.s(n)/20; ty=br.s(n)/20; br.align()
     return {'sx':sx,'sy':sy,'r0':r0,'r1':r1,'tx':tx,'ty':ty},br.pos
 
+def read_cxform_with_alpha(b,pos):
+    """Decode SWF CXFORMWITHALPHA into explicit RGBA terms.
+
+    Multipliers are signed 8.8 fixed-point values where 256 is identity;
+    additions are signed channel offsets. Keeping identity values explicit
+    makes Move inheritance and renderer diagnostics deterministic.
+    """
+    br=Bits(b,pos); has_add=br.u(1);has_mult=br.u(1);n=br.u(4)
+    mult=[br.s(n) for _ in range(4)] if has_mult else [256]*4
+    add=[br.s(n) for _ in range(4)] if has_add else [0]*4
+    br.align()
+    return {'mult':mult,'add':add},br.pos
+
 def cstr(b,pos):
     e=b.find(b'\0',pos)
     if e<0: return b[pos:].decode('latin1','replace'),len(b)
@@ -152,14 +165,9 @@ def parse_place2(pl):
         d['character_id']=struct.unpack_from('<H',pl,p)[0];p+=2
     if flags&0x04:
         d['matrix'],p=read_matrix(pl,p)
-    # CXFORMWITHALPHA skip roughly with bit parser
+    # CXFORMWITHALPHA applies to the complete placed child subtree.
     if flags&0x08:
-        br=Bits(pl,p); has_add=br.u(1);has_mult=br.u(1);n=br.u(4)
-        if has_mult:
-            for _ in range(4): br.s(n)
-        if has_add:
-            for _ in range(4): br.s(n)
-        br.align();p=br.pos
+        d['cxform'],p=read_cxform_with_alpha(pl,p)
     if flags&0x10: d['ratio']=struct.unpack_from('<H',pl,p)[0];p+=2
     if flags&0x20:
         d['name'],p=cstr(pl,p)
