@@ -273,14 +273,16 @@ jobs:
               "const HALFTONE:i32=4",
               "SetStretchBltMode(hdc,HALFTONE)",
               "SetBrushOrgEx(hdc,0,0,null_mut())",
-              "biWidth:LOGICAL_W as i32",
-              "biHeight:-(LOGICAL_H as i32)",
+              "RenderSurface::new(LOGICAL_W,LOGICAL_H)",
+              "biWidth:app.fb.w as i32",
+              "biHeight:-(app.fb.h as i32)",
           ]
           missing=[x for x in required if x not in src]
           if missing:
               raise SystemExit(f"Round 1 presenter contract missing: {missing}")
-          # Phase 1 must remain presentation-only: logical framebuffer is still 600x400.
-          print("Round 1 contract OK: HALFTONE + brush-origin reset; logical framebuffer unchanged.")
+          # Phase 1 behavior survives the Phase 2 abstraction: the active
+          # legacy surface is still exactly the original logical 600x400.
+          print("Round 1 contract OK: HALFTONE retained; legacy surface remains LOGICAL_W x LOGICAL_H.")
 
       - name: Validate Round 2 surface abstraction contract
         shell: python
