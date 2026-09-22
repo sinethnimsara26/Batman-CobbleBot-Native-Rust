@@ -2,6 +2,10 @@ use crate::assets::{Assets,Image,LevelTileSet};
 use crate::game::{AppScreen,Game,LEVEL_X,LEVEL_Y,LOGICAL_H,LOGICAL_W};
 use crate::surface::RenderSurface;
 
+pub const HQ_SCALE:usize=3;
+pub const HQ_W:usize=LOGICAL_W*HQ_SCALE;
+pub const HQ_H:usize=LOGICAL_H*HQ_SCALE;
+
 #[derive(Copy,Clone,Debug,PartialEq,Eq)]
 pub enum RenderMode{Legacy1x,HighQuality}
 
@@ -9,24 +13,106 @@ pub enum RenderMode{Legacy1x,HighQuality}
 pub struct RenderConfig{pub logical_w:usize,pub logical_h:usize,pub hq_scale:usize,pub mode:RenderMode}
 impl RenderConfig{
     pub const fn legacy()->Self{Self{logical_w:LOGICAL_W,logical_h:LOGICAL_H,hq_scale:1,mode:RenderMode::Legacy1x}}
+    pub const fn high_quality()->Self{Self{logical_w:LOGICAL_W,logical_h:LOGICAL_H,hq_scale:HQ_SCALE,mode:RenderMode::HighQuality}}
 }
 
 
 pub fn render(fb:&mut RenderSurface,game:&Game,assets:&Assets){
-    render_with_config(fb,game,assets,RenderConfig::legacy());
+    render_with_config(fb,None,game,assets,RenderConfig::legacy());
 }
 
-pub fn render_with_config(fb:&mut RenderSurface,game:&Game,assets:&Assets,config:RenderConfig){
+pub fn render_high_quality(base:&mut RenderSurface,hq:&mut RenderSurface,game:&Game,assets:&Assets){
+    render_with_config(hq,Some(base),game,assets,RenderConfig::high_quality());
+}
+
+pub fn render_with_config(
+    target:&mut RenderSurface,
+    scratch:Option<&mut RenderSurface>,
+    game:&Game,
+    assets:&Assets,
+    config:RenderConfig,
+){
     assert_eq!(config.logical_w,LOGICAL_W);
     assert_eq!(config.logical_h,LOGICAL_H);
     match config.mode{
         RenderMode::Legacy1x=>{
             assert_eq!(config.hq_scale,1);
-            assert_eq!(fb.w,LOGICAL_W);
-            assert_eq!(fb.h,LOGICAL_H);
-            render_legacy(fb,game,assets);
+            assert_eq!(target.w,LOGICAL_W);
+            assert_eq!(target.h,LOGICAL_H);
+            render_legacy(target,game,assets);
         }
-        RenderMode::HighQuality=>panic!("HQ render mode is intentionally not implemented until Phase 3"),
+        RenderMode::HighQuality=>{
+            assert_eq!(config.hq_scale,HQ_SCALE);
+            assert_eq!(target.w,HQ_W);
+            assert_eq!(target.h,HQ_H);
+            let base=scratch.expect("HQ rendering requires a logical-resolution scratch surface");
+            assert_eq!(base.w,LOGICAL_W);
+            assert_eq!(base.h,LOGICAL_H);
+
+            // Round 3 deliberately keeps every source asset at its existing
+            // 1x resolution. Render the known-good legacy frame first, then
+            // promote that complete opaque frame to the 3x presentation
+            // surface. Later rounds replace Batman/UI/overlays with true HQ
+            // assets composited 1:1 over this presentation surface.
+            render_legacy(base,game,assets);
+            upscale_opaque_base(base,target);
+        }
+    }
+}
+
+pub fn upscale_opaque_base(src:&RenderSurface,dst:&mut RenderSurface){
+    assert_eq!(dst.w,src.w*HQ_SCALE);
+    assert_eq!(dst.h,src.h*HQ_SCALE);
+    assert_eq!(HQ_SCALE,3,"Round 3 bilinear kernel is specialized for 3x");
+
+    // Pixel-center bilinear resampling. For an exact 3x scale, destination
+    // pixel (3*x+1,3*y+1) lands exactly on source pixel (x,y), which gives us
+    // a strong no-drift CI invariant while smoothing the two pixels between
+    // neighboring logical samples.
+    //
+    // Precompute the horizontal lookup/weights once. The original proof
+    // kernel recomputed div_euclid/clamping for every one of the 2.16M output
+    // pixels; this keeps those divisions out of the hot inner loop while
+    // preserving the exact same integer-weighted result.
+    let mut xmap=Vec::with_capacity(dst.w);
+    for dx in 0..dst.w{
+        let xn=dx as isize-1;
+        let xq=xn.div_euclid(3);
+        let xr=xn.rem_euclid(3) as u32;
+        let x0=xq.clamp(0,src.w as isize-1) as usize;
+        let x1=(xq+1).clamp(0,src.w as isize-1) as usize;
+        xmap.push((x0,x1,3-xr,xr));
+    }
+
+    for dy in 0..dst.h{
+        let yn=dy as isize-1;
+        let yq=yn.div_euclid(3);
+        let yr=yn.rem_euclid(3) as u32;
+        let y0=yq.clamp(0,src.h as isize-1) as usize;
+        let y1=(yq+1).clamp(0,src.h as isize-1) as usize;
+        let wy0=3-yr;
+        let wy1=yr;
+        let row0=y0*src.w;
+        let row1=y1*src.w;
+        let dst_row=dy*dst.w;
+
+        for (dx,&(x0,x1,wx0,wx1)) in xmap.iter().enumerate(){
+            let p00=src.pixels[row0+x0];
+            let p10=src.pixels[row0+x1];
+            let p01=src.pixels[row1+x0];
+            let p11=src.pixels[row1+x1];
+
+            let w00=wx0*wy0;
+            let w10=wx1*wy0;
+            let w01=wx0*wy1;
+            let w11=wx1*wy1;
+
+            let r=((((p00>>16)&255)*w00+((p10>>16)&255)*w10+((p01>>16)&255)*w01+((p11>>16)&255)*w11+4)/9)&255;
+            let g=((((p00>>8)&255)*w00+((p10>>8)&255)*w10+((p01>>8)&255)*w01+((p11>>8)&255)*w11+4)/9)&255;
+            let b=((p00&255)*w00+(p10&255)*w10+(p01&255)*w01+(p11&255)*w11+4)/9;
+
+            dst.pixels[dst_row+dx]=(r<<16)|(g<<8)|b;
+        }
     }
 }
 
