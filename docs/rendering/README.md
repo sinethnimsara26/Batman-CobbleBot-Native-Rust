@@ -1,0 +1,28 @@
+# HQ Rendering Plan
+
+This folder contains the research and implementation blueprint for improving the visual resolution of the native CobbleBot port after the Level 1A renderer-repair pass.
+
+## Documents
+
+- [HQ_RENDERING_RESEARCH.md](HQ_RENDERING_RESEARCH.md) — diagnosis, external research, alternatives and decisions.
+- [HQ_RENDERING_ARCHITECTURE.md](HQ_RENDERING_ARCHITECTURE.md) — selected 3× presentation architecture and asset strategy.
+- [HQ_RENDERING_EXECUTION_PLAN.md](HQ_RENDERING_EXECUTION_PLAN.md) — phase-by-phase file changes, CI gates, budgets and rollback plan.
+
+## Decision summary
+
+The project will **not** use AI upscaling as the canonical fix.
+
+The source SWF still contains vector geometry, fonts, placements, transforms and real animation timelines, so the faithful solution is to preserve the 600×400 gameplay simulation while moving foreground/vector presentation to a higher-resolution supersampled pipeline.
+
+Selected starting point:
+
+- gameplay: 600×400, unchanged.
+- base scenery: current 600×400 composition.
+- HQ presentation: 1800×1200 (3×).
+- important vector-derived assets: rebuild at 3× with build-time supersampling.
+- final Win32 stretch: GDI HALFTONE.
+- large world tile/background packs: keep current resolution initially and evaluate only after Batman/UI are fixed.
+- Direct2D: fallback if software HQ misses performance/quality goals.
+- AI super-resolution: optional bitmap-only experiment, never the default source of truth.
+
+No runtime code is changed by this planning branch.
