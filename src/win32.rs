@@ -32,9 +32,9 @@ type HWND=*mut c_void; type HINSTANCE=*mut c_void; type HICON=*mut c_void; type 
 const KEYS:[usize;10]=[VK_LEFT,VK_RIGHT,VK_UP,VK_DOWN,VK_SPACE,VK_ENTER,VK_ESCAPE,VK_I,VK_A,VK_D];
 const EXTRA_KEYS:[usize;1]=[VK_S];
 
-struct App{fb:RenderSurface,assets:Assets,audio:Audio,ground:CollisionMask,game:Game,input:InputState,last:Instant,acc:f32,active:bool}
+struct App{base_fb:RenderSurface,fb:RenderSurface,assets:Assets,audio:Audio,ground:CollisionMask,game:Game,input:InputState,last:Instant,acc:f32,active:bool}
 impl App{
- fn new()->Self{Self{fb:RenderSurface::new(LOGICAL_W,LOGICAL_H),assets:Assets::load(),audio:Audio::new(),ground:CollisionMask::level1a(),game:Game::new(),input:InputState::default(),last:Instant::now(),acc:0.0,active:true}}
+ fn new()->Self{Self{base_fb:RenderSurface::new(LOGICAL_W,LOGICAL_H),fb:RenderSurface::new(render::HQ_W,render::HQ_H),assets:Assets::load(),audio:Audio::new(),ground:CollisionMask::level1a(),game:Game::new(),input:InputState::default(),last:Instant::now(),acc:0.0,active:true}}
  unsafe fn poll_keyboard(&mut self,hwnd:HWND){
   // WM_ACTIVATE / WM_SETFOCUS are authoritative. GetForegroundWindow is
   // allowed to promote us to active, but a transient mismatch must not undo
@@ -46,7 +46,7 @@ impl App{
   }
  }
  fn timer(&mut self,hwnd:HWND)->bool{unsafe{self.poll_keyboard(hwnd);}let now=Instant::now();let dt=(now-self.last).as_secs_f32().min(0.2);self.last=now;if !self.active{return false;}self.acc+=dt;let mut stepped=false;while self.acc>=FIXED_STEP{self.game.tick(&mut self.input,&self.ground);for event in self.game.take_audio_events(){self.audio.handle(event);}self.acc-=FIXED_STEP;stepped=true;}stepped}
- fn render(&mut self){render::render(&mut self.fb,&self.game,&self.assets);}
+ fn render(&mut self){render::render_high_quality(&mut self.base_fb,&mut self.fb,&self.game,&self.assets);}
 }
 static mut APP:*mut App=null_mut();
 fn wide(s:&str)->Vec<u16>{s.encode_utf16().chain(Some(0)).collect()}
