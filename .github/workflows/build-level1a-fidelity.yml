@@ -1201,8 +1201,10 @@ jobs:
           ):
               assert needle in assets, needle
           for needle in (
-              "render_backdrop_legacy(base,game,assets)",
-              "draw_tiles(base,game,&assets.level1a_tiles_hq_base)",
+              "target.fill(0xffa11600)",
+              "draw_moon_hq(target,assets)",
+              "render_upper_backdrop_rgba(base,game,assets)",
+              "upscale_alpha_layer(base,target)",
               "draw_tiles_hq(target,game,&assets.level1a_detail_tiles_hq)",
               "fn draw_tiles_hq",
           ):
