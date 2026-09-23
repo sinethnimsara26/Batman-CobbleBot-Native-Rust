@@ -41,16 +41,16 @@ pub struct Assets {
 impl Assets {
     pub fn load() -> Self {
         Self {
-            batman_frames: decode_sprite_frames(include_bytes!("../assets/batman_frames.bin")),
+            batman_frames: decode_sprite_frames_expected(include_bytes!("../assets/batman_frames.bin"),1.0,"batman_frames"),
             root_sky: decode_png(include_bytes!("../assets/root_bg_131.png")),
             root_moon: decode_png(include_bytes!("../assets/root_bg_134.png")),
             city_background: decode_png(include_bytes!("../assets/level1a_bg.png")),
-            pickup_frames: decode_sprite_frames(include_bytes!("../assets/pickup_frames.bin")),
-            batarang_frames: decode_sprite_frames(include_bytes!("../assets/batarang_frames.bin")),
-            level_title_frames: decode_sprite_frames(include_bytes!("../assets/level_title_frames.bin")),
-            fadein_frames: decode_sprite_frames(include_bytes!("../assets/fadein_frames.bin")),
-            fadeout_frames: decode_sprite_frames(include_bytes!("../assets/fadeout_frames.bin")),
-            tutorial_overlay_frames: decode_sprite_frames(include_bytes!("../assets/tutorial_overlay_frames.bin")),
+            pickup_frames: decode_sprite_frames_expected(include_bytes!("../assets/pickup_frames.bin"),1.0,"pickup_frames"),
+            batarang_frames: decode_sprite_frames_expected(include_bytes!("../assets/batarang_frames.bin"),1.0,"batarang_frames"),
+            level_title_frames: decode_sprite_frames_expected(include_bytes!("../assets/level_title_frames.bin"),1.0,"level_title_frames"),
+            fadein_frames: decode_sprite_frames_expected(include_bytes!("../assets/fadein_frames.bin"),1.0,"fadein_frames"),
+            fadeout_frames: decode_sprite_frames_expected(include_bytes!("../assets/fadeout_frames.bin"),1.0,"fadeout_frames"),
+            tutorial_overlay_frames: decode_sprite_frames_expected(include_bytes!("../assets/tutorial_overlay_frames.bin"),1.0,"tutorial_overlay_frames"),
             hud_base: decode_png(include_bytes!("../assets/hud_base.png")),
             hud_digits_small: decode_png(include_bytes!("../assets/hud_digits_small.png")),
             hud_digits_large: decode_png(include_bytes!("../assets/hud_digits_large.png")),
@@ -90,6 +90,17 @@ impl LevelTileSet {
         cache.push_back(((x,y),Rc::clone(&image))); if cache.len()>12{cache.pop_front();}
         Some(image)
     }
+}
+
+fn decode_sprite_frames_expected(bytes:&[u8],expected_scale:f32,label:&str)->SpriteSet{
+    let set=decode_sprite_frames(bytes);
+    let delta=(set.logical_pixel_scale-expected_scale).abs();
+    assert!(
+        delta<=0.0001,
+        "sprite pack scale mismatch for {}: expected {}, got {}",
+        label,expected_scale,set.logical_pixel_scale
+    );
+    set
 }
 
 fn decode_sprite_frames(bytes:&[u8])->SpriteSet{
@@ -141,4 +152,31 @@ pub fn decode_png(bytes:&[u8])->Image{
         ColorType::Indexed=>unreachable!(),
     }
     Image{w:info.width as usize,h:info.height as usize,pixels:out}
+}
+
+#[cfg(test)]
+mod tests{
+    use super::{decode_sprite_frames,decode_sprite_frames_expected};
+
+    #[test]
+    fn legacy_v1_defaults_to_one(){
+        let set=decode_sprite_frames(include_bytes!("../assets/batarang_frames.bin"));
+        assert!((set.logical_pixel_scale-1.0).abs()<0.0001);
+        assert!(!set.frames.is_empty());
+    }
+
+    #[test]
+    fn v2_reports_embedded_scale(){
+        let set=decode_sprite_frames(include_bytes!("../assets/scale_probe.bin"));
+        assert!((set.logical_pixel_scale-3.0).abs()<0.0001);
+        assert!(!set.frames.is_empty());
+    }
+
+    #[test]
+    #[should_panic(expected="sprite pack scale mismatch for scale_probe: expected 1, got 3")]
+    fn v2_scale_mismatch_panics(){
+        let _=decode_sprite_frames_expected(
+            include_bytes!("../assets/scale_probe.bin"),1.0,"scale_probe"
+        );
+    }
 }
