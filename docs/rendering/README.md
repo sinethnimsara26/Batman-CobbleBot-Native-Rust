@@ -15,6 +15,7 @@ This folder contains the research and implementation blueprint for improving the
 - [HQ_ROUND6_HUD_3X_RESULTS.md](HQ_ROUND6_HUD_3X_RESULTS.md) — executed Phase 6 true 3× HUD/device-font/digit reconstruction, exact field-registration proof, A/B inspection, and Windows validation.
 - [HQ_ROUND7_OVERLAYS_3X_RESULTS.md](HQ_ROUND7_OVERLAYS_3X_RESULTS.md) — executed Phase 7 true 3× tutorial/title/fade reconstruction, stage-clipped supersampling, lazy memory control, and Windows validation.
 - [HQ_ROUND8_WORLD_OBJECTS_3X_RESULTS.md](HQ_ROUND8_WORLD_OBJECTS_3X_RESULTS.md) — executed Phase 8 true 3× pickup/Batarang reconstruction, depth-preserving composition, registration proof, and Windows validation.
+- [HQ_ROUND9_DPI_AWARENESS_RESULTS.md](HQ_ROUND9_DPI_AWARENESS_RESULTS.md) — executed Phase 9 Per-Monitor-V2 DPI awareness, compatibility fallback, viewport proof, and unchanged-pixel validation.
 
 ## Decision summary
 
