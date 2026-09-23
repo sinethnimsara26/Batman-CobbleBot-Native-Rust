@@ -1265,6 +1265,8 @@ jobs:
                   hi6=hi0.convert("RGBA")
                   legacy3=lo.resize((lo.width*3,lo.height*3),Image.Resampling.BILINEAR)
                   candidate=premul_lanczos_half(hi6)
+              if sid==134:
+                  candidate.save("assets/root_bg_134_hq.png")
               decoded=candidate.width*candidate.height*4
               report["candidate_total_decoded_rgba_bytes"] += decoded
               report["symbols"][str(sid)]={
@@ -1296,10 +1298,25 @@ jobs:
           report["headroom_to_500_mib_if_all_three_eager"]=(
               500*1024*1024-report["hypothetical_all_three_eager_upper_bound"]
           )
+          selected=report["symbols"]["134"]["candidate_decoded_rgba_bytes"]
+          report["runtime_decision"]={
+              "selected_symbols":[134],
+              "selected_reason":"moon has a visible source-rasterization gain at modest decoded cost",
+              "sky_reason":"symbol 131 is a single opaque RGB color in-stage, so a 3x bitmap adds no visible detail",
+              "city_reason":"symbol 142 would add over 112 MiB decoded by itself and is rejected by the 500 MiB stop condition",
+          }
+          report["selected_decoded_rgba_bytes"]=selected
+          report["final_known_decoded_upper_bound"]=report["round10_known_decoded_upper_bound"]+selected
+          report["final_headroom_to_500_mib"]=500*1024*1024-report["final_known_decoded_upper_bound"]
           Path(".generated/backdrop-evaluation-report.json").write_text(json.dumps(report,indent=2))
           assert len(list(out.glob("*.png"))) == 3
+          assert Path("assets/root_bg_134_hq.png").exists()
+          assert report["symbols"]["134"]["candidate_3x_size"] == [1171,1171]
+          assert report["symbols"]["142"]["candidate_decoded_rgba_bytes"] > 110*1024*1024
+          assert report["final_known_decoded_upper_bound"] < 500*1024*1024
+          assert report["final_headroom_to_500_mib"] > 80*1024*1024
           print(json.dumps(report,indent=2))
-          print("Round 10B backdrop evaluation PASS: sky/moon/city source probes built.")
+          print("Round 10B backdrop decision PASS: true-3x moon selected; flat sky and oversized city remain on the efficient path.")
 
       - name: Validate Round 9 per-monitor DPI-awareness contract
         shell: python
@@ -1790,6 +1807,7 @@ jobs:
             .generated/title-actions.json
             assets/root_bg_131.png
             assets/root_bg_134.png
+            assets/root_bg_134_hq.png
             assets/level1a_bg.png
             assets/hud_base.png
             assets/hud_base_hq.png
