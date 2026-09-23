@@ -2,7 +2,7 @@ name: build-level1a-fidelity
 
 on:
   push:
-    branches: [main, level1a-cxform-fidelity, hq-rendering-phase1-halftone, hq-rendering-phase2-surfaces, hq-rendering-phase3-3x-surface]
+    branches: [main, level1a-cxform-fidelity, hq-rendering-phase1-halftone, hq-rendering-phase2-surfaces, hq-rendering-phase3-3x-surface, hq-rendering-phase4-pack-v2]
   workflow_dispatch:
 
 concurrency:
@@ -105,7 +105,8 @@ jobs:
           python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/pickup-frames" --bitmaps "$work/bitmaps" --symbol 695 --scale 1.130691 --all-frames
           python "$tools/pack_sprite_frames.py" "$work/pickup-frames" "assets/pickup_frames.bin"
           python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/batarang-frames" --bitmaps "$work/bitmaps" --symbol 694 --scale 0.364471 --all-frames
-          python "$tools/pack_sprite_frames.py" "$work/batarang-frames" "assets/batarang_frames.bin"
+          python "$tools/pack_sprite_frames.py" "$work/batarang-frames" "assets/batarang_frames.bin" --format-version 1
+          python "$tools/pack_sprite_frames.py" "$work/batarang-frames" "assets/scale_probe.bin" --format-version 2 --logical-pixel-scale 3.0
 
           # Root gameplay frame 19 has two backdrop layers below game:
           # depth 1 = character 131, depth 2 = character 134 at (300,130)
@@ -370,9 +371,75 @@ jobs:
               raise SystemExit(f"Round 3 HQ contract missing: {missing}")
           print("Round 3 contract OK: 600x400 logical + 1800x1200 HQ presentation path is wired.")
 
+      - name: Validate Round 4 sprite-pack format contract
+        shell: python
+        run: |
+          import json,struct
+          from pathlib import Path
+
+          packer=Path("reverse-engineering/tools/pack_sprite_frames.py").read_text()
+          assets=Path("src/assets.rs").read_text()
+          required_packer=[
+              'MAGIC_V1 = b"BCBFRM01"',
+              'MAGIC_V2 = b"BCBFRM02"',
+              '"--format-version"',
+              '"--logical-pixel-scale"',
+              'struct.pack("<f", args.logical_pixel_scale)',
+          ]
+          required_assets=[
+              "pub struct SpriteSet",
+              "pub logical_pixel_scale: f32",
+              'b"BCBFRM01"',
+              'b"BCBFRM02"',
+              "decode_sprite_frames_expected",
+              "sprite pack scale mismatch",
+          ]
+          missing=[x for x in required_packer if x not in packer]
+          missing += [x for x in required_assets if x not in assets]
+          if missing:
+              raise SystemExit(f"Round 4 source contract missing: {missing}")
+
+          def inspect(path):
+              data=Path(path).read_bytes()
+              magic=data[:8].decode("ascii")
+              count=struct.unpack_from("<I",data,8)[0]
+              scale=1.0 if magic=="BCBFRM01" else struct.unpack_from("<f",data,12)[0]
+              return magic,count,scale
+
+          # Real runtime packs intentionally exercise both versions.
+          batman=inspect("assets/batman_frames.bin")
+          pickup=inspect("assets/pickup_frames.bin")
+          legacy=inspect("assets/batarang_frames.bin")
+          probe=inspect("assets/scale_probe.bin")
+          print("Batman pack:",batman)
+          print("Pickup pack:",pickup)
+          print("Legacy Batarang pack:",legacy)
+          print("3x scale probe:",probe)
+
+          assert batman == ("BCBFRM02",279,1.0), batman
+          assert pickup[0]=="BCBFRM02" and pickup[2]==1.0, pickup
+          assert legacy[0]=="BCBFRM01" and legacy[2]==1.0, legacy
+          assert probe[0]=="BCBFRM02" and probe[2]==3.0, probe
+
+          # Sidecars must carry exactly the same scale metadata.
+          for name,expected_format,expected_scale in [
+              ("batman_frames","BCBFRM02",1.0),
+              ("pickup_frames","BCBFRM02",1.0),
+              ("batarang_frames","BCBFRM01",1.0),
+              ("scale_probe","BCBFRM02",3.0),
+          ]:
+              meta=json.loads(Path(f"assets/{name}.json").read_text())
+              assert meta["format"]==expected_format,(name,meta)
+              assert abs(meta["logical_pixel_scale"]-expected_scale)<1e-6,(name,meta)
+
+          print("Round 4 pack contract OK: v1 compatibility + v2 explicit scale metadata.")
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-pc-windows-msvc
+
+      - name: Run sprite-pack compatibility tests
+        run: cargo test --release --target x86_64-pc-windows-msvc --lib
 
       - name: Build Level 1A fidelity slice
         run: cargo build --release --target x86_64-pc-windows-msvc
