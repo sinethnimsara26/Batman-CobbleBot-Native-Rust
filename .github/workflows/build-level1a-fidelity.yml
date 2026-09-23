@@ -1096,7 +1096,7 @@ jobs:
           assert detail3["excluded_symbols"] == [14,147,149,151,153]
           for m in (full,base,detail1,detail3):
               assert m["unsupported_fills"] == [], m["unsupported_fills"]
-              assert m.get("missing_bitmap_ids",[]) == [], m.get("missing_bitmap_ids")
+              assert m["missing_ids"] == [], m["missing_ids"]
 
           def index(manifest):
               return {(x["world_x"],x["world_y"]):x for x in manifest["tiles"]}
