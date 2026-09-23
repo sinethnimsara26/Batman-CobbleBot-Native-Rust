@@ -236,24 +236,28 @@ fn draw_foreground_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
 }
 
 fn draw_foreground_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
-    // Round 5 keeps UI assets at 1x, but draws them at the correct depth after
-    // HQ Batman using the same 3x pixel-center bilinear promotion semantics.
     draw_hud_hq(fb,game,assets);
 
-    if !assets.tutorial_overlay_frames.is_empty(){
-        let i=game.overlay_frame.min(assets.tutorial_overlay_frames.len()-1);
-        let f=&assets.tutorial_overlay_frames[i];
-        blit_region_hq3(
-            fb,&f.image,0,0,f.image.w,f.image.h,
-            (311.4-f.anchor_x).round() as i32,
-            (190.0-f.anchor_y).round() as i32
+    // Round 7 foreground timelines are already true 3x assets. Their SWF
+    // display lists, embedded DefineText glyphs, masks and CXFORMWITHALPHA were
+    // resolved at 6x before premultiplied-alpha Lanczos downsampling to 3x.
+    if !assets.tutorial_overlay_frames_hq.is_empty(){
+        debug_assert!((assets.tutorial_overlay_frames_hq.logical_pixel_scale-HQ_SCALE as f32).abs()<0.001);
+        let i=game.overlay_frame.min(assets.tutorial_overlay_frames_hq.len()-1);
+        let f=assets.tutorial_overlay_frames_hq.frame(i);
+        let scale=assets.tutorial_overlay_frames_hq.logical_pixel_scale;
+        blit(
+            fb,&f.image,
+            (311.4*scale-f.anchor_x).round() as i32,
+            (190.0*scale-f.anchor_y).round() as i32,
+            f.image.w as i32,f.image.h as i32,false
         );
     }
 
-    draw_root_timeline_hq(fb,&assets.level_title_frames,game.ticks,318.7,76.75);
-    draw_root_timeline_hq(fb,&assets.fadein_frames,game.ticks,301.0,205.0);
+    draw_root_timeline_hq_lazy(fb,&assets.level_title_frames_hq,game.ticks,318.7,76.75);
+    draw_root_timeline_hq_lazy(fb,&assets.fadein_frames_hq,game.ticks,301.0,205.0);
     if let Some(t)=game.fadeout_tick{
-        draw_root_timeline_hq(fb,&assets.fadeout_frames,t as u64,301.0,205.0);
+        draw_root_timeline_hq_lazy(fb,&assets.fadeout_frames_hq,t as u64,301.0,205.0);
     }
 }
 
@@ -316,18 +320,21 @@ fn draw_number_centered_hq_1to1(fb:&mut RenderSurface,atlas:&Image,cx:i32,cy:i32
     }
 }
 
-fn draw_root_timeline_hq(
+fn draw_root_timeline_hq_lazy(
     fb:&mut RenderSurface,
-    frames:&[crate::assets::SpriteFrame],
+    frames:&crate::assets::LazySpriteSet,
     tick:u64,x:f32,y:f32
 ){
     if frames.is_empty(){return;}
+    debug_assert!((frames.logical_pixel_scale-HQ_SCALE as f32).abs()<0.001);
     let i=(tick as usize).min(frames.len()-1);
-    let f=&frames[i];
-    blit_region_hq3(
-        fb,&f.image,0,0,f.image.w,f.image.h,
-        (x-f.anchor_x).round() as i32,
-        (y-f.anchor_y).round() as i32
+    let f=frames.frame(i);
+    let scale=frames.logical_pixel_scale;
+    blit(
+        fb,&f.image,
+        (x*scale-f.anchor_x).round() as i32,
+        (y*scale-f.anchor_y).round() as i32,
+        f.image.w as i32,f.image.h as i32,false
     );
 }
 
