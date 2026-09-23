@@ -2,7 +2,7 @@ name: build-level1a-fidelity
 
 on:
   push:
-    branches: [main, level1a-cxform-fidelity, hq-rendering-phase1-halftone, hq-rendering-phase2-surfaces, hq-rendering-phase3-3x-surface, hq-rendering-phase4-pack-v2, hq-rendering-phase5-batman-3x, hq-rendering-phase6-hud-3x, hq-rendering-phase7-overlays-3x]
+    branches: [main, level1a-cxform-fidelity, hq-rendering-phase1-halftone, hq-rendering-phase2-surfaces, hq-rendering-phase3-3x-surface, hq-rendering-phase4-pack-v2, hq-rendering-phase5-batman-3x, hq-rendering-phase6-hud-3x, hq-rendering-phase7-overlays-3x, hq-rendering-phase8-world-objects-3x]
   workflow_dispatch:
 
 concurrency:
@@ -51,7 +51,7 @@ jobs:
           $tools = "reverse-engineering/tools"
           $work = ".generated"
           $swf = "$work/cobblebot.swf"
-          New-Item -ItemType Directory -Force -Path "$work/reports","$work/bitmaps","$work/sounds","$work/batman-frames","$work/batman-frames-hq","$work/pickup-frames","$work/batarang-frames","$work/level-title","$work/level-title-hq-super","$work/level-title-hq","$work/fadein","$work/fadein-hq-super","$work/fadein-hq","$work/fadeout","$work/fadeout-hq-super","$work/fadeout-hq","$work/tutorial-overlay","$work/tutorial-overlay-hq-super","$work/tutorial-overlay-hq","$work/hud","$work/hud-hq-super","$work/hud-hq-final","$work/level1a-tiles","assets","reverse-engineering/generated/collision_masks" | Out-Null
+          New-Item -ItemType Directory -Force -Path "$work/reports","$work/bitmaps","$work/sounds","$work/batman-frames","$work/batman-frames-hq","$work/pickup-frames","$work/pickup-frames-hq-super","$work/pickup-frames-hq","$work/batarang-frames","$work/batarang-frames-hq-super","$work/batarang-frames-hq","$work/level-title","$work/level-title-hq-super","$work/level-title-hq","$work/fadein","$work/fadein-hq-super","$work/fadein-hq","$work/fadeout","$work/fadeout-hq-super","$work/fadeout-hq","$work/tutorial-overlay","$work/tutorial-overlay-hq-super","$work/tutorial-overlay-hq","$work/hud","$work/hud-hq-super","$work/hud-hq-final","$work/level1a-tiles","assets","reverse-engineering/generated/collision_masks" | Out-Null
 
           python "$tools/swf_re.py" "$swf" "$work/reports"
           @'
@@ -112,8 +112,20 @@ jobs:
 
           python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/pickup-frames" --bitmaps "$work/bitmaps" --symbol 695 --scale 1.130691 --all-frames
           python "$tools/pack_sprite_frames.py" "$work/pickup-frames" "assets/pickup_frames.bin"
+
+          # Round 8: rebuild the small moving world objects at a temporary 6x
+          # relative to their recovered logical display scale, then filter to
+          # final 3x and pack with explicit logical_pixel_scale = 3.0.
+          python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/pickup-frames-hq-super" --bitmaps "$work/bitmaps" --symbol 695 --scale 6.784146 --all-frames
+          python "$tools/finalize_hq_timeline.py" "$work/pickup-frames-hq-super" "$work/pickup-frames-hq" --output-scale 3.392073 --supersample 2
+          python "$tools/pack_sprite_frames.py" "$work/pickup-frames-hq" "assets/pickup_frames_hq.bin" --format-version 2 --logical-pixel-scale 3.0
+
           python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/batarang-frames" --bitmaps "$work/bitmaps" --symbol 694 --scale 0.364471 --all-frames
           python "$tools/pack_sprite_frames.py" "$work/batarang-frames" "assets/batarang_frames.bin" --format-version 1
+          python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/batarang-frames-hq-super" --bitmaps "$work/bitmaps" --symbol 694 --scale 2.186826 --all-frames
+          python "$tools/finalize_hq_timeline.py" "$work/batarang-frames-hq-super" "$work/batarang-frames-hq" --output-scale 1.093413 --supersample 2
+          python "$tools/pack_sprite_frames.py" "$work/batarang-frames-hq" "assets/batarang_frames_hq.bin" --format-version 2 --logical-pixel-scale 3.0
+
           python "$tools/pack_sprite_frames.py" "$work/batarang-frames" "assets/scale_probe.bin" --format-version 2 --logical-pixel-scale 3.0
 
           # Root gameplay frame 19 has two backdrop layers below game:
@@ -516,7 +528,7 @@ jobs:
               assert needle in assets, needle
           for needle in (
               "draw_batman_hq",
-              "render_world_legacy(base,game,assets)",
+              "render_world_base_legacy(base,game,assets)",
               "draw_foreground_hq(target,game,assets)",
               "True HQ frames are already at final presentation resolution",
           ):
@@ -794,6 +806,126 @@ jobs:
           print(json.dumps(report,indent=2))
           print("Round 7 contract PASS: four true-3x timelines, exact counts/timing, lazy runtime decode.")
 
+      - name: Validate Round 8 true-3x moving world objects
+        shell: python
+        run: |
+          import json,math,struct
+          from pathlib import Path
+
+          specs=[
+              {
+                  "name":"pickup",
+                  "legacy_dir":"pickup-frames",
+                  "hq_dir":"pickup-frames-hq",
+                  "legacy_pack":"pickup_frames.bin",
+                  "hq_pack":"pickup_frames_hq.bin",
+                  "symbol":695,
+                  "base_scale":1.130691,
+              },
+              {
+                  "name":"batarang",
+                  "legacy_dir":"batarang-frames",
+                  "hq_dir":"batarang-frames-hq",
+                  "legacy_pack":"batarang_frames.bin",
+                  "hq_pack":"batarang_frames_hq.bin",
+                  "symbol":694,
+                  "base_scale":0.364471,
+              },
+          ]
+
+          report={
+              "objects":{},
+              "strategy":"6x-relative-SWF-raster -> premultiplied-alpha Lanczos -> true 3x",
+              "moon":"deferred: it sits behind the city layer; upgrading it safely needs a separate depth-preserving world-layer split",
+          }
+          eager_bytes=0
+          for spec in specs:
+              legacy=json.loads(Path(".generated",spec["legacy_dir"],"manifest.json").read_text())
+              hq=json.loads(Path(".generated",spec["hq_dir"],"manifest.json").read_text())
+              assert legacy["symbol"] == hq["symbol"] == spec["symbol"]
+              assert legacy["frame_count"] == hq["frame_count"] > 0
+              assert legacy["source_bounds"] == hq["source_bounds"]
+              assert legacy["unsupported_fills"] == hq["unsupported_fills"] == []
+              assert legacy["missing_bitmap_ids"] == hq["missing_bitmap_ids"] == []
+              assert [x.get("animation") for x in legacy["frames"]] == [x.get("animation") for x in hq["frames"]]
+              assert math.isclose(legacy["scale"][0],spec["base_scale"],abs_tol=1e-6)
+              assert math.isclose(legacy["scale"][1],spec["base_scale"],abs_tol=1e-6)
+              assert math.isclose(hq["scale"][0],spec["base_scale"]*3.0,abs_tol=1e-6)
+              assert math.isclose(hq["scale"][1],spec["base_scale"]*3.0,abs_tol=1e-6)
+              final=hq["hq_finalize"]
+              assert math.isclose(final["source_scale"],spec["base_scale"]*6.0,abs_tol=1e-6), final
+              assert math.isclose(final["output_scale"],spec["base_scale"]*3.0,abs_tol=1e-6), final
+              assert final["supersample"] == 2
+              assert final["downsample"] == "lanczos"
+              assert final["alpha_filtering"] == "premultiplied"
+
+              raw=Path("assets",spec["hq_pack"]).read_bytes()
+              assert raw[:8] == b"BCBFRM02"
+              assert struct.unpack_from("<I",raw,8)[0] == hq["frame_count"]
+              assert abs(struct.unpack_from("<f",raw,12)[0]-3.0) < 1e-6
+
+              legacy_side=json.loads(Path("assets",spec["legacy_pack"].replace(".bin",".json")).read_text())
+              hq_side=json.loads(Path("assets",spec["hq_pack"].replace(".bin",".json")).read_text())
+              assert legacy_side["frame_count"] == hq_side["frame_count"] == hq["frame_count"]
+              assert abs(hq_side["logical_pixel_scale"]-3.0) < 1e-6
+
+              worst_anchor_drift=0.0
+              for lo,hi in zip(legacy_side["frames"],hq_side["frames"]):
+                  la=lo["anchor_in_cropped_image"]
+                  ha=hi["anchor_in_cropped_image"]
+                  drift=max(abs(ha[0]-la[0]*3.0),abs(ha[1]-la[1]*3.0))
+                  worst_anchor_drift=max(worst_anchor_drift,drift)
+                  assert drift <= 3.0, (spec["name"],lo["frame"],la,ha,drift)
+
+              legacy_decoded=sum(x["size"][0]*x["size"][1]*4 for x in legacy_side["frames"])
+              hq_decoded=sum(x["size"][0]*x["size"][1]*4 for x in hq_side["frames"])
+              eager_bytes += legacy_decoded + hq_decoded
+              report["objects"][spec["name"]]={
+                  "symbol":spec["symbol"],
+                  "frames":hq["frame_count"],
+                  "legacy_scale":spec["base_scale"],
+                  "hq_swf_scale":spec["base_scale"]*3.0,
+                  "temporary_swf_scale":spec["base_scale"]*6.0,
+                  "legacy_pack_bytes":Path("assets",spec["legacy_pack"]).stat().st_size,
+                  "hq_pack_bytes":Path("assets",spec["hq_pack"]).stat().st_size,
+                  "legacy_decoded_rgba_bytes":legacy_decoded,
+                  "hq_decoded_rgba_bytes":hq_decoded,
+                  "worst_anchor_drift_hq_pixels":worst_anchor_drift,
+              }
+
+          assets=Path("src/assets.rs").read_text()
+          render=Path("src/render.rs").read_text()
+          headless=Path("src/headless.rs").read_text()
+          for needle in (
+              "pickup_frames_hq: SpriteSet",
+              "batarang_frames_hq: SpriteSet",
+              'decode_sprite_frames_expected(include_bytes!("../assets/pickup_frames_hq.bin"),3.0',
+              'decode_sprite_frames_expected(include_bytes!("../assets/batarang_frames_hq.bin"),3.0',
+          ):
+              assert needle in assets, needle
+          for needle in (
+              "render_world_base_legacy(base,game,assets)",
+              "draw_world_objects_hq(target,game,assets)",
+              "fn draw_world_objects_hq",
+              "scenery at 1x -> promote -> true 3x pickups/Batarangs",
+          ):
+              assert needle in render, needle
+          hq_fn=render.split("fn draw_world_objects_hq",1)[1].split("fn draw_batman_legacy",1)[0]
+          assert "blit_region_hq3" not in hq_fn
+          assert "pickup_frames_hq" in hq_fn and "batarang_frames_hq" in hq_fn
+          assert '"13_world_objects.png"' in headless
+
+          previous=json.loads(Path(".generated/hq-overlay-asset-report.json").read_text())
+          report["round8_legacy_plus_hq_eager_rgba_bytes"]=eager_bytes
+          report["previous_known_sprite_rgba_upper_bound"]=previous["combined_known_sprite_rgba_upper_bound"]
+          report["combined_known_sprite_rgba_upper_bound"]=(
+              report["previous_known_sprite_rgba_upper_bound"]+eager_bytes
+          )
+          assert report["combined_known_sprite_rgba_upper_bound"] < 500*1024*1024, report
+          Path(".generated/hq-world-object-asset-report.json").write_text(json.dumps(report,indent=2))
+          print(json.dumps(report,indent=2))
+          print("Round 8 contract PASS: pickup 695 and projectile 694 are true-3x, depth-correct, and 1:1 at runtime.")
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-pc-windows-msvc
@@ -823,8 +955,8 @@ jobs:
 
           $legacyShots = Get-ChildItem ".generated/visual-smoke/*.png"
           $hqShots = Get-ChildItem ".generated/visual-smoke-hq/*.png"
-          if ($legacyShots.Count -ne 16) { throw "Expected 16 legacy smoke screenshots, got $($legacyShots.Count)" }
-          if ($hqShots.Count -ne 16) { throw "Expected 16 HQ smoke screenshots, got $($hqShots.Count)" }
+          if ($legacyShots.Count -ne 17) { throw "Expected 17 legacy smoke screenshots, got $($legacyShots.Count)" }
+          if ($hqShots.Count -ne 17) { throw "Expected 17 HQ smoke screenshots, got $($hqShots.Count)" }
           $legacyShots | Format-Table Name,Length
           $hqShots | Format-Table Name,Length
           Get-Content ".generated/render-benchmark.json"
@@ -856,12 +988,13 @@ jobs:
           actual={p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in root.glob("*.png")}
           missing=set(expected)-set(actual)
           extra=set(actual)-set(expected)
-          if missing or extra!={"04_walk.png"}:
+          allowed_extra={"04_walk.png","13_world_objects.png"}
+          if missing or extra!=allowed_extra:
               raise SystemExit(f"legacy screenshot set changed unexpectedly: missing={sorted(missing)} extra={sorted(extra)}")
           bad={name:(expected[name],actual[name]) for name in expected if actual[name]!=expected[name]}
           if bad:
               raise SystemExit(f"Round 2 changed legacy pixels: {bad}")
-          print(f"Legacy pixel identity PASS: {len(expected)}/{len(expected)} historical screenshots still match Run 45 exactly; 04_walk.png is the new Round-5 checkpoint.")
+          print(f"Legacy pixel identity PASS: {len(expected)}/{len(expected)} historical screenshots still match Run 45 exactly; Round-5 walk and Round-8 world-object checkpoints are additive.")
 
       - name: Verify Round 5 HQ output and render timing
         shell: python
@@ -873,7 +1006,7 @@ jobs:
           legacy=sorted(Path(".generated/visual-smoke").glob("*.png"))
           hq=sorted(Path(".generated/visual-smoke-hq").glob("*.png"))
           assert [p.name for p in legacy] == [p.name for p in hq]
-          assert len(legacy) == 16
+          assert len(legacy) == 17
           for lp,hp in zip(legacy,hq):
               with Image.open(lp) as lo, Image.open(hp) as hi:
                   assert lo.size == (600,400), (lp.name,lo.size)
@@ -888,7 +1021,7 @@ jobs:
           for key in ("mean_ms","p50_ms","p95_ms","max_ms"):
               assert bench[key] >= 0.0, (key,bench[key])
 
-          print("Round 5 HQ dimensions PASS: 16/16 frames are 1800x1200.")
+          print("HQ dimensions PASS: 17/17 frames are 1800x1200, including the Round-8 world-object checkpoint.")
           print("Round 5 render benchmark:",json.dumps(bench,indent=2))
 
       - name: Build Round 5 Batman A-B comparison sheets
@@ -999,6 +1132,43 @@ jobs:
           assert len(list(out.glob("*.png"))) == 4
           print("Built 4 Round-7 foreground A/B sheets.")
 
+      - name: Build Round 8 moving-object A-B comparison sheets
+        shell: python
+        run: |
+          from pathlib import Path
+          from PIL import Image,ImageDraw
+
+          out=Path(".generated/world-object-hq-comparisons")
+          out.mkdir(parents=True,exist_ok=True)
+          specs=[
+              ("pickup",Path(".generated/pickup-frames"),Path(".generated/pickup-frames-hq")),
+              ("batarang",Path(".generated/batarang-frames"),Path(".generated/batarang-frames-hq")),
+          ]
+
+          def visible_score(path):
+              with Image.open(path) as im:
+                  return sum(im.convert("RGBA").getchannel("A").histogram()[1:])
+
+          for name,legacy_dir,hq_dir in specs:
+              files=sorted(legacy_dir.glob("*.png"))
+              chosen=max(files,key=visible_score)
+              hp=hq_dir/chosen.name
+              with Image.open(chosen) as a0, Image.open(hp) as b0:
+                  a0=a0.convert("RGBA")
+                  b=b0.convert("RGBA")
+                  a=a0.resize((a0.width*3,a0.height*3),Image.Resampling.BILINEAR)
+              panel_w=max(a.width,b.width); panel_h=max(a.height,b.height); top=28
+              sheet=Image.new("RGBA",(panel_w*2+12,panel_h+top),(28,28,28,255))
+              sheet.alpha_composite(a,((panel_w-a.width)//2,top+(panel_h-a.height)//2))
+              sheet.alpha_composite(b,(panel_w+12+(panel_w-b.width)//2,top+(panel_h-b.height)//2))
+              draw=ImageDraw.Draw(sheet)
+              draw.text((6,6),f"{name}: legacy 1x -> bilinear 3x",fill=(255,255,255,255))
+              draw.text((panel_w+18,6),f"{name}: true SWF 6x-relative -> Lanczos 3x",fill=(255,255,255,255))
+              sheet.save(out/f"{name}.png")
+
+          assert len(list(out.glob("*.png"))) == 2
+          print("Built 2 Round-8 moving-object A/B sheets.")
+
       - uses: actions/upload-artifact@v4
         with:
           name: Batman-CobbleBot-Level1A-Fidelity-Windows-x64
@@ -1057,6 +1227,18 @@ jobs:
         with:
           name: Batman-CobbleBot-Level1A-Round7-Overlay-Asset-Report
           path: .generated/hq-overlay-asset-report.json
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Batman-CobbleBot-Level1A-Round8-World-Object-Comparisons
+          path: .generated/world-object-hq-comparisons/*.png
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Batman-CobbleBot-Level1A-Round8-World-Object-Asset-Report
+          path: .generated/hq-world-object-asset-report.json
           if-no-files-found: error
 
       - uses: actions/upload-artifact@v4
