@@ -59,11 +59,11 @@ pub fn render_with_config(
                 // scenery at 1x -> promote -> true 3x pickups/Batarangs ->
                 // true 3x Batman -> true 3x foreground UI/overlays.
                 base.fill(0xff000000);
-                // Round 10 keeps the flat/low-value level pieces in the cheap
-                // 1x base, but removes the window/facade detail symbols
-                // (144-146) before promotion. Their true-3x tile layer is
-                // then copied 1:1 at the original level depth, before moving
-                // objects and Batman.
+                // Round 10 keeps only the cheap depth-1 symbol 14 in
+                // the promoted 1x base. Symbols 146 and 147 interleave in the
+                // original Flash display list, so 144-147 stay together in
+                // one true-3x tile layer; that layer is copied 1:1 before
+                // moving objects and Batman.
                 render_backdrop_legacy(base,game,assets);
                 draw_tiles(base,game,&assets.level1a_tiles_hq_base);
                 upscale_opaque_base(base,target);
