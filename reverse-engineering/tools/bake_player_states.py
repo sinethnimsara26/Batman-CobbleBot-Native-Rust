@@ -35,8 +35,15 @@ def main():
     ap.add_argument("output",type=Path)
     ap.add_argument("--bitmaps",type=Path,required=True)
     ap.add_argument("--symbol",type=int,default=691)
-    ap.add_argument("--scale",type=float,default=0.163742)
+    ap.add_argument("--scale",type=float,default=0.163742,help="recovered logical player placement scale")
+    ap.add_argument("--output-scale",type=int,default=1,help="final raster pixels per legacy output pixel")
+    ap.add_argument("--supersample",type=int,default=1,help="temporary raster multiplier before final downsampling")
+    ap.add_argument("--downsample",choices=("lanczos","bicubic","bilinear"),default="lanczos")
     args=ap.parse_args()
+    if args.output_scale < 1:
+        raise SystemExit("--output-scale must be >= 1")
+    if args.supersample < 1:
+        raise SystemExit("--supersample must be >= 1")
 
     symbols=json.loads(args.symbols_json.read_text(encoding="utf-8"))
     outer=symbols.get(str(args.symbol))
@@ -79,11 +86,34 @@ def main():
 
     min_x=min(b[0] for b in all_bounds); min_y=min(b[1] for b in all_bounds)
     max_x=max(b[2] for b in all_bounds); max_y=max(b[3] for b in all_bounds)
-    pad=2
-    tx=pad-min_x*args.scale; ty=pad-min_y*args.scale
-    width=math.ceil((max_x-min_x)*args.scale)+pad*2
-    height=math.ceil((max_y-min_y)*args.scale)+pad*2
-    root=(args.scale,0.0,0.0,args.scale,tx,ty)
+    # Keep legacy registration mathematically identical at output-scale 1,
+    # while making HQ output explicit instead of hiding a multiplier in CI.
+    final_scale=args.scale*args.output_scale
+    final_pad=2*args.output_scale
+    final_tx=final_pad-min_x*final_scale; final_ty=final_pad-min_y*final_scale
+    final_width=math.ceil((max_x-min_x)*final_scale)+final_pad*2
+    final_height=math.ceil((max_y-min_y)*final_scale)+final_pad*2
+
+    raster_scale=final_scale*args.supersample
+    raster_tx=final_tx*args.supersample; raster_ty=final_ty*args.supersample
+    raster_width=final_width*args.supersample
+    raster_height=final_height*args.supersample
+    root=(raster_scale,0.0,0.0,raster_scale,raster_tx,raster_ty)
+
+    resampling={
+        "lanczos":Image.Resampling.LANCZOS,
+        "bicubic":Image.Resampling.BICUBIC,
+        "bilinear":Image.Resampling.BILINEAR,
+    }[args.downsample]
+
+    def finish_frame(canvas):
+        if args.supersample==1:
+            return canvas
+        # Pillow's RGBa mode is premultiplied-alpha RGBA. Filtering in this
+        # mode prevents transparent RGB from creating dark/colored edge halos.
+        return canvas.convert("RGBa").resize(
+            (final_width,final_height),resampling
+        ).convert("RGBA")
 
     args.output.mkdir(parents=True,exist_ok=True)
     frames=[]; ranges=[]; cursor=0; missing=set()
@@ -91,11 +121,12 @@ def main():
         start=cursor
         transform=compose(root,state["matrix"])
         for local in range(state["frame_count"]):
-            canvas=Image.new("RGBA",(width,height),(0,0,0,0))
+            canvas=Image.new("RGBA",(raster_width,raster_height),(0,0,0,0))
             render_symbol(
                 state["child_symbol"],local,transform,canvas,
                 symbols,shapes,bitmaps,unsupported,missing
             )
+            canvas=finish_frame(canvas)
             filename=f"{cursor:03}.png"
             canvas.save(args.output/filename)
             frames.append({
@@ -115,10 +146,15 @@ def main():
         "format":"batman-true-child-timelines-v1",
         "outer_symbol":args.symbol,
         "frame_count":cursor,
-        "size":[width,height],
-        "scale":[args.scale,args.scale],
+        "size":[final_width,final_height],
+        "scale":[final_scale,final_scale],
+        "base_scale":args.scale,
+        "output_scale":args.output_scale,
+        "supersample":args.supersample,
+        "downsample":args.downsample if args.supersample>1 else "none",
+        "raster_scale":[raster_scale,raster_scale],
         "source_bounds":[min_x,min_y,max_x,max_y],
-        "anchor_in_bitmap":[tx,ty],
+        "anchor_in_bitmap":[final_tx,final_ty],
         "states":ranges,
         "unsupported_fills":sorted(unsupported),
         "missing_bitmap_ids":sorted(missing),
@@ -130,8 +166,12 @@ def main():
     print(json.dumps({
         "outer_symbol":args.symbol,
         "frame_count":cursor,
-        "size":[width,height],
-        "anchor_in_bitmap":[tx,ty],
+        "size":[final_width,final_height],
+        "anchor_in_bitmap":[final_tx,final_ty],
+        "base_scale":args.scale,
+        "output_scale":args.output_scale,
+        "supersample":args.supersample,
+        "downsample":args.downsample if args.supersample>1 else "none",
         "states":ranges,
         "unsupported_fills":sorted(unsupported),
         "missing_bitmap_ids":sorted(missing),
