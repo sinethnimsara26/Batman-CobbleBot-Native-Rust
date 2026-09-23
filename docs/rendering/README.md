@@ -16,6 +16,7 @@ This folder contains the research and implementation blueprint for improving the
 - [HQ_ROUND7_OVERLAYS_3X_RESULTS.md](HQ_ROUND7_OVERLAYS_3X_RESULTS.md) — executed Phase 7 true 3× tutorial/title/fade reconstruction, stage-clipped supersampling, lazy memory control, and Windows validation.
 - [HQ_ROUND8_WORLD_OBJECTS_3X_RESULTS.md](HQ_ROUND8_WORLD_OBJECTS_3X_RESULTS.md) — executed Phase 8 true 3× pickup/Batarang reconstruction, depth-preserving composition, registration proof, and Windows validation.
 - [HQ_ROUND9_DPI_AWARENESS_RESULTS.md](HQ_ROUND9_DPI_AWARENESS_RESULTS.md) — executed Phase 9 Per-Monitor-V2 DPI awareness, compatibility fallback, viewport proof, and unchanged-pixel validation.
+- [HQ_ROUND10_SCENERY_3X_RESULTS.md](HQ_ROUND10_SCENERY_3X_RESULTS.md) — executed Phase 10 depth-preserved selective true 3× scenery, BCLVT002 cropped tile packs, cache/memory proof, and scrolling-performance validation.
 
 ## Decision summary
 

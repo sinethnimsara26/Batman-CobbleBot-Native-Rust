@@ -89,6 +89,8 @@ pub struct Assets {
     pub hud_digits_small_hq: Image,
     pub hud_digits_large_hq: Image,
     pub level1a_tiles: LevelTileSet,
+    pub level1a_tiles_hq_base: LevelTileSet,
+    pub level1a_detail_tiles_hq: LevelTileSet,
     pub title_screen: Image,
     pub instructions_screen: Image,
 }
@@ -119,41 +121,103 @@ impl Assets {
             hud_shell_hq: decode_sprite_frames_expected(include_bytes!("../assets/hud_shell_hq.bin"),3.0,"hud_shell_hq"),
             hud_digits_small_hq: decode_png(include_bytes!("../assets/hud_digits_small_hq.png")),
             hud_digits_large_hq: decode_png(include_bytes!("../assets/hud_digits_large_hq.png")),
-            level1a_tiles: LevelTileSet::new(include_bytes!("../assets/level1a_tiles.bin")),
+            level1a_tiles: LevelTileSet::new_expected(include_bytes!("../assets/level1a_tiles.bin"),1.0,12,"level1a_tiles"),
+            level1a_tiles_hq_base: LevelTileSet::new_expected(include_bytes!("../assets/level1a_tiles_hq_base.bin"),1.0,4,"level1a_tiles_hq_base"),
+            level1a_detail_tiles_hq: LevelTileSet::new_expected(include_bytes!("../assets/level1a_detail_tiles_hq.bin"),3.0,4,"level1a_detail_tiles_hq"),
             title_screen: decode_png(include_bytes!("../assets/title_screen.png")),
             instructions_screen: decode_png(include_bytes!("../assets/instructions_screen.png")),
         }
     }
 }
 
+#[derive(Copy,Clone)]
+struct LevelTileMeta {
+    offset: usize,
+    len: usize,
+    crop_x: i32,
+    crop_y: i32,
+}
+
+pub struct LevelTileFrame {
+    pub image: Rc<Image>,
+    pub crop_x: i32,
+    pub crop_y: i32,
+}
+
 pub struct LevelTileSet {
     bytes: &'static [u8],
-    index: HashMap<(i32,i32),(usize,usize)>,
+    index: HashMap<(i32,i32),LevelTileMeta>,
     cache: RefCell<VecDeque<((i32,i32),Rc<Image>)>>,
+    cache_limit: usize,
+    pub logical_pixel_scale: f32,
 }
 impl LevelTileSet {
-    fn new(bytes:&'static [u8])->Self{
-        assert!(bytes.len()>=12 && &bytes[..8]==b"BCLVT001");
+    fn new_expected(bytes:&'static [u8],expected_scale:f32,cache_limit:usize,label:&str)->Self{
+        assert!(cache_limit>0,"level tile cache limit must be positive");
+        assert!(bytes.len()>=12,"level tile pack too small");
+        let magic=&bytes[..8];
         let count=u32::from_le_bytes(bytes[8..12].try_into().unwrap()) as usize;
-        let mut pos=12; let mut index=HashMap::with_capacity(count);
+        let (logical_pixel_scale,mut pos)=match magic{
+            b"BCLVT001"=>(1.0,12usize),
+            b"BCLVT002"=>{
+                assert!(bytes.len()>=16,"BCLVT002 header truncated");
+                let scale=f32::from_le_bytes(bytes[12..16].try_into().unwrap());
+                assert!(scale.is_finite()&&scale>0.0,"invalid BCLVT002 logical pixel scale");
+                (scale,16usize)
+            }
+            _=>panic!("unsupported level tile pack format: {:?}",magic),
+        };
+        assert!(
+            (logical_pixel_scale-expected_scale).abs()<=0.0001,
+            "level tile pack scale mismatch for {}: expected {}, got {}",
+            label,expected_scale,logical_pixel_scale
+        );
+        let mut index=HashMap::with_capacity(count);
         for _ in 0..count {
-            let x=i32::from_le_bytes(bytes[pos..pos+4].try_into().unwrap());
-            let y=i32::from_le_bytes(bytes[pos+4..pos+8].try_into().unwrap());
-            let len=u32::from_le_bytes(bytes[pos+8..pos+12].try_into().unwrap()) as usize;
-            pos+=12; assert!(pos+len<=bytes.len()); index.insert((x,y),(pos,len)); pos+=len;
+            if magic==b"BCLVT001"{
+                assert!(pos+12<=bytes.len(),"BCLVT001 tile header truncated");
+                let x=i32::from_le_bytes(bytes[pos..pos+4].try_into().unwrap());
+                let y=i32::from_le_bytes(bytes[pos+4..pos+8].try_into().unwrap());
+                let len=u32::from_le_bytes(bytes[pos+8..pos+12].try_into().unwrap()) as usize;
+                pos+=12;
+                assert!(pos+len<=bytes.len(),"BCLVT001 tile PNG truncated");
+                index.insert((x,y),LevelTileMeta{offset:pos,len,crop_x:0,crop_y:0});
+                pos+=len;
+            }else{
+                assert!(pos+20<=bytes.len(),"BCLVT002 tile header truncated");
+                let x=i32::from_le_bytes(bytes[pos..pos+4].try_into().unwrap());
+                let y=i32::from_le_bytes(bytes[pos+4..pos+8].try_into().unwrap());
+                let crop_x=i32::from_le_bytes(bytes[pos+8..pos+12].try_into().unwrap());
+                let crop_y=i32::from_le_bytes(bytes[pos+12..pos+16].try_into().unwrap());
+                let len=u32::from_le_bytes(bytes[pos+16..pos+20].try_into().unwrap()) as usize;
+                pos+=20;
+                assert!(crop_x>=0&&crop_y>=0,"negative BCLVT002 crop offset");
+                assert!(pos+len<=bytes.len(),"BCLVT002 tile PNG truncated");
+                index.insert((x,y),LevelTileMeta{offset:pos,len,crop_x,crop_y});
+                pos+=len;
+            }
         }
-        assert_eq!(pos,bytes.len());
-        Self{bytes,index,cache:RefCell::new(VecDeque::new())}
+        assert_eq!(pos,bytes.len(),"trailing bytes in level tile pack");
+        Self{
+            bytes,index,cache:RefCell::new(VecDeque::new()),
+            cache_limit,logical_pixel_scale
+        }
     }
-    pub fn tile(&self,x:i32,y:i32)->Option<Rc<Image>>{
+    pub fn tile(&self,x:i32,y:i32)->Option<LevelTileFrame>{
+        let meta=*self.index.get(&(x,y))?;
         let mut cache=self.cache.borrow_mut();
-        if let Some(i)=cache.iter().position(|(k,_)|*k==(x,y)){
-            let item=cache.remove(i).unwrap(); let image=Rc::clone(&item.1); cache.push_back(item); return Some(image);
-        }
-        let (offset,len)=*self.index.get(&(x,y))?;
-        let image=Rc::new(decode_png(&self.bytes[offset..offset+len]));
-        cache.push_back(((x,y),Rc::clone(&image))); if cache.len()>12{cache.pop_front();}
-        Some(image)
+        let image=if let Some(i)=cache.iter().position(|(k,_)|*k==(x,y)){
+            let item=cache.remove(i).unwrap();
+            let image=Rc::clone(&item.1);
+            cache.push_back(item);
+            image
+        }else{
+            let image=Rc::new(decode_png(&self.bytes[meta.offset..meta.offset+meta.len]));
+            cache.push_back(((x,y),Rc::clone(&image)));
+            if cache.len()>self.cache_limit{cache.pop_front();}
+            image
+        };
+        Some(LevelTileFrame{image,crop_x:meta.crop_x,crop_y:meta.crop_y})
     }
 }
 

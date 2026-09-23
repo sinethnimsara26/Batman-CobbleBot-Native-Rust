@@ -2,7 +2,7 @@ name: build-level1a-fidelity
 
 on:
   push:
-    branches: [main, level1a-cxform-fidelity, hq-rendering-phase1-halftone, hq-rendering-phase2-surfaces, hq-rendering-phase3-3x-surface, hq-rendering-phase4-pack-v2, hq-rendering-phase5-batman-3x, hq-rendering-phase6-hud-3x, hq-rendering-phase7-overlays-3x, hq-rendering-phase8-world-objects-3x, hq-rendering-phase9-dpi-awareness]
+    branches: [main, level1a-cxform-fidelity, hq-rendering-phase1-halftone, hq-rendering-phase2-surfaces, hq-rendering-phase3-3x-surface, hq-rendering-phase4-pack-v2, hq-rendering-phase5-batman-3x, hq-rendering-phase6-hud-3x, hq-rendering-phase7-overlays-3x, hq-rendering-phase8-world-objects-3x, hq-rendering-phase9-dpi-awareness, hq-rendering-phase10-scenery-eval]
   workflow_dispatch:
 
 concurrency:
@@ -22,7 +22,18 @@ jobs:
         shell: pwsh
         run: |
           $url = "https://archive.org/download/the-batman-cobblebot-caper/The%20Batman%20-%20The%20Cobblebot%20Caper.swf"
-          Invoke-WebRequest -Uri $url -OutFile cobblebot-source.swf
+          $downloaded = $false
+          for ($attempt = 1; $attempt -le 4; $attempt++) {
+            try {
+              Invoke-WebRequest -Uri $url -OutFile cobblebot-source.swf -ErrorAction Stop
+              $downloaded = $true
+              break
+            } catch {
+              if ($attempt -eq 4) { throw }
+              Start-Sleep -Seconds (5 * $attempt)
+            }
+          }
+          if (-not $downloaded) { throw "Canonical SWF download did not complete" }
           @'
           import hashlib, zlib
           from pathlib import Path
@@ -51,7 +62,7 @@ jobs:
           $tools = "reverse-engineering/tools"
           $work = ".generated"
           $swf = "$work/cobblebot.swf"
-          New-Item -ItemType Directory -Force -Path "$work/reports","$work/bitmaps","$work/sounds","$work/batman-frames","$work/batman-frames-hq","$work/pickup-frames","$work/pickup-frames-hq-super","$work/pickup-frames-hq","$work/batarang-frames","$work/batarang-frames-hq-super","$work/batarang-frames-hq","$work/level-title","$work/level-title-hq-super","$work/level-title-hq","$work/fadein","$work/fadein-hq-super","$work/fadein-hq","$work/fadeout","$work/fadeout-hq-super","$work/fadeout-hq","$work/tutorial-overlay","$work/tutorial-overlay-hq-super","$work/tutorial-overlay-hq","$work/hud","$work/hud-hq-super","$work/hud-hq-final","$work/level1a-tiles","assets","reverse-engineering/generated/collision_masks" | Out-Null
+          New-Item -ItemType Directory -Force -Path "$work/reports","$work/bitmaps","$work/sounds","$work/batman-frames","$work/batman-frames-hq","$work/pickup-frames","$work/pickup-frames-hq-super","$work/pickup-frames-hq","$work/batarang-frames","$work/batarang-frames-hq-super","$work/batarang-frames-hq","$work/level-title","$work/level-title-hq-super","$work/level-title-hq","$work/fadein","$work/fadein-hq-super","$work/fadein-hq","$work/fadeout","$work/fadeout-hq-super","$work/fadeout-hq","$work/tutorial-overlay","$work/tutorial-overlay-hq-super","$work/tutorial-overlay-hq","$work/hud","$work/hud-hq-super","$work/hud-hq-final","$work/level1a-tiles","$work/level1a-tiles-hq-base","$work/level1a-detail-tiles-1x","$work/level1a-detail-tiles-hq","$work/scenery-probes","assets","reverse-engineering/generated/collision_masks" | Out-Null
 
           python "$tools/swf_re.py" "$swf" "$work/reports"
           @'
@@ -90,6 +101,15 @@ jobs:
           print(json.dumps(report,indent=2))
           '@ | python -
           python "$tools/extract_bitmaps.py" "$swf" "$work/bitmaps"
+
+          # Round 10 evaluation: isolate the repeated visible Level-1A child
+          # symbols before deciding which scenery layer should move to true 3x.
+          # These probes are diagnostic only and do not change runtime assets.
+          foreach ($sid in 144,145,146,147) {
+            python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/scenery-probes/symbol-$sid-1x.png" --bitmaps "$work/bitmaps" --symbol $sid --frame 0 --scale 1.0 --native-bounds
+            python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/scenery-probes/symbol-$sid-6x.png" --bitmaps "$work/bitmaps" --symbol $sid --frame 0 --scale 6.0 --native-bounds
+          }
+
           python "$tools/extract_sounds.py" "$swf" "$work/sounds"
           Copy-Item "$work/sounds/0751_sound_0751.mp3" "assets/level1a_music.mp3"
           Copy-Item "$work/sounds/0248_sound_0248.mp3" "assets/jump.mp3"
@@ -178,8 +198,28 @@ jobs:
           python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/hud-hq-super" --bitmaps "$work/bitmaps" --symbol 716 --scale 6.0 --all-frames
           python "$tools/bake_hud_assets.py" "$swf" "$work/reports/symbols.json" "$work/hud-hq-super" "assets" --font "C:/Windows/Fonts/arial.ttf" --output-scale 3 --supersample 2 --downsample lanczos --suffix "_hq" --pack-dir "$work/hud-hq-final"
           python "$tools/pack_sprite_frames.py" "$work/hud-hq-final" "assets/hud_shell_hq.bin" --format-version 2 --logical-pixel-scale 3.0
+          # Legacy full level remains the exact regression oracle.
           python "$tools/bake_level_tiles.py" "$swf" "$work/reports/symbols.json" "$work/level1a-tiles" --bitmaps "$work/bitmaps" --symbol 152 --place-x 2467.65 --place-y 239.25 --exclude-symbol 149 --exclude-symbol 151 --exclude-symbol 153
           python "$tools/pack_level_tiles.py" "$work/level1a-tiles" "assets/level1a_tiles.bin"
+
+          # Round 10 selective scenery split.
+          #
+          # HQ base: retain only the cheap depth-1 symbol 14. Symbol 146
+          # crosses through the 147 depth band, so 144-147 must remain
+          # together in the HQ layer to preserve the original Flash order.
+          python "$tools/bake_level_tiles.py" "$swf" "$work/reports/symbols.json" "$work/level1a-tiles-hq-base" --bitmaps "$work/bitmaps" --symbol 152 --place-x 2467.65 --place-y 239.25 --exclude-symbol 149 --exclude-symbol 151 --exclude-symbol 153 --exclude-symbol 144 --exclude-symbol 145 --exclude-symbol 146 --exclude-symbol 147
+          python "$tools/pack_level_tiles.py" "$work/level1a-tiles-hq-base" "assets/level1a_tiles_hq_base.bin"
+
+          # 1x detail oracle: keep 144-147 together. This is used to prove
+          # base + detail can reproduce the original full level exactly before
+          # the same logical layer is replaced by true 3x pixels.
+          python "$tools/bake_level_tiles.py" "$swf" "$work/reports/symbols.json" "$work/level1a-detail-tiles-1x" --bitmaps "$work/bitmaps" --symbol 152 --place-x 2467.65 --place-y 239.25 --exclude-symbol 149 --exclude-symbol 151 --exclude-symbol 153 --exclude-symbol 14
+
+          # True-HQ detail: rasterize the same selected display-list content at
+          # 6x with tile overscan, premultiplied-alpha Lanczos to final 3x,
+          # then crop transparent margins in BCLVT002 for runtime efficiency.
+          python "$tools/bake_level_tiles.py" "$swf" "$work/reports/symbols.json" "$work/level1a-detail-tiles-hq" --bitmaps "$work/bitmaps" --symbol 152 --place-x 2467.65 --place-y 239.25 --exclude-symbol 149 --exclude-symbol 151 --exclude-symbol 153 --exclude-symbol 14 --output-scale 3 --supersample 2 --downsample lanczos
+          python "$tools/pack_level_tiles.py" "$work/level1a-detail-tiles-hq" "assets/level1a_detail_tiles_hq.bin" --format-version 2 --logical-pixel-scale 3.0 --crop-transparent
 
       - name: Validate recovered assets and reject leaked control geometry
         shell: python
@@ -528,7 +568,7 @@ jobs:
               assert needle in assets, needle
           for needle in (
               "draw_batman_hq",
-              "render_world_base_legacy(base,game,assets)",
+              "upscale_opaque_base(base,target)",
               "draw_foreground_hq(target,game,assets)",
               "True HQ frames are already at final presentation resolution",
           ):
@@ -912,7 +952,7 @@ jobs:
           ):
               assert needle in assets, needle
           for needle in (
-              "render_world_base_legacy(base,game,assets)",
+              "upscale_opaque_base(base,target)",
               "draw_world_objects_hq(target,game,assets)",
               "fn draw_world_objects_hq",
               "scenery at 1x -> promote -> true 3x pickups/Batarangs",
@@ -933,6 +973,260 @@ jobs:
           Path(".generated/hq-world-object-asset-report.json").write_text(json.dumps(report,indent=2))
           print(json.dumps(report,indent=2))
           print("Round 8 contract PASS: pickup 695 and projectile 694 are true-3x, depth-correct, and 1:1 at runtime.")
+
+      - name: Build Round 10 scenery evaluation report
+        shell: python
+        run: |
+          import json,sys
+          from pathlib import Path
+          from PIL import Image,ImageDraw
+
+          symbols=json.loads(Path(".generated/reports/symbols.json").read_text())
+          level=symbols["152"]
+          wanted={144,145,146,147}
+          placements=[
+              {
+                  "depth":p["depth"],
+                  "character_id":p["character_id"],
+                  "matrix":p.get("matrix",{}),
+              }
+              for p in level["placements"]
+              if p.get("frame",0)==0 and p.get("character_id") in wanted
+          ]
+          counts={str(sid):sum(p["character_id"]==sid for p in placements) for sid in sorted(wanted)}
+          depth_ranges={}
+          for sid in sorted(wanted):
+              depths=[p["depth"] for p in placements if p["character_id"]==sid]
+              depth_ranges[str(sid)]=[min(depths),max(depths)]
+
+          probe_root=Path(".generated/scenery-probes")
+          out=probe_root/"comparisons"
+          out.mkdir(parents=True,exist_ok=True)
+          probe_info={}
+          for sid in sorted(wanted):
+              lo_path=probe_root/f"symbol-{sid}-1x.png"
+              hi6_path=probe_root/f"symbol-{sid}-6x.png"
+              with Image.open(lo_path) as lo0, Image.open(hi6_path) as hi60:
+                  lo=lo0.convert("RGBA")
+                  hi6=hi60.convert("RGBA")
+                  # Existing-world comparison: the current 1x asset promoted 3x.
+                  legacy=lo.resize((lo.width*3,lo.height*3),Image.Resampling.BILINEAR)
+                  # Candidate true-HQ comparison: premultiplied-alpha 6x -> 3x.
+                  final_size=(max(1,round(hi6.width/2)),max(1,round(hi6.height/2)))
+                  hq=hi6.convert("RGBa").resize(final_size,Image.Resampling.LANCZOS).convert("RGBA")
+              panel_w=max(legacy.width,hq.width)
+              panel_h=max(legacy.height,hq.height)
+              top=30
+              sheet=Image.new("RGBA",(panel_w*2+12,panel_h+top),(28,28,28,255))
+              sheet.alpha_composite(legacy,((panel_w-legacy.width)//2,top+(panel_h-legacy.height)//2))
+              sheet.alpha_composite(hq,(panel_w+12+(panel_w-hq.width)//2,top+(panel_h-hq.height)//2))
+              draw=ImageDraw.Draw(sheet)
+              draw.text((6,7),f"symbol {sid}: current 1x -> bilinear 3x",fill=(255,255,255,255))
+              draw.text((panel_w+18,7),f"symbol {sid}: SWF 6x -> Lanczos 3x",fill=(255,255,255,255))
+              sheet.save(out/f"symbol-{sid}.png")
+              probe_info[str(sid)]={
+                  "legacy_native_size":[lo.width,lo.height],
+                  "temporary_6x_size":[hi6.width,hi6.height],
+                  "candidate_3x_size":[hq.width,hq.height],
+                  "legacy_visible_bbox":list(lo.getchannel("A").getbbox() or (0,0,0,0)),
+                  "candidate_visible_bbox":list(hq.getchannel("A").getbbox() or (0,0,0,0)),
+              }
+
+          # The current full logical layer has 168 600x400 tiles, but runtime
+          # decodes lazily. Quantify the worst-case cache cost before touching
+          # that format so Phase 10 cannot accidentally cross the 500 MiB stop.
+          legacy_tile_cache=12*600*400*4
+          hq_full_tile_12_cache=12*1800*1200*4
+          hq_full_tile_4_cache=4*1800*1200*4
+          previous=json.loads(Path(".generated/hq-world-object-asset-report.json").read_text())
+          known=previous["combined_known_sprite_rgba_upper_bound"]
+          report={
+              "level_symbol":152,
+              "level_frame0_placement_count":len([p for p in level["placements"] if p.get("frame",0)==0]),
+              "candidate_symbols":sorted(wanted),
+              "candidate_counts":counts,
+              "candidate_depth_ranges":depth_ranges,
+              "candidate_placements":placements,
+              "probes":probe_info,
+              "current_level_tiles":{
+                  "count":168,
+                  "logical_tile_size":[600,400],
+                  "legacy_cache_frames":12,
+                  "legacy_cache_rgba_upper_bound":legacy_tile_cache,
+              },
+              "hypothetical_full_3x_tiles":{
+                  "tile_size":[1800,1200],
+                  "12_tile_cache_rgba_upper_bound":hq_full_tile_12_cache,
+                  "4_tile_cache_rgba_upper_bound":hq_full_tile_4_cache,
+                  "known_sprite_upper_bound_before_tiles":known,
+                  "known_plus_legacy_plus_hq4":known+legacy_tile_cache+hq_full_tile_4_cache,
+                  "known_plus_legacy_plus_hq12":known+legacy_tile_cache+hq_full_tile_12_cache,
+                  "hq4_headroom_to_500_mib":500*1024*1024-(known+legacy_tile_cache+hq_full_tile_4_cache),
+                  "hq12_headroom_to_500_mib":500*1024*1024-(known+legacy_tile_cache+hq_full_tile_12_cache),
+              },
+              "decision_gate":"inspect symbol 144-147 probes and preserve internal display depth; do not blindly adopt full 3x tiles",
+          }
+          Path(".generated/scenery-evaluation-report.json").write_text(json.dumps(report,indent=2))
+          assert len(placements)==38, len(placements)
+          assert counts=={"144":6,"145":6,"146":14,"147":12}, counts
+          assert report["hypothetical_full_3x_tiles"]["known_plus_legacy_plus_hq4"] < 500*1024*1024
+          assert report["hypothetical_full_3x_tiles"]["known_plus_legacy_plus_hq12"] < 500*1024*1024
+          assert report["hypothetical_full_3x_tiles"]["hq4_headroom_to_500_mib"] > 90*1024*1024
+          assert report["hypothetical_full_3x_tiles"]["hq12_headroom_to_500_mib"] < 40*1024*1024
+          print(json.dumps(report,indent=2))
+          print("Round 10 evaluation PASS: four visible scenery symbols isolated; 4-tile HQ cache has healthy headroom while 12-tile HQ cache is too close to the 500 MiB stop condition for casual adoption.")
+
+      - name: Validate Round 10 selective true-3x scenery layer
+        shell: python
+        run: |
+          import json,struct
+          from pathlib import Path
+          from PIL import Image,ImageChops
+
+          full_root=Path(".generated/level1a-tiles")
+          base_root=Path(".generated/level1a-tiles-hq-base")
+          detail1_root=Path(".generated/level1a-detail-tiles-1x")
+          detail3_root=Path(".generated/level1a-detail-tiles-hq")
+
+          full=json.loads((full_root/"manifest.json").read_text())
+          base=json.loads((base_root/"manifest.json").read_text())
+          detail1=json.loads((detail1_root/"manifest.json").read_text())
+          detail3=json.loads((detail3_root/"manifest.json").read_text())
+
+          assert full["logical_pixel_scale"] == 1.0
+          assert base["logical_pixel_scale"] == 1.0
+          assert detail1["logical_pixel_scale"] == 1.0
+          assert detail3["logical_pixel_scale"] == 3.0
+          assert detail3["supersample"] == 2
+          assert detail3["downsample"] == "lanczos"
+          assert detail3["alpha_filtering"] == "premultiplied"
+          assert detail3["logical_tile_size"] == [600,400]
+          assert detail3["tile_size"] == [1800,1200]
+          assert full["excluded_symbols"] == [149,151,153]
+          assert base["excluded_symbols"] == [144,145,146,147,149,151,153]
+          assert detail1["excluded_symbols"] == [14,149,151,153]
+          assert detail3["excluded_symbols"] == [14,149,151,153]
+          for m in (full,base,detail1,detail3):
+              assert m["unsupported_fills"] == [], m["unsupported_fills"]
+              assert m["missing_ids"] == [], m["missing_ids"]
+
+          def index(manifest):
+              return {(x["world_x"],x["world_y"]):x for x in manifest["tiles"]}
+          fi,bi,di=index(full),index(base),index(detail1)
+          keys=set(fi)|set(bi)|set(di)
+
+          # Depth-safety proof: 146 and 147 interleave in the original Flash
+          # display list, so they stay together with 144/145 in one selected
+          # layer. If symbol 14 + selected 144-147 reconstructs every 1x tile
+          # exactly, the split preserves all internal scenery depth ordering.
+          changed_tiles=[]
+          changed_pixels=0
+          for key in sorted(keys):
+              original=Image.new("RGBA",(600,400),(0,0,0,0))
+              if key in fi:
+                  with Image.open(full_root/fi[key]["file"]) as im:
+                      original=im.convert("RGBA")
+              rebuilt=Image.new("RGBA",(600,400),(0,0,0,0))
+              if key in bi:
+                  with Image.open(base_root/bi[key]["file"]) as im:
+                      rebuilt.alpha_composite(im.convert("RGBA"))
+              if key in di:
+                  with Image.open(detail1_root/di[key]["file"]) as im:
+                      rebuilt.alpha_composite(im.convert("RGBA"))
+              diff=ImageChops.difference(original,rebuilt)
+              bbox=diff.getbbox()
+              if bbox is not None:
+                  changed_tiles.append({"tile":list(key),"bbox":list(bbox)})
+                  changed_pixels += sum(
+                      1 for px in diff.convert("RGBA").getdata()
+                      if px != (0,0,0,0)
+                  )
+          assert not changed_tiles, {
+              "changed_tiles":changed_tiles[:20],
+              "changed_pixels":changed_pixels,
+          }
+
+          raw=Path("assets/level1a_detail_tiles_hq.bin").read_bytes()
+          assert raw[:8] == b"BCLVT002"
+          assert abs(struct.unpack_from("<f",raw,12)[0]-3.0) < 1e-6
+          side=json.loads(Path("assets/level1a_detail_tiles_hq.json").read_text())
+          assert side["format"] == "BCLVT002"
+          assert abs(side["logical_pixel_scale"]-3.0) < 1e-6
+          assert side["tile_count"] == len(detail3["tiles"])
+          for rec in side["tiles"]:
+              cx,cy=rec["crop_offset"]
+              w,h=rec["size"]
+              assert cx>=0 and cy>=0, rec
+              assert cx+w <= 1800 and cy+h <= 1200, rec
+
+          # Conservative cache accounting. The HQ path uses a 4-tile cache for
+          # both its 1x retained base and 3x selected detail. Include the
+          # legacy 12-tile oracle too even though normal HQ play does not fill
+          # all three caches simultaneously.
+          def top_decoded(sidecar,n):
+              sizes=sorted(
+                  (x["size"][0]*x["size"][1]*4 for x in sidecar["tiles"]),
+                  reverse=True
+              )
+              return sum(sizes[:n])
+          legacy_side=json.loads(Path("assets/level1a_tiles.json").read_text())
+          base_side=json.loads(Path("assets/level1a_tiles_hq_base.json").read_text())
+          detail_side=side
+          legacy_cache=top_decoded(legacy_side,12)
+          base_cache=top_decoded(base_side,4)
+          detail_cache=top_decoded(detail_side,4)
+          previous=json.loads(Path(".generated/hq-world-object-asset-report.json").read_text())
+          known=previous["combined_known_sprite_rgba_upper_bound"]
+          combined=known+legacy_cache+base_cache+detail_cache
+          assert combined < 500*1024*1024, combined
+
+          assets=Path("src/assets.rs").read_text()
+          render=Path("src/render.rs").read_text()
+          packer=Path("reverse-engineering/tools/pack_level_tiles.py").read_text()
+          baker=Path("reverse-engineering/tools/bake_level_tiles.py").read_text()
+          for needle in (
+              'b"BCLVT001"',
+              'b"BCLVT002"',
+              "pub logical_pixel_scale: f32",
+              "level1a_tiles_hq_base: LevelTileSet",
+              "level1a_detail_tiles_hq: LevelTileSet",
+              "cache_limit",
+          ):
+              assert needle in assets, needle
+          for needle in (
+              "render_backdrop_legacy(base,game,assets)",
+              "draw_tiles(base,game,&assets.level1a_tiles_hq_base)",
+              "draw_tiles_hq(target,game,&assets.level1a_detail_tiles_hq)",
+              "fn draw_tiles_hq",
+          ):
+              assert needle in render, needle
+          for needle in ("MAGIC_V2 = b\"BCLVT002\"","--crop-transparent","<iiiiI"):
+              assert needle in packer, needle
+          for needle in ("--output-scale","--supersample","--downsample","margin = 2"):
+              assert needle in baker, needle
+
+          report={
+              "selected_symbols":[144,145,146,147],
+              "retained_base_symbol":14,
+              "split_recomposition_exact":True,
+              "split_changed_pixels":0,
+              "legacy_full_tiles":len(full["tiles"]),
+              "hq_base_tiles":len(base["tiles"]),
+              "hq_detail_tiles":len(detail3["tiles"]),
+              "legacy_pack_bytes":Path("assets/level1a_tiles.bin").stat().st_size,
+              "hq_base_pack_bytes":Path("assets/level1a_tiles_hq_base.bin").stat().st_size,
+              "hq_detail_pack_bytes":Path("assets/level1a_detail_tiles_hq.bin").stat().st_size,
+              "legacy_12_tile_cache_upper_bound":legacy_cache,
+              "hq_base_4_tile_cache_upper_bound":base_cache,
+              "hq_detail_4_tile_cache_upper_bound":detail_cache,
+              "previous_known_sprite_upper_bound":known,
+              "combined_known_decoded_upper_bound":combined,
+              "headroom_to_500_mib":500*1024*1024-combined,
+              "hq_detail_strategy":"symbol152 selected children 144-147 with original internal depth order, 6x overscan render -> premultiplied Lanczos -> 3x, transparent-cropped BCLVT002",
+          }
+          Path(".generated/hq-scenery-asset-report.json").write_text(json.dumps(report,indent=2))
+          print(json.dumps(report,indent=2))
+          print("Round 10 scenery contract PASS: exact 1x split proof + true-3x depth-preserved scenery layer 144-147.")
 
       - name: Validate Round 9 per-monitor DPI-awareness contract
         shell: python
@@ -1027,6 +1321,9 @@ jobs:
           $bench = Start-Process -FilePath $exe -ArgumentList @("--benchmark-render", "60", ".generated/render-benchmark.json") -Wait -PassThru
           if ($bench.ExitCode -ne 0) { throw "Render benchmark failed with exit code $($bench.ExitCode)" }
 
+          $scroll = Start-Process -FilePath $exe -ArgumentList @("--benchmark-scenery-scroll", ".generated/scenery-scroll-benchmark.json") -Wait -PassThru
+          if ($scroll.ExitCode -ne 0) { throw "Scenery-scroll benchmark failed with exit code $($scroll.ExitCode)" }
+
           $legacyShots = Get-ChildItem ".generated/visual-smoke/*.png"
           $hqShots = Get-ChildItem ".generated/visual-smoke-hq/*.png"
           if ($legacyShots.Count -ne 17) { throw "Expected 17 legacy smoke screenshots, got $($legacyShots.Count)" }
@@ -1034,6 +1331,7 @@ jobs:
           $legacyShots | Format-Table Name,Length
           $hqShots | Format-Table Name,Length
           Get-Content ".generated/render-benchmark.json"
+          Get-Content ".generated/scenery-scroll-benchmark.json"
 
       - name: Verify Round 2 legacy pixels against renderer-repair baseline
         shell: python
@@ -1094,9 +1392,17 @@ jobs:
           assert bench["framebuffer_bytes"] == 9600000, bench
           for key in ("mean_ms","p50_ms","p95_ms","max_ms"):
               assert bench[key] >= 0.0, (key,bench[key])
+          assert bench["p95_ms"] < 40.0, bench
+
+          scroll=json.loads(Path(".generated/scenery-scroll-benchmark.json").read_text())
+          assert scroll["mode"] == "hq3x-scenery-scroll", scroll
+          assert scroll["step_pixels"] == 600, scroll
+          assert scroll["samples_count"] >= 40, scroll
+          assert scroll["p95_ms"] < 40.0, scroll
 
           print("HQ dimensions PASS: 17/17 frames are 1800x1200, including the Round-8 world-object checkpoint.")
           print("Round 5 render benchmark:",json.dumps(bench,indent=2))
+          print("Round 10 scenery-scroll benchmark:",json.dumps(scroll,indent=2))
 
       - name: Build Round 5 Batman A-B comparison sheets
         shell: python
@@ -1243,6 +1549,46 @@ jobs:
           assert len(list(out.glob("*.png"))) == 2
           print("Built 2 Round-8 moving-object A/B sheets.")
 
+      - name: Build Round 10 scenery-detail A-B comparison sheets
+        shell: python
+        run: |
+          import json
+          from pathlib import Path
+          from PIL import Image,ImageDraw
+
+          lo_root=Path(".generated/level1a-detail-tiles-1x")
+          hi_root=Path(".generated/level1a-detail-tiles-hq")
+          lo=json.loads((lo_root/"manifest.json").read_text())
+          hi=json.loads((hi_root/"manifest.json").read_text())
+          hi_by={(x["world_x"],x["world_y"]):x for x in hi["tiles"]}
+
+          scored=[]
+          for rec in lo["tiles"]:
+              key=(rec["world_x"],rec["world_y"])
+              if key not in hi_by:
+                  continue
+              with Image.open(lo_root/rec["file"]) as im:
+                  alpha=im.convert("RGBA").getchannel("A")
+                  score=sum(alpha.histogram()[1:])
+              scored.append((score,key,rec,hi_by[key]))
+          scored.sort(reverse=True,key=lambda x:x[0])
+          chosen=scored[:3]
+          out=Path(".generated/scenery-hq-comparisons")
+          out.mkdir(parents=True,exist_ok=True)
+          for rank,(_,key,lrec,hrec) in enumerate(chosen,1):
+              with Image.open(lo_root/lrec["file"]) as a0, Image.open(hi_root/hrec["file"]) as b0:
+                  a=a0.convert("RGBA").resize((1800,1200),Image.Resampling.BILINEAR)
+                  b=b0.convert("RGBA")
+              sheet=Image.new("RGBA",(3612,1234),(28,28,28,255))
+              sheet.alpha_composite(a,(0,34))
+              sheet.alpha_composite(b,(1812,34))
+              draw=ImageDraw.Draw(sheet)
+              draw.text((8,8),f"tile {key}: current 1x detail -> bilinear 3x",fill=(255,255,255,255))
+              draw.text((1820,8),f"tile {key}: true SWF 6x -> Lanczos 3x",fill=(255,255,255,255))
+              sheet.save(out/f"{rank:02d}_x{key[0]:+07d}_y{key[1]:+07d}.png")
+          assert len(list(out.glob("*.png"))) == min(3,len(scored))
+          print("Built Round-10 scenery detail A/B sheets for", [x[1] for x in chosen])
+
       - uses: actions/upload-artifact@v4
         with:
           name: Batman-CobbleBot-Level1A-Fidelity-Windows-x64
@@ -1265,6 +1611,12 @@ jobs:
         with:
           name: Batman-CobbleBot-Level1A-HQ3x-Benchmark
           path: .generated/render-benchmark.json
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Batman-CobbleBot-Level1A-Round10-Scenery-Scroll-Benchmark
+          path: .generated/scenery-scroll-benchmark.json
           if-no-files-found: error
 
       - uses: actions/upload-artifact@v4
@@ -1313,6 +1665,30 @@ jobs:
         with:
           name: Batman-CobbleBot-Level1A-Round8-World-Object-Asset-Report
           path: .generated/hq-world-object-asset-report.json
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Batman-CobbleBot-Level1A-Round10-Scenery-Detail-Comparisons
+          path: .generated/scenery-hq-comparisons/*.png
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Batman-CobbleBot-Level1A-Round10-Scenery-Asset-Report
+          path: .generated/hq-scenery-asset-report.json
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Batman-CobbleBot-Level1A-Round10-Scenery-Probes
+          path: .generated/scenery-probes/comparisons/*.png
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Batman-CobbleBot-Level1A-Round10-Scenery-Evaluation-Report
+          path: .generated/scenery-evaluation-report.json
           if-no-files-found: error
 
       - uses: actions/upload-artifact@v4

@@ -228,6 +228,53 @@ pub fn benchmark_render(iterations:usize,out:&str){
     fs::write(out,report).expect("write render benchmark report");
 }
 
+pub fn benchmark_scenery_scroll(out:&str){
+    let assets=Assets::load();
+    let mut game=Game::new();
+    game.screen=AppScreen::Playing;
+    game.ticks=105;
+    game.camera_y=0.0;
+    game.player.x=100000.0;
+    game.player.y=100000.0;
+    game.pickups.fill(true);
+    game.shots.clear();
+
+    let mut base=RenderSurface::new(LOGICAL_W,LOGICAL_H);
+    let mut hq=RenderSurface::new(render::HQ_W,render::HQ_H);
+
+    let forward:Vec<i32>=(-1200..=10800).step_by(600).collect();
+    let positions:Vec<i32>=forward.iter().copied()
+        .chain(forward.iter().rev().skip(1).copied())
+        .collect();
+    let mut records=Vec::with_capacity(positions.len());
+    let mut timings=Vec::with_capacity(positions.len());
+
+    for world_left in positions{
+        game.camera_x=-(world_left as f32);
+        let start=Instant::now();
+        render::render_high_quality(&mut base,&mut hq,&game,&assets);
+        let ms=start.elapsed().as_secs_f64()*1000.0;
+        records.push((world_left,ms));
+        timings.push(ms);
+    }
+
+    let mut sorted=timings.clone();
+    sorted.sort_by(|a,b|a.partial_cmp(b).unwrap());
+    let mean=sorted.iter().sum::<f64>()/sorted.len() as f64;
+    let p50=sorted[((sorted.len()-1) as f64*0.50).round() as usize];
+    let p95=sorted[((sorted.len()-1) as f64*0.95).round() as usize];
+    let max=*sorted.last().unwrap();
+
+    let samples=records.iter().map(|(left,ms)|
+        format!("    {{\"world_left\": {}, \"ms\": {:.4}}}",left,ms)
+    ).collect::<Vec<_>>().join(",\n");
+    let report=format!(
+        "{{\n  \"mode\": \"hq3x-scenery-scroll\",\n  \"step_pixels\": 600,\n  \"samples_count\": {},\n  \"mean_ms\": {:.4},\n  \"p50_ms\": {:.4},\n  \"p95_ms\": {:.4},\n  \"max_ms\": {:.4},\n  \"samples\": [\n{}\n  ]\n}}\n",
+        records.len(),mean,p50,p95,max,samples
+    );
+    fs::write(out,report).expect("write scenery scroll benchmark report");
+}
+
 fn write_png(path:&Path,fb:&RenderSurface){
     let file=File::create(path).expect("create PNG");
     let writer=BufWriter::new(file);

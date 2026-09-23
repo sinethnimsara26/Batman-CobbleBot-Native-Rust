@@ -27,5 +27,10 @@ fn main() {
         headless::benchmark_render(iterations,out);
         return;
     }
+    if let Some(pos) = args.iter().position(|arg| arg == "--benchmark-scenery-scroll") {
+        let out = args.get(pos + 1).map(String::as_str).unwrap_or("scenery-scroll-benchmark.json");
+        headless::benchmark_scenery_scroll(out);
+        return;
+    }
     win32::run();
 }
