@@ -556,9 +556,12 @@ fn draw_root_timeline_lazy_legacy(
 fn draw_tiles(fb:&mut RenderSurface,game:&Game,tiles:&LevelTileSet){
     debug_assert!((tiles.logical_pixel_scale-1.0).abs()<0.001);
     let fw=((-game.camera_x/600.0).floor() as i32)*600;
-    let lw=(((600.0-game.camera_x)/600.0).floor() as i32)*600;
+    // Right/bottom edges are exclusive. Using ceil-1 preserves the old
+    // result for every non-boundary camera position, but avoids decoding a
+    // zero-coverage neighbor when the viewport ends exactly on a tile edge.
+    let lw=((((600.0-game.camera_x)/600.0).ceil() as i32)-1)*600;
     let fh=((-game.camera_y/400.0).floor() as i32)*400;
-    let lh=(((400.0-game.camera_y)/400.0).floor() as i32)*400;
+    let lh=((((400.0-game.camera_y)/400.0).ceil() as i32)-1)*400;
     let mut y=fh;
     while y<=lh{
         let mut x=fw;
@@ -577,9 +580,12 @@ fn draw_tiles(fb:&mut RenderSurface,game:&Game,tiles:&LevelTileSet){
 fn draw_tiles_hq(fb:&mut RenderSurface,game:&Game,tiles:&LevelTileSet){
     debug_assert!((tiles.logical_pixel_scale-HQ_SCALE as f32).abs()<0.001);
     let fw=((-game.camera_x/600.0).floor() as i32)*600;
-    let lw=(((600.0-game.camera_x)/600.0).floor() as i32)*600;
+    // Right/bottom edges are exclusive. Using ceil-1 preserves the old
+    // result for every non-boundary camera position, but avoids decoding a
+    // zero-coverage neighbor when the viewport ends exactly on a tile edge.
+    let lw=((((600.0-game.camera_x)/600.0).ceil() as i32)-1)*600;
     let fh=((-game.camera_y/400.0).floor() as i32)*400;
-    let lh=(((400.0-game.camera_y)/400.0).floor() as i32)*400;
+    let lh=((((400.0-game.camera_y)/400.0).ceil() as i32)-1)*400;
     let s=HQ_SCALE as i32;
     let mut y=fh;
     while y<=lh{
