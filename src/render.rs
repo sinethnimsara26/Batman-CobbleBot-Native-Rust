@@ -59,8 +59,15 @@ pub fn render_with_config(
                 // scenery at 1x -> promote -> true 3x pickups/Batarangs ->
                 // true 3x Batman -> true 3x foreground UI/overlays.
                 base.fill(0xff000000);
-                render_world_base_legacy(base,game,assets);
+                // Round 10 keeps the flat/low-value level pieces in the cheap
+                // 1x base, but removes the window/facade detail symbols
+                // (144-146) before promotion. Their true-3x tile layer is
+                // then copied 1:1 at the original level depth, before moving
+                // objects and Batman.
+                render_backdrop_legacy(base,game,assets);
+                draw_tiles(base,game,&assets.level1a_tiles_hq_base);
                 upscale_opaque_base(base,target);
+                draw_tiles_hq(target,game,&assets.level1a_detail_tiles_hq);
                 draw_world_objects_hq(target,game,assets);
                 draw_batman_hq(target,game,assets);
                 draw_foreground_hq(target,game,assets);
@@ -143,6 +150,11 @@ fn render_world_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
 }
 
 fn render_world_base_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
+    render_backdrop_legacy(fb,game,assets);
+    draw_tiles(fb,game,&assets.level1a_tiles);
+}
+
+fn render_backdrop_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     // Original root gameplay backdrop, frame 19:
     // depth 1 = symbol 131 at identity; depth 2 = symbol 134 at (300,130).
     blit(
@@ -169,8 +181,6 @@ fn render_world_base_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     let bg_w=(assets.city_background.w as f32*BG_SX).round() as i32;
     let bg_h=(assets.city_background.h as f32*BG_SY).round() as i32;
     blit(fb,&assets.city_background,bg_x,bg_y,bg_w,bg_h,false);
-    draw_tiles(fb,game,&assets.level1a_tiles);
-
 }
 
 fn draw_world_objects_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
@@ -544,9 +554,48 @@ fn draw_root_timeline_lazy_legacy(
     );
 }
 fn draw_tiles(fb:&mut RenderSurface,game:&Game,tiles:&LevelTileSet){
-    let fw=(( -game.camera_x/600.0).floor() as i32)*600; let lw=(((600.0-game.camera_x)/600.0).floor() as i32)*600;
-    let fh=(( -game.camera_y/400.0).floor() as i32)*400; let lh=(((400.0-game.camera_y)/400.0).floor() as i32)*400;
-    let mut y=fh;while y<=lh{let mut x=fw;while x<=lw{if let Some(t)=tiles.tile(x,y){blit(fb,&t,(x as f32+game.camera_x).round() as i32,(y as f32+game.camera_y).round() as i32,600,400,false)}x+=600;}y+=400;}
+    debug_assert!((tiles.logical_pixel_scale-1.0).abs()<0.001);
+    let fw=((-game.camera_x/600.0).floor() as i32)*600;
+    let lw=(((600.0-game.camera_x)/600.0).floor() as i32)*600;
+    let fh=((-game.camera_y/400.0).floor() as i32)*400;
+    let lh=(((400.0-game.camera_y)/400.0).floor() as i32)*400;
+    let mut y=fh;
+    while y<=lh{
+        let mut x=fw;
+        while x<=lw{
+            if let Some(t)=tiles.tile(x,y){
+                let px=(x as f32+game.camera_x).round() as i32+t.crop_x;
+                let py=(y as f32+game.camera_y).round() as i32+t.crop_y;
+                blit(fb,&t.image,px,py,t.image.w as i32,t.image.h as i32,false);
+            }
+            x+=600;
+        }
+        y+=400;
+    }
+}
+
+fn draw_tiles_hq(fb:&mut RenderSurface,game:&Game,tiles:&LevelTileSet){
+    debug_assert!((tiles.logical_pixel_scale-HQ_SCALE as f32).abs()<0.001);
+    let fw=((-game.camera_x/600.0).floor() as i32)*600;
+    let lw=(((600.0-game.camera_x)/600.0).floor() as i32)*600;
+    let fh=((-game.camera_y/400.0).floor() as i32)*400;
+    let lh=(((400.0-game.camera_y)/400.0).floor() as i32)*400;
+    let s=HQ_SCALE as i32;
+    let mut y=fh;
+    while y<=lh{
+        let mut x=fw;
+        while x<=lw{
+            if let Some(t)=tiles.tile(x,y){
+                // Match the legacy renderer's integer logical tile origin,
+                // then convert only that origin to presentation pixels.
+                let px=(x as f32+game.camera_x).round() as i32*s+t.crop_x;
+                let py=(y as f32+game.camera_y).round() as i32*s+t.crop_y;
+                blit(fb,&t.image,px,py,t.image.w as i32,t.image.h as i32,false);
+            }
+            x+=600;
+        }
+        y+=400;
+    }
 }
 fn blend(dst:&mut u32,src:u32){let a=(src>>24)&255;if a==0{return}let sr=(src>>16)&255;let sg=(src>>8)&255;let sb=src&255;if a==255{*dst=(sr<<16)|(sg<<8)|sb;return}let inv=255-a;let dr=(*dst>>16)&255;let dg=(*dst>>8)&255;let db=*dst&255;*dst=(((sr*a+dr*inv+127)/255)<<16)|(((sg*a+dg*inv+127)/255)<<8)|((sb*a+db*inv+127)/255);}
 fn blit(dst:&mut RenderSurface,src:&Image,x:i32,y:i32,rw:i32,rh:i32,flip:bool){if rw<=0||rh<=0{return}for oy in 0..rh{let dy=y+oy;if dy<0||dy>=dst.h as i32{continue}let sy=(oy as usize*src.h/rh as usize).min(src.h-1);for ox in 0..rw{let dx=x+ox;if dx<0||dx>=dst.w as i32{continue}let raw=(ox as usize*src.w/rw as usize).min(src.w-1);let sx=if flip{src.w-1-raw}else{raw};let sp=src.pixels[sy*src.w+sx];blend(&mut dst.pixels[dy as usize*dst.w+dx as usize],sp);}}}
