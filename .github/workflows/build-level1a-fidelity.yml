@@ -2,7 +2,7 @@ name: build-level1a-fidelity
 
 on:
   push:
-    branches: [main, level1a-cxform-fidelity, hq-rendering-phase1-halftone, hq-rendering-phase2-surfaces, hq-rendering-phase3-3x-surface, hq-rendering-phase4-pack-v2, hq-rendering-phase5-batman-3x, hq-rendering-phase6-hud-3x, hq-rendering-phase7-overlays-3x, hq-rendering-phase8-world-objects-3x, hq-rendering-phase9-dpi-awareness]
+    branches: [main, level1a-cxform-fidelity, hq-rendering-phase1-halftone, hq-rendering-phase2-surfaces, hq-rendering-phase3-3x-surface, hq-rendering-phase4-pack-v2, hq-rendering-phase5-batman-3x, hq-rendering-phase6-hud-3x, hq-rendering-phase7-overlays-3x, hq-rendering-phase8-world-objects-3x, hq-rendering-phase9-dpi-awareness, hq-rendering-phase10-scenery-eval]
   workflow_dispatch:
 
 concurrency:
@@ -51,7 +51,7 @@ jobs:
           $tools = "reverse-engineering/tools"
           $work = ".generated"
           $swf = "$work/cobblebot.swf"
-          New-Item -ItemType Directory -Force -Path "$work/reports","$work/bitmaps","$work/sounds","$work/batman-frames","$work/batman-frames-hq","$work/pickup-frames","$work/pickup-frames-hq-super","$work/pickup-frames-hq","$work/batarang-frames","$work/batarang-frames-hq-super","$work/batarang-frames-hq","$work/level-title","$work/level-title-hq-super","$work/level-title-hq","$work/fadein","$work/fadein-hq-super","$work/fadein-hq","$work/fadeout","$work/fadeout-hq-super","$work/fadeout-hq","$work/tutorial-overlay","$work/tutorial-overlay-hq-super","$work/tutorial-overlay-hq","$work/hud","$work/hud-hq-super","$work/hud-hq-final","$work/level1a-tiles","assets","reverse-engineering/generated/collision_masks" | Out-Null
+          New-Item -ItemType Directory -Force -Path "$work/reports","$work/bitmaps","$work/sounds","$work/batman-frames","$work/batman-frames-hq","$work/pickup-frames","$work/pickup-frames-hq-super","$work/pickup-frames-hq","$work/batarang-frames","$work/batarang-frames-hq-super","$work/batarang-frames-hq","$work/level-title","$work/level-title-hq-super","$work/level-title-hq","$work/fadein","$work/fadein-hq-super","$work/fadein-hq","$work/fadeout","$work/fadeout-hq-super","$work/fadeout-hq","$work/tutorial-overlay","$work/tutorial-overlay-hq-super","$work/tutorial-overlay-hq","$work/hud","$work/hud-hq-super","$work/hud-hq-final","$work/level1a-tiles","$work/scenery-probes","assets","reverse-engineering/generated/collision_masks" | Out-Null
 
           python "$tools/swf_re.py" "$swf" "$work/reports"
           @'
@@ -90,6 +90,15 @@ jobs:
           print(json.dumps(report,indent=2))
           '@ | python -
           python "$tools/extract_bitmaps.py" "$swf" "$work/bitmaps"
+
+          # Round 10 evaluation: isolate the repeated visible Level-1A child
+          # symbols before deciding which scenery layer should move to true 3x.
+          # These probes are diagnostic only and do not change runtime assets.
+          foreach ($sid in 144,145,146,147) {
+            python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/scenery-probes/symbol-$sid-1x.png" --bitmaps "$work/bitmaps" --symbol $sid --frame 0 --scale 1.0 --native-bounds
+            python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/scenery-probes/symbol-$sid-6x.png" --bitmaps "$work/bitmaps" --symbol $sid --frame 0 --scale 6.0 --native-bounds
+          }
+
           python "$tools/extract_sounds.py" "$swf" "$work/sounds"
           Copy-Item "$work/sounds/0751_sound_0751.mp3" "assets/level1a_music.mp3"
           Copy-Item "$work/sounds/0248_sound_0248.mp3" "assets/jump.mp3"
@@ -934,6 +943,104 @@ jobs:
           print(json.dumps(report,indent=2))
           print("Round 8 contract PASS: pickup 695 and projectile 694 are true-3x, depth-correct, and 1:1 at runtime.")
 
+      - name: Build Round 10 scenery evaluation report
+        shell: python
+        run: |
+          import json,sys
+          from pathlib import Path
+          from PIL import Image,ImageDraw
+
+          symbols=json.loads(Path(".generated/reports/symbols.json").read_text())
+          level=symbols["152"]
+          wanted={144,145,146,147}
+          placements=[
+              {
+                  "depth":p["depth"],
+                  "character_id":p["character_id"],
+                  "matrix":p.get("matrix",{}),
+              }
+              for p in level["placements"]
+              if p.get("frame",0)==0 and p.get("character_id") in wanted
+          ]
+          counts={str(sid):sum(p["character_id"]==sid for p in placements) for sid in sorted(wanted)}
+          depth_ranges={}
+          for sid in sorted(wanted):
+              depths=[p["depth"] for p in placements if p["character_id"]==sid]
+              depth_ranges[str(sid)]=[min(depths),max(depths)]
+
+          probe_root=Path(".generated/scenery-probes")
+          out=probe_root/"comparisons"
+          out.mkdir(parents=True,exist_ok=True)
+          probe_info={}
+          for sid in sorted(wanted):
+              lo_path=probe_root/f"symbol-{sid}-1x.png"
+              hi6_path=probe_root/f"symbol-{sid}-6x.png"
+              with Image.open(lo_path) as lo0, Image.open(hi6_path) as hi60:
+                  lo=lo0.convert("RGBA")
+                  hi6=hi60.convert("RGBA")
+                  # Existing-world comparison: the current 1x asset promoted 3x.
+                  legacy=lo.resize((lo.width*3,lo.height*3),Image.Resampling.BILINEAR)
+                  # Candidate true-HQ comparison: premultiplied-alpha 6x -> 3x.
+                  final_size=(max(1,round(hi6.width/2)),max(1,round(hi6.height/2)))
+                  hq=hi6.convert("RGBa").resize(final_size,Image.Resampling.LANCZOS).convert("RGBA")
+              panel_w=max(legacy.width,hq.width)
+              panel_h=max(legacy.height,hq.height)
+              top=30
+              sheet=Image.new("RGBA",(panel_w*2+12,panel_h+top),(28,28,28,255))
+              sheet.alpha_composite(legacy,((panel_w-legacy.width)//2,top+(panel_h-legacy.height)//2))
+              sheet.alpha_composite(hq,(panel_w+12+(panel_w-hq.width)//2,top+(panel_h-hq.height)//2))
+              draw=ImageDraw.Draw(sheet)
+              draw.text((6,7),f"symbol {sid}: current 1x -> bilinear 3x",fill=(255,255,255,255))
+              draw.text((panel_w+18,7),f"symbol {sid}: SWF 6x -> Lanczos 3x",fill=(255,255,255,255))
+              sheet.save(out/f"symbol-{sid}.png")
+              probe_info[str(sid)]={
+                  "legacy_native_size":[lo.width,lo.height],
+                  "temporary_6x_size":[hi6.width,hi6.height],
+                  "candidate_3x_size":[hq.width,hq.height],
+                  "legacy_visible_bbox":list(lo.getchannel("A").getbbox() or (0,0,0,0)),
+                  "candidate_visible_bbox":list(hq.getchannel("A").getbbox() or (0,0,0,0)),
+              }
+
+          # The current full logical layer has 168 600x400 tiles, but runtime
+          # decodes lazily. Quantify the worst-case cache cost before touching
+          # that format so Phase 10 cannot accidentally cross the 500 MiB stop.
+          legacy_tile_cache=12*600*400*4
+          hq_full_tile_12_cache=12*1800*1200*4
+          hq_full_tile_4_cache=4*1800*1200*4
+          previous=json.loads(Path(".generated/hq-world-object-asset-report.json").read_text())
+          known=previous["combined_known_sprite_rgba_upper_bound"]
+          report={
+              "level_symbol":152,
+              "level_frame0_placement_count":len([p for p in level["placements"] if p.get("frame",0)==0]),
+              "candidate_symbols":sorted(wanted),
+              "candidate_counts":counts,
+              "candidate_depth_ranges":depth_ranges,
+              "candidate_placements":placements,
+              "probes":probe_info,
+              "current_level_tiles":{
+                  "count":168,
+                  "logical_tile_size":[600,400],
+                  "legacy_cache_frames":12,
+                  "legacy_cache_rgba_upper_bound":legacy_tile_cache,
+              },
+              "hypothetical_full_3x_tiles":{
+                  "tile_size":[1800,1200],
+                  "12_tile_cache_rgba_upper_bound":hq_full_tile_12_cache,
+                  "4_tile_cache_rgba_upper_bound":hq_full_tile_4_cache,
+                  "known_sprite_upper_bound_before_tiles":known,
+                  "known_plus_legacy_plus_hq4":known+legacy_tile_cache+hq_full_tile_4_cache,
+                  "known_plus_legacy_plus_hq12":known+legacy_tile_cache+hq_full_tile_12_cache,
+              },
+              "decision_gate":"inspect symbol 144-147 probes and preserve internal display depth; do not blindly adopt full 3x tiles",
+          }
+          Path(".generated/scenery-evaluation-report.json").write_text(json.dumps(report,indent=2))
+          assert len(placements)==38, len(placements)
+          assert counts=={"144":6,"145":6,"146":14,"147":12}, counts
+          assert report["hypothetical_full_3x_tiles"]["known_plus_legacy_plus_hq4"] < 500*1024*1024
+          assert report["hypothetical_full_3x_tiles"]["known_plus_legacy_plus_hq12"] > 500*1024*1024
+          print(json.dumps(report,indent=2))
+          print("Round 10 evaluation PASS: four visible scenery symbols isolated; full 12-tile HQ cache rejected by memory gate.")
+
       - name: Validate Round 9 per-monitor DPI-awareness contract
         shell: python
         run: |
@@ -1313,6 +1420,18 @@ jobs:
         with:
           name: Batman-CobbleBot-Level1A-Round8-World-Object-Asset-Report
           path: .generated/hq-world-object-asset-report.json
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Batman-CobbleBot-Level1A-Round10-Scenery-Probes
+          path: .generated/scenery-probes/comparisons/*.png
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Batman-CobbleBot-Level1A-Round10-Scenery-Evaluation-Report
+          path: .generated/scenery-evaluation-report.json
           if-no-files-found: error
 
       - uses: actions/upload-artifact@v4
