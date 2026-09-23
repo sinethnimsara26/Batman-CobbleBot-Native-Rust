@@ -575,9 +575,20 @@ jobs:
               assert dx <= 1.0 and dy <= 1.0, (cid,dx,dy)
 
           with Image.open("assets/hud_base.png") as lo, Image.open("assets/hud_base_hq.png") as hi:
-              assert hi.width >= lo.width*2.9 and hi.height >= lo.height*2.9
-              lpartial=sum(lo.convert("RGBA").getchannel("A").histogram()[1:255])
-              hpartial=sum(hi.convert("RGBA").getchannel("A").histogram()[1:255])
+              la=lo.convert("RGBA").getchannel("A")
+              ha=hi.convert("RGBA").getchannel("A")
+              lb=la.getbbox(); hb=ha.getbbox()
+              assert lb is not None and hb is not None
+              lw,lh=lb[2]-lb[0],lb[3]-lb[1]
+              hw,hh=hb[2]-hb[0],hb[3]-hb[1]
+              # Compare visible artwork instead of raw canvas dimensions:
+              # the native-bounds baker uses fixed pixel padding, so a 1x
+              # canvas and a 6x->3x canvas do not have exactly 3x outer size.
+              print("HUD visible bounds legacy",lb,(lw,lh),"HQ",hb,(hw,hh))
+              assert abs(hw-lw*3) <= 12, (lw,hw)
+              assert abs(hh-lh*3) <= 12, (lh,hh)
+              lpartial=sum(la.histogram()[1:255])
+              hpartial=sum(ha.histogram()[1:255])
               assert lpartial > 10000
               assert hpartial > lpartial*5, (lpartial,hpartial)
 
