@@ -2,7 +2,7 @@ name: build-level1a-fidelity
 
 on:
   push:
-    branches: [main, level1a-cxform-fidelity, hq-rendering-phase1-halftone, hq-rendering-phase2-surfaces, hq-rendering-phase3-3x-surface, hq-rendering-phase4-pack-v2, hq-rendering-phase5-batman-3x, hq-rendering-phase6-hud-3x]
+    branches: [main, level1a-cxform-fidelity, hq-rendering-phase1-halftone, hq-rendering-phase2-surfaces, hq-rendering-phase3-3x-surface, hq-rendering-phase4-pack-v2, hq-rendering-phase5-batman-3x, hq-rendering-phase6-hud-3x, hq-rendering-phase7-overlays-3x]
   workflow_dispatch:
 
 concurrency:
@@ -51,7 +51,7 @@ jobs:
           $tools = "reverse-engineering/tools"
           $work = ".generated"
           $swf = "$work/cobblebot.swf"
-          New-Item -ItemType Directory -Force -Path "$work/reports","$work/bitmaps","$work/sounds","$work/batman-frames","$work/batman-frames-hq","$work/pickup-frames","$work/batarang-frames","$work/level-title","$work/fadein","$work/fadeout","$work/tutorial-overlay","$work/hud","$work/hud-hq-super","$work/hud-hq-final","$work/level1a-tiles","assets","reverse-engineering/generated/collision_masks" | Out-Null
+          New-Item -ItemType Directory -Force -Path "$work/reports","$work/bitmaps","$work/sounds","$work/batman-frames","$work/batman-frames-hq","$work/pickup-frames","$work/batarang-frames","$work/level-title","$work/level-title-hq-super","$work/level-title-hq","$work/fadein","$work/fadein-hq-super","$work/fadein-hq","$work/fadeout","$work/fadeout-hq-super","$work/fadeout-hq","$work/tutorial-overlay","$work/tutorial-overlay-hq-super","$work/tutorial-overlay-hq","$work/hud","$work/hud-hq-super","$work/hud-hq-final","$work/level1a-tiles","assets","reverse-engineering/generated/collision_masks" | Out-Null
 
           python "$tools/swf_re.py" "$swf" "$work/reports"
           @'
@@ -130,9 +130,27 @@ jobs:
           python "$tools/pack_sprite_frames.py" "$work/fadein" "assets/fadein_frames.bin"
           python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/fadeout" --bitmaps "$work/bitmaps" --symbol 34 --scale 1.0 --all-frames
           python "$tools/pack_sprite_frames.py" "$work/fadeout" "assets/fadeout_frames.bin"
-
           python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/tutorial-overlay" --bitmaps "$work/bitmaps" --symbol 737 --scale 1.0 --all-frames
           python "$tools/pack_sprite_frames.py" "$work/tutorial-overlay" "assets/tutorial_overlay_frames.bin"
+
+          # Round 7: resolve each foreground timeline at 6x so embedded
+          # DefineText, masks and CXFORMWITHALPHA are already applied before
+          # premultiplied-alpha Lanczos downsampling to the final true 3x pack.
+          python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/level-title-hq-super" --bitmaps "$work/bitmaps" --symbol 746 --scale 6.0 --all-frames
+          python "$tools/finalize_hq_timeline.py" "$work/level-title-hq-super" "$work/level-title-hq" --output-scale 3 --supersample 2
+          python "$tools/pack_sprite_frames.py" "$work/level-title-hq" "assets/level_title_frames_hq.bin" --format-version 2 --logical-pixel-scale 3.0
+
+          python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/fadein-hq-super" --bitmaps "$work/bitmaps" --symbol 747 --scale 6.0 --all-frames
+          python "$tools/finalize_hq_timeline.py" "$work/fadein-hq-super" "$work/fadein-hq" --output-scale 3 --supersample 2
+          python "$tools/pack_sprite_frames.py" "$work/fadein-hq" "assets/fadein_frames_hq.bin" --format-version 2 --logical-pixel-scale 3.0
+
+          python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/fadeout-hq-super" --bitmaps "$work/bitmaps" --symbol 34 --scale 6.0 --all-frames
+          python "$tools/finalize_hq_timeline.py" "$work/fadeout-hq-super" "$work/fadeout-hq" --output-scale 3 --supersample 2
+          python "$tools/pack_sprite_frames.py" "$work/fadeout-hq" "assets/fadeout_frames_hq.bin" --format-version 2 --logical-pixel-scale 3.0
+
+          python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/tutorial-overlay-hq-super" --bitmaps "$work/bitmaps" --symbol 737 --scale 6.0 --all-frames
+          python "$tools/finalize_hq_timeline.py" "$work/tutorial-overlay-hq-super" "$work/tutorial-overlay-hq" --output-scale 3 --supersample 2
+          python "$tools/pack_sprite_frames.py" "$work/tutorial-overlay-hq" "assets/tutorial_overlay_frames_hq.bin" --format-version 2 --logical-pixel-scale 3.0
 
           # Original HUD shell (symbol 716). Flash _sans resolves to Arial on
           # Windows; bake only the static labels and numeric atlases. Rust owns
@@ -640,6 +658,103 @@ jobs:
           print(json.dumps(report,indent=2))
           print("Round 6 HUD contract PASS: true 3x shell/text/digits, 1:1 runtime path, field centers locked.")
 
+      - name: Validate Round 7 true-3x foreground timelines
+        shell: python
+        run: |
+          import json,struct
+          from pathlib import Path
+          from PIL import Image
+
+          specs=[
+              ("tutorial-overlay","tutorial-overlay-hq","tutorial_overlay_frames_hq.bin",737,149),
+              ("level-title","level-title-hq","level_title_frames_hq.bin",746,100),
+              ("fadein","fadein-hq","fadein_frames_hq.bin",747,43),
+              ("fadeout","fadeout-hq","fadeout_frames_hq.bin",34,41),
+          ]
+
+          report={"timelines":{},"lazy_cache_frames_per_timeline":2}
+          lazy_cache_upper=0
+          for legacy_name,hq_name,pack_name,symbol,count in specs:
+              legacy=json.loads(Path(f".generated/{legacy_name}/manifest.json").read_text())
+              hq=json.loads(Path(f".generated/{hq_name}/manifest.json").read_text())
+              assert legacy["symbol"] == hq["symbol"] == symbol
+              assert legacy["frame_count"] == hq["frame_count"] == count
+              assert legacy["source_bounds"] == hq["source_bounds"]
+              assert legacy["unsupported_fills"] == hq["unsupported_fills"] == []
+              assert legacy["missing_bitmap_ids"] == hq["missing_bitmap_ids"] == []
+              assert [x.get("animation") for x in legacy["frames"]] == [x.get("animation") for x in hq["frames"]]
+              assert legacy["scale"] == [1.0,1.0]
+              assert hq["scale"] == [3.0,3.0]
+              final=hq["hq_finalize"]
+              assert final == {
+                  "source_scale":6.0,
+                  "output_scale":3.0,
+                  "supersample":2,
+                  "downsample":"lanczos",
+                  "alpha_filtering":"premultiplied",
+              }, final
+
+              data=Path("assets")/pack_name
+              raw=data.read_bytes()
+              assert raw[:8] == b"BCBFRM02", pack_name
+              assert struct.unpack_from("<I",raw,8)[0] == count
+              assert abs(struct.unpack_from("<f",raw,12)[0]-3.0) < 1e-6
+
+              frame_bytes=hq["size"][0]*hq["size"][1]*4
+              cache_bytes=frame_bytes*min(2,count)
+              lazy_cache_upper+=cache_bytes
+              report["timelines"][hq_name]={
+                  "symbol":symbol,
+                  "frames":count,
+                  "legacy_canvas":legacy["size"],
+                  "hq_canvas":hq["size"],
+                  "pack_bytes":data.stat().st_size,
+                  "one_decoded_frame_rgba_bytes":frame_bytes,
+                  "two_frame_cache_upper_bound":cache_bytes,
+              }
+
+          # Preserve the known title alpha/CXFORM fade after the HQ
+          # supersample/downsample path.
+          for frame,expected in [(44,204),(45,153),(46,102),(47,51),(50,51)]:
+              with Image.open(Path(".generated/level-title-hq")/f"{frame:03}.png") as im:
+                  maximum=im.convert("RGBA").getchannel("A").getextrema()[1]
+                  assert maximum == expected, (frame,maximum,expected)
+
+          assets=Path("src/assets.rs").read_text()
+          render=Path("src/render.rs").read_text()
+          finalizer=Path("reverse-engineering/tools/finalize_hq_timeline.py").read_text()
+          for needle in (
+              "pub struct LazySpriteSet",
+              "decode_sprite_frames_lazy_expected",
+              "if cache.len()>2{cache.pop_front();}",
+              "level_title_frames_hq: LazySpriteSet",
+              "tutorial_overlay_frames_hq: LazySpriteSet",
+          ):
+              assert needle in assets, needle
+          for needle in (
+              "draw_root_timeline_hq_lazy",
+              "tutorial_overlay_frames_hq",
+              "Round 7 foreground timelines are already true 3x assets",
+          ):
+              assert needle in render, needle
+          foreground=render.split("fn draw_foreground_hq",1)[1].split("fn draw_hud_hq",1)[0]
+          assert "blit_region_hq3" not in foreground
+          for needle in ('convert("RGBa")',"Image.Resampling.LANCZOS","hq_finalize"):
+              assert needle in finalizer, needle
+
+          report["lazy_cache_upper_bound_rgba_bytes"]=lazy_cache_upper
+          # Add the eagerly decoded Round-5 player packs as the dominant known
+          # resident sprite cost; lazy foreground overlays should remain modest.
+          batman=json.loads(Path(".generated/hq-batman-asset-report.json").read_text())
+          report["batman_eager_rgba_bytes"]=batman["combined_runtime_decoded_rgba_bytes"]
+          report["combined_known_sprite_rgba_upper_bound"]=(
+              lazy_cache_upper+batman["combined_runtime_decoded_rgba_bytes"]
+          )
+          assert report["combined_known_sprite_rgba_upper_bound"] < 500*1024*1024, report
+          Path(".generated/hq-overlay-asset-report.json").write_text(json.dumps(report,indent=2))
+          print(json.dumps(report,indent=2))
+          print("Round 7 contract PASS: four true-3x timelines, exact counts/timing, lazy runtime decode.")
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-pc-windows-msvc
@@ -802,6 +917,49 @@ jobs:
           assert len(list(out.glob("*.png"))) == 3
           print("Built 3 Round-6 HUD A/B comparison sheets.")
 
+      - name: Build Round 7 foreground A-B comparison sheets
+        shell: python
+        run: |
+          from pathlib import Path
+          from PIL import Image,ImageDraw
+
+          out=Path(".generated/overlay-hq-comparisons")
+          out.mkdir(parents=True,exist_ok=True)
+
+          specs=[
+              ("tutorial",".generated/tutorial-overlay",".generated/tutorial-overlay-hq","auto"),
+              ("level-title",".generated/level-title",".generated/level-title-hq","auto"),
+              ("fade-in",".generated/fadein",".generated/fadein-hq","middle"),
+              ("fade-out",".generated/fadeout",".generated/fadeout-hq","middle"),
+          ]
+
+          def visible_score(path):
+              with Image.open(path) as im:
+                  return sum(im.convert("RGBA").getchannel("A").histogram()[1:])
+
+          for name,legacy_dir,hq_dir,mode in specs:
+              legacy=Path(legacy_dir); hq=Path(hq_dir)
+              files=sorted(legacy.glob("*.png"))
+              if mode=="middle":
+                  chosen=files[len(files)//2]
+              else:
+                  chosen=max(files,key=visible_score)
+              hp=hq/chosen.name
+              with Image.open(chosen) as a0, Image.open(hp) as b0:
+                  a0=a0.convert("RGBA"); b=b0.convert("RGBA")
+                  a=a0.resize((a0.width*3,a0.height*3),Image.Resampling.BILINEAR)
+              panel_w=max(a.width,b.width); panel_h=max(a.height,b.height); top=28
+              sheet=Image.new("RGBA",(panel_w*2+12,panel_h+top),(28,28,28,255))
+              sheet.alpha_composite(a,((panel_w-a.width)//2,top+(panel_h-a.height)//2))
+              sheet.alpha_composite(b,(panel_w+12+(panel_w-b.width)//2,top+(panel_h-b.height)//2))
+              draw=ImageDraw.Draw(sheet)
+              draw.text((6,6),f"{name} frame {chosen.stem}: legacy 1x -> bilinear 3x",fill=(255,255,255,255))
+              draw.text((panel_w+18,6),f"{name} frame {chosen.stem}: true SWF 6x -> Lanczos 3x",fill=(255,255,255,255))
+              sheet.save(out/f"{name}.png")
+
+          assert len(list(out.glob("*.png"))) == 4
+          print("Built 4 Round-7 foreground A/B sheets.")
+
       - uses: actions/upload-artifact@v4
         with:
           name: Batman-CobbleBot-Level1A-Fidelity-Windows-x64
@@ -848,6 +1006,18 @@ jobs:
         with:
           name: Batman-CobbleBot-Level1A-Round6-HUD-Asset-Report
           path: .generated/hq-hud-asset-report.json
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Batman-CobbleBot-Level1A-Round7-Overlay-Comparisons
+          path: .generated/overlay-hq-comparisons/*.png
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Batman-CobbleBot-Level1A-Round7-Overlay-Asset-Report
+          path: .generated/hq-overlay-asset-report.json
           if-no-files-found: error
 
       - uses: actions/upload-artifact@v4
