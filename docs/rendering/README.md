@@ -13,6 +13,7 @@ This folder contains the research and implementation blueprint for improving the
 - [HQ_ROUND4_PACK_V2_RESULTS.md](HQ_ROUND4_PACK_V2_RESULTS.md) — executed Phase 4 BCBFRM02 metadata, V1 compatibility, and mismatch-rejection proof.
 - [HQ_ROUND5_BATMAN_3X_RESULTS.md](HQ_ROUND5_BATMAN_3X_RESULTS.md) — executed Phase 5 true 3× Batman rerasterization, runtime-memory proof, visual A/B gates, and Windows validation.
 - [HQ_ROUND6_HUD_3X_RESULTS.md](HQ_ROUND6_HUD_3X_RESULTS.md) — executed Phase 6 true 3× HUD/device-font/digit reconstruction, exact field-registration proof, A/B inspection, and Windows validation.
+- [HQ_ROUND7_OVERLAYS_3X_RESULTS.md](HQ_ROUND7_OVERLAYS_3X_RESULTS.md) — executed Phase 7 true 3× tutorial/title/fade reconstruction, stage-clipped supersampling, lazy memory control, and Windows validation.
 
 ## Decision summary
 
