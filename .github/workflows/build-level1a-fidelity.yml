@@ -869,13 +869,21 @@ jobs:
               assert legacy_side["frame_count"] == hq_side["frame_count"] == hq["frame_count"]
               assert abs(hq_side["logical_pixel_scale"]-3.0) < 1e-6
 
-              worst_anchor_drift=0.0
+              # Packed anchors include the alpha-crop origin, so they are not
+              # expected to be numerically exact 3x copies. The generic baker
+              # uses a fixed 2-pixel canvas pad at every raster scale: legacy
+              # therefore carries 2px, while the 6x supersample is finalized
+              # by /2 to 1 HQ pixel. Comparing against a naive 3x legacy canvas
+              # creates an expected 6-1 = 5 HQ-pixel bookkeeping delta before
+              # Lanczos crop-fringe effects. This is NOT stage-space drift;
+              # runtime placement uses each pack's own recovered anchor.
+              worst_cropped_anchor_delta=0.0
               for lo,hi in zip(legacy_side["frames"],hq_side["frames"]):
                   la=lo["anchor_in_cropped_image"]
                   ha=hi["anchor_in_cropped_image"]
-                  drift=max(abs(ha[0]-la[0]*3.0),abs(ha[1]-la[1]*3.0))
-                  worst_anchor_drift=max(worst_anchor_drift,drift)
-                  assert drift <= 3.0, (spec["name"],lo["frame"],la,ha,drift)
+                  delta=max(abs(ha[0]-la[0]*3.0),abs(ha[1]-la[1]*3.0))
+                  worst_cropped_anchor_delta=max(worst_cropped_anchor_delta,delta)
+                  assert delta <= 6.0, (spec["name"],lo["frame"],la,ha,delta)
 
               legacy_decoded=sum(x["size"][0]*x["size"][1]*4 for x in legacy_side["frames"])
               hq_decoded=sum(x["size"][0]*x["size"][1]*4 for x in hq_side["frames"])
@@ -890,7 +898,7 @@ jobs:
                   "hq_pack_bytes":Path("assets",spec["hq_pack"]).stat().st_size,
                   "legacy_decoded_rgba_bytes":legacy_decoded,
                   "hq_decoded_rgba_bytes":hq_decoded,
-                  "worst_anchor_drift_hq_pixels":worst_anchor_drift,
+                  "worst_cropped_anchor_delta_hq_pixels":worst_cropped_anchor_delta,
               }
 
           assets=Path("src/assets.rs").read_text()
