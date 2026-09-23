@@ -22,7 +22,18 @@ jobs:
         shell: pwsh
         run: |
           $url = "https://archive.org/download/the-batman-cobblebot-caper/The%20Batman%20-%20The%20Cobblebot%20Caper.swf"
-          Invoke-WebRequest -Uri $url -OutFile cobblebot-source.swf
+          $downloaded = $false
+          for ($attempt = 1; $attempt -le 4; $attempt++) {
+            try {
+              Invoke-WebRequest -Uri $url -OutFile cobblebot-source.swf -ErrorAction Stop
+              $downloaded = $true
+              break
+            } catch {
+              if ($attempt -eq 4) { throw }
+              Start-Sleep -Seconds (5 * $attempt)
+            }
+          }
+          if (-not $downloaded) { throw "Canonical SWF download did not complete" }
           @'
           import hashlib, zlib
           from pathlib import Path
