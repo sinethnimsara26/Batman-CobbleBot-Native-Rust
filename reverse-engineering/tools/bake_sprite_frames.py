@@ -939,6 +939,10 @@ def main():
     parser.add_argument("--bitmaps", type=Path, help="directory produced by extract_bitmaps.py (defaults beside the SWF source directory)")
     parser.add_argument("--all-frames", action="store_true", help="bake the whole symbol timeline into a directory plus manifest")
     parser.add_argument("--native-bounds", action="store_true", help="size the single-frame PNG to the symbol's native transformed bounds")
+    parser.add_argument("--clip-stage-width", type=float, help="for --all-frames, crop rendering to this logical stage width")
+    parser.add_argument("--clip-stage-height", type=float, help="for --all-frames, crop rendering to this logical stage height")
+    parser.add_argument("--place-x", type=float, default=0.0, help="logical stage X of the symbol origin when stage clipping")
+    parser.add_argument("--place-y", type=float, default=0.0, help="logical stage Y of the symbol origin when stage clipping")
     args = parser.parse_args()
 
     symbols = json.loads(args.symbols_json.read_text(encoding="utf-8"))
@@ -978,10 +982,45 @@ def main():
         max_x = max(box[2] for box in visible_bounds)
         max_y = max(box[3] for box in visible_bounds)
         pad = 2
-        tx = pad - min_x * args.scale
-        ty = pad - min_y * args.scale
-        width = math.ceil((max_x - min_x) * args.scale) + pad * 2
-        height = math.ceil((max_y - min_y) * args.scale) + pad * 2
+        clip_requested = args.clip_stage_width is not None or args.clip_stage_height is not None
+        if clip_requested:
+            if args.clip_stage_width is None or args.clip_stage_height is None:
+                raise ValueError("--clip-stage-width and --clip-stage-height must be supplied together")
+            if args.clip_stage_width <= 0 or args.clip_stage_height <= 0:
+                raise ValueError("stage clip dimensions must be positive")
+
+            # Work in integer logical-stage pixels so a supersampled temporary
+            # bake (6x) can be downsampled exactly to the final 3x grid.
+            # Only geometry that can actually intersect the visible stage is
+            # rasterized; huge off-screen fade rectangles never allocate a
+            # giant native-bounds canvas.
+            placed_min_x = min_x + args.place_x
+            placed_min_y = min_y + args.place_y
+            placed_max_x = max_x + args.place_x
+            placed_max_y = max_y + args.place_y
+            crop_left = max(0.0, math.floor(placed_min_x) - 1.0)
+            crop_top = max(0.0, math.floor(placed_min_y) - 1.0)
+            crop_right = min(args.clip_stage_width, math.ceil(placed_max_x) + 1.0)
+            crop_bottom = min(args.clip_stage_height, math.ceil(placed_max_y) + 1.0)
+            if crop_right <= crop_left or crop_bottom <= crop_top:
+                raise ValueError(
+                    f"symbol {args.symbol} does not intersect the requested stage clip"
+                )
+            width = max(1, round((crop_right - crop_left) * args.scale))
+            height = max(1, round((crop_bottom - crop_top) * args.scale))
+            tx = (args.place_x - crop_left) * args.scale
+            ty = (args.place_y - crop_top) * args.scale
+            stage_clip = {
+                "logical_rect": [crop_left, crop_top, crop_right, crop_bottom],
+                "stage_size": [args.clip_stage_width, args.clip_stage_height],
+                "placement": [args.place_x, args.place_y],
+            }
+        else:
+            tx = pad - min_x * args.scale
+            ty = pad - min_y * args.scale
+            width = math.ceil((max_x - min_x) * args.scale) + pad * 2
+            height = math.ceil((max_y - min_y) * args.scale) + pad * 2
+            stage_clip = None
         transform = (args.scale, 0.0, 0.0, args.scale, tx, ty)
         outdir = args.output
         outdir.mkdir(parents=True, exist_ok=True)
@@ -1009,6 +1048,7 @@ def main():
             "scale": [args.scale, args.scale],
             "source_bounds": [min_x, min_y, max_x, max_y],
             "anchor_in_bitmap": [tx, ty],
+            "stage_clip": stage_clip,
             "unsupported_fills": sorted(unsupported),
             "missing_bitmap_ids": sorted(all_missing),
             "frames": manifest_frames,
