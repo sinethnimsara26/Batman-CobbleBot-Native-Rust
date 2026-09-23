@@ -219,7 +219,7 @@ fn draw_foreground_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
 
     if !assets.tutorial_overlay_frames.is_empty(){
         let i=game.overlay_frame.min(assets.tutorial_overlay_frames.len()-1);
-        let f=&assets.tutorial_overlay_frames[i];
+        let f=assets.tutorial_overlay_frames.frame(i);
         blit(
             fb,&f.image,
             (311.4-f.anchor_x).round() as i32,
@@ -228,10 +228,10 @@ fn draw_foreground_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
         );
     }
 
-    draw_root_timeline(fb,&assets.level_title_frames,game.ticks,318.7,76.75);
-    draw_root_timeline(fb,&assets.fadein_frames,game.ticks,301.0,205.0);
+    draw_root_timeline_lazy_legacy(fb,&assets.level_title_frames,game.ticks,318.7,76.75);
+    draw_root_timeline_lazy_legacy(fb,&assets.fadein_frames,game.ticks,301.0,205.0);
     if let Some(t)=game.fadeout_tick{
-        draw_root_timeline(fb,&assets.fadeout_frames,t as u64,301.0,205.0);
+        draw_root_timeline_lazy_legacy(fb,&assets.fadeout_frames,t as u64,301.0,205.0);
     }
 }
 
@@ -486,10 +486,15 @@ fn blit_region(
     }
 }
 
-fn draw_root_timeline(fb:&mut RenderSurface,frames:&[crate::assets::SpriteFrame],tick:u64,x:f32,y:f32){
+fn draw_root_timeline_lazy_legacy(
+    fb:&mut RenderSurface,
+    frames:&crate::assets::LazySpriteSet,
+    tick:u64,x:f32,y:f32
+){
     if frames.is_empty(){return;}
+    debug_assert!((frames.logical_pixel_scale-1.0).abs()<0.001);
     let i=(tick as usize).min(frames.len()-1);
-    let f=&frames[i];
+    let f=frames.frame(i);
     blit(
         fb,&f.image,
         (x-f.anchor_x).round() as i32,
