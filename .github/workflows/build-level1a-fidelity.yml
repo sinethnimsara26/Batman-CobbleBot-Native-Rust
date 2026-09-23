@@ -2,7 +2,7 @@ name: build-level1a-fidelity
 
 on:
   push:
-    branches: [main, level1a-cxform-fidelity, hq-rendering-phase1-halftone, hq-rendering-phase2-surfaces, hq-rendering-phase3-3x-surface, hq-rendering-phase4-pack-v2, hq-rendering-phase5-batman-3x, hq-rendering-phase6-hud-3x, hq-rendering-phase7-overlays-3x, hq-rendering-phase8-world-objects-3x, hq-rendering-phase9-dpi-awareness, hq-rendering-phase10-scenery-eval]
+    branches: [main, level1a-cxform-fidelity, hq-rendering-phase1-halftone, hq-rendering-phase2-surfaces, hq-rendering-phase3-3x-surface, hq-rendering-phase4-pack-v2, hq-rendering-phase5-batman-3x, hq-rendering-phase6-hud-3x, hq-rendering-phase7-overlays-3x, hq-rendering-phase8-world-objects-3x, hq-rendering-phase9-dpi-awareness, hq-rendering-phase10-scenery-eval, hq-rendering-phase10b-backdrop-eval]
   workflow_dispatch:
 
 concurrency:
@@ -62,7 +62,7 @@ jobs:
           $tools = "reverse-engineering/tools"
           $work = ".generated"
           $swf = "$work/cobblebot.swf"
-          New-Item -ItemType Directory -Force -Path "$work/reports","$work/bitmaps","$work/sounds","$work/batman-frames","$work/batman-frames-hq","$work/pickup-frames","$work/pickup-frames-hq-super","$work/pickup-frames-hq","$work/batarang-frames","$work/batarang-frames-hq-super","$work/batarang-frames-hq","$work/level-title","$work/level-title-hq-super","$work/level-title-hq","$work/fadein","$work/fadein-hq-super","$work/fadein-hq","$work/fadeout","$work/fadeout-hq-super","$work/fadeout-hq","$work/tutorial-overlay","$work/tutorial-overlay-hq-super","$work/tutorial-overlay-hq","$work/hud","$work/hud-hq-super","$work/hud-hq-final","$work/level1a-tiles","$work/level1a-tiles-hq-base","$work/level1a-detail-tiles-1x","$work/level1a-detail-tiles-hq","$work/scenery-probes","assets","reverse-engineering/generated/collision_masks" | Out-Null
+          New-Item -ItemType Directory -Force -Path "$work/reports","$work/bitmaps","$work/sounds","$work/batman-frames","$work/batman-frames-hq","$work/pickup-frames","$work/pickup-frames-hq-super","$work/pickup-frames-hq","$work/batarang-frames","$work/batarang-frames-hq-super","$work/batarang-frames-hq","$work/level-title","$work/level-title-hq-super","$work/level-title-hq","$work/fadein","$work/fadein-hq-super","$work/fadein-hq","$work/fadeout","$work/fadeout-hq-super","$work/fadeout-hq","$work/tutorial-overlay","$work/tutorial-overlay-hq-super","$work/tutorial-overlay-hq","$work/hud","$work/hud-hq-super","$work/hud-hq-final","$work/level1a-tiles","$work/level1a-tiles-hq-base","$work/level1a-detail-tiles-1x","$work/level1a-detail-tiles-hq","$work/scenery-probes","$work/backdrop-probes","assets","reverse-engineering/generated/collision_masks" | Out-Null
 
           python "$tools/swf_re.py" "$swf" "$work/reports"
           @'
@@ -108,6 +108,13 @@ jobs:
           foreach ($sid in 144,145,146,147) {
             python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/scenery-probes/symbol-$sid-1x.png" --bitmaps "$work/bitmaps" --symbol $sid --frame 0 --scale 1.0 --native-bounds
             python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/scenery-probes/symbol-$sid-6x.png" --bitmaps "$work/bitmaps" --symbol $sid --frame 0 --scale 6.0 --native-bounds
+          }
+
+          # Round 10B backdrop evaluation. These are diagnostic source probes:
+          # root sky 131, moon 134, and game background/city symbol 142.
+          foreach ($sid in 131,134,142) {
+            python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/backdrop-probes/symbol-$sid-1x.png" --bitmaps "$work/bitmaps" --symbol $sid --frame 0 --scale 1.0 --native-bounds
+            python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/backdrop-probes/symbol-$sid-6x.png" --bitmaps "$work/bitmaps" --symbol $sid --frame 0 --scale 6.0 --native-bounds
           }
 
           python "$tools/extract_sounds.py" "$swf" "$work/sounds"
@@ -1194,8 +1201,10 @@ jobs:
           ):
               assert needle in assets, needle
           for needle in (
-              "render_backdrop_legacy(base,game,assets)",
-              "draw_tiles(base,game,&assets.level1a_tiles_hq_base)",
+              "target.fill(0xffa11600)",
+              "draw_moon_hq(target,assets)",
+              "render_upper_backdrop_rgba(base,game,assets)",
+              "upscale_alpha_layer(base,target)",
               "draw_tiles_hq(target,game,&assets.level1a_detail_tiles_hq)",
               "fn draw_tiles_hq",
           ):
@@ -1227,6 +1236,89 @@ jobs:
           Path(".generated/hq-scenery-asset-report.json").write_text(json.dumps(report,indent=2))
           print(json.dumps(report,indent=2))
           print("Round 10 scenery contract PASS: exact 1x split proof + true-3x depth-preserved scenery layer 144-147.")
+
+      - name: Build Round 10B backdrop evaluation
+        shell: python
+        run: |
+          import json
+          from pathlib import Path
+          from PIL import Image,ImageDraw
+
+          root=Path(".generated/backdrop-probes")
+          out=root/"comparisons"
+          out.mkdir(parents=True,exist_ok=True)
+
+          def premul_lanczos_half(im):
+              im=im.convert("RGBA")
+              r,g,b,a=im.split()
+              # Pillow's RGBa mode stores premultiplied RGB, preventing dark
+              # transparent-edge bleed during the 6x -> 3x evaluation filter.
+              pre=im.convert("RGBa")
+              dst=pre.resize((max(1,im.width//2),max(1,im.height//2)),Image.Resampling.LANCZOS)
+              return dst.convert("RGBA")
+
+          names={131:"root-sky",134:"moon",142:"city-background"}
+          report={"symbols":{},"candidate_total_decoded_rgba_bytes":0}
+          for sid,name in names.items():
+              p1=root/f"symbol-{sid}-1x.png"
+              p6=root/f"symbol-{sid}-6x.png"
+              with Image.open(p1) as lo0, Image.open(p6) as hi0:
+                  lo=lo0.convert("RGBA")
+                  hi6=hi0.convert("RGBA")
+                  legacy3=lo.resize((lo.width*3,lo.height*3),Image.Resampling.BILINEAR)
+                  candidate=premul_lanczos_half(hi6)
+              if sid==134:
+                  candidate.save("assets/root_bg_134_hq.png")
+              decoded=candidate.width*candidate.height*4
+              report["candidate_total_decoded_rgba_bytes"] += decoded
+              report["symbols"][str(sid)]={
+                  "name":name,
+                  "legacy_1x_size":[lo.width,lo.height],
+                  "source_6x_size":[hi6.width,hi6.height],
+                  "candidate_3x_size":[candidate.width,candidate.height],
+                  "candidate_decoded_rgba_bytes":decoded,
+                  "legacy_visible_bbox":list(lo.getchannel("A").getbbox() or (0,0,0,0)),
+                  "candidate_visible_bbox":list(candidate.getchannel("A").getbbox() or (0,0,0,0)),
+              }
+              panel_w=max(legacy3.width,candidate.width)
+              panel_h=max(legacy3.height,candidate.height)
+              top=32
+              sheet=Image.new("RGBA",(panel_w*2+12,panel_h+top),(28,28,28,255))
+              sheet.alpha_composite(legacy3,((panel_w-legacy3.width)//2,top+(panel_h-legacy3.height)//2))
+              sheet.alpha_composite(candidate,(panel_w+12+(panel_w-candidate.width)//2,top+(panel_h-candidate.height)//2))
+              draw=ImageDraw.Draw(sheet)
+              draw.text((6,8),f"{name}: current 1x -> bilinear 3x",fill=(255,255,255,255))
+              draw.text((panel_w+18,8),f"{name}: source 6x -> premul Lanczos 3x",fill=(255,255,255,255))
+              sheet.save(out/f"{sid}_{name}.png")
+
+          previous=json.loads(Path(".generated/hq-scenery-asset-report.json").read_text())
+          report["round10_known_decoded_upper_bound"]=previous["combined_known_decoded_upper_bound"]
+          report["hypothetical_all_three_eager_upper_bound"]=(
+              report["round10_known_decoded_upper_bound"]+
+              report["candidate_total_decoded_rgba_bytes"]
+          )
+          report["headroom_to_500_mib_if_all_three_eager"]=(
+              500*1024*1024-report["hypothetical_all_three_eager_upper_bound"]
+          )
+          selected=report["symbols"]["134"]["candidate_decoded_rgba_bytes"]
+          report["runtime_decision"]={
+              "selected_symbols":[134],
+              "selected_reason":"moon has a visible source-rasterization gain at modest decoded cost",
+              "sky_reason":"symbol 131 is a single opaque RGB color in-stage, so a 3x bitmap adds no visible detail",
+              "city_reason":"symbol 142 would add over 112 MiB decoded by itself and is rejected by the 500 MiB stop condition",
+          }
+          report["selected_decoded_rgba_bytes"]=selected
+          report["final_known_decoded_upper_bound"]=report["round10_known_decoded_upper_bound"]+selected
+          report["final_headroom_to_500_mib"]=500*1024*1024-report["final_known_decoded_upper_bound"]
+          Path(".generated/backdrop-evaluation-report.json").write_text(json.dumps(report,indent=2))
+          assert len(list(out.glob("*.png"))) == 3
+          assert Path("assets/root_bg_134_hq.png").exists()
+          assert report["symbols"]["134"]["candidate_3x_size"] == [1171,1171]
+          assert report["symbols"]["142"]["candidate_decoded_rgba_bytes"] > 110*1024*1024
+          assert report["final_known_decoded_upper_bound"] < 500*1024*1024
+          assert report["final_headroom_to_500_mib"] > 80*1024*1024
+          print(json.dumps(report,indent=2))
+          print("Round 10B backdrop decision PASS: true-3x moon selected; flat sky and oversized city remain on the efficient path.")
 
       - name: Validate Round 9 per-monitor DPI-awareness contract
         shell: python
@@ -1693,6 +1785,18 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
+          name: Batman-CobbleBot-Level1A-Round10B-Backdrop-Comparisons
+          path: .generated/backdrop-probes/comparisons/*.png
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Batman-CobbleBot-Level1A-Round10B-Backdrop-Evaluation-Report
+          path: .generated/backdrop-evaluation-report.json
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
           name: Batman-CobbleBot-Level1A-Round9-DPI-Awareness-Report
           path: .generated/dpi-awareness-report.json
           if-no-files-found: error
@@ -1705,6 +1809,7 @@ jobs:
             .generated/title-actions.json
             assets/root_bg_131.png
             assets/root_bg_134.png
+            assets/root_bg_134_hq.png
             assets/level1a_bg.png
             assets/hud_base.png
             assets/hud_base_hq.png

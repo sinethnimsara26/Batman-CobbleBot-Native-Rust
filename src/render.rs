@@ -58,15 +58,17 @@ pub fn render_with_config(
                 // the last small moving objects from the blurry 1x world:
                 // scenery at 1x -> promote -> true 3x pickups/Batarangs ->
                 // true 3x Batman -> true 3x foreground UI/overlays.
-                base.fill(0xff000000);
-                // Round 10 keeps only the cheap depth-1 symbol 14 in
-                // the promoted 1x base. Symbols 146 and 147 interleave in the
-                // original Flash display list, so 144-147 stay together in
-                // one true-3x tile layer; that layer is copied 1:1 before
-                // moving objects and Batman.
-                render_backdrop_legacy(base,game,assets);
-                draw_tiles(base,game,&assets.level1a_tiles_hq_base);
-                upscale_opaque_base(base,target);
+                // Round 10B keeps the flat root sky exact without wasting an
+                // 8.3 MiB decoded 3x copy, then inserts only the moon as true
+                // source-derived 3x. City + the cheap symbol-14 tile base are
+                // composited into a transparent logical layer and promoted
+                // with premultiplied-alpha bilinear sampling so they remain
+                // above the moon at their original Flash depths.
+                target.fill(0xffa11600);
+                draw_moon_hq(target,assets);
+                base.fill(0x00000000);
+                render_upper_backdrop_rgba(base,game,assets);
+                upscale_alpha_layer(base,target);
                 draw_tiles_hq(target,game,&assets.level1a_detail_tiles_hq);
                 draw_world_objects_hq(target,game,assets);
                 draw_batman_hq(target,game,assets);
@@ -132,6 +134,66 @@ pub fn upscale_opaque_base(src:&RenderSurface,dst:&mut RenderSurface){
     }
 }
 
+fn upscale_alpha_layer(src:&RenderSurface,dst:&mut RenderSurface){
+    assert_eq!(dst.w,src.w*HQ_SCALE);
+    assert_eq!(dst.h,src.h*HQ_SCALE);
+    assert_eq!(HQ_SCALE,3,"Round 10B alpha promotion is specialized for 3x");
+
+    let mut xmap=Vec::with_capacity(dst.w);
+    for dx in 0..dst.w{
+        let xn=dx as isize-1;
+        let xq=xn.div_euclid(3);
+        let xr=xn.rem_euclid(3) as u32;
+        let x0=xq.clamp(0,src.w as isize-1) as usize;
+        let x1=(xq+1).clamp(0,src.w as isize-1) as usize;
+        xmap.push((x0,x1,3-xr,xr));
+    }
+
+    const DEN:u32=9*255;
+    for dy in 0..dst.h{
+        let yn=dy as isize-1;
+        let yq=yn.div_euclid(3);
+        let yr=yn.rem_euclid(3) as u32;
+        let y0=yq.clamp(0,src.h as isize-1) as usize;
+        let y1=(yq+1).clamp(0,src.h as isize-1) as usize;
+        let wy0=3-yr;
+        let wy1=yr;
+        let row0=y0*src.w;
+        let row1=y1*src.w;
+        let dst_row=dy*dst.w;
+
+        for (dx,&(x0,x1,wx0,wx1)) in xmap.iter().enumerate(){
+            let ps=[
+                (src.pixels[row0+x0],wx0*wy0),
+                (src.pixels[row0+x1],wx1*wy0),
+                (src.pixels[row1+x0],wx0*wy1),
+                (src.pixels[row1+x1],wx1*wy1),
+            ];
+            let mut a_num=0u32;
+            let mut r_num=0u32;
+            let mut g_num=0u32;
+            let mut b_num=0u32;
+            for &(p,w) in &ps{
+                let a=(p>>24)&255;
+                a_num+=a*w;
+                r_num+=((p>>16)&255)*a*w;
+                g_num+=((p>>8)&255)*a*w;
+                b_num+=(p&255)*a*w;
+            }
+            if a_num==0{continue;}
+            let d=dst.pixels[dst_row+dx];
+            let inv=DEN-a_num;
+            let dr=(d>>16)&255;
+            let dg=(d>>8)&255;
+            let db=d&255;
+            let r=(r_num+dr*inv+DEN/2)/DEN;
+            let g=(g_num+dg*inv+DEN/2)/DEN;
+            let b=(b_num+db*inv+DEN/2)/DEN;
+            dst.pixels[dst_row+dx]=(r<<16)|(g<<8)|b;
+        }
+    }
+}
+
 fn render_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     fb.fill(0xff000000);
     match game.screen{
@@ -181,6 +243,36 @@ fn render_backdrop_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     let bg_w=(assets.city_background.w as f32*BG_SX).round() as i32;
     let bg_h=(assets.city_background.h as f32*BG_SY).round() as i32;
     blit(fb,&assets.city_background,bg_x,bg_y,bg_w,bg_h,false);
+}
+
+fn draw_moon_hq(fb:&mut RenderSurface,assets:&Assets){
+    const MOON_SCALE:f32=0.76934814453125;
+    const MOON_ANCHOR:f32=195.95;
+    let s=HQ_SCALE as f32;
+    let pad_x=(assets.root_moon.w*HQ_SCALE).saturating_sub(assets.root_moon_hq.w) as f32*0.5;
+    let pad_y=(assets.root_moon.h*HQ_SCALE).saturating_sub(assets.root_moon_hq.h) as f32*0.5;
+    let anchor_x=MOON_ANCHOR*s-pad_x;
+    let anchor_y=MOON_ANCHOR*s-pad_y;
+    let moon_w=(assets.root_moon_hq.w as f32*MOON_SCALE).round() as i32;
+    let moon_h=(assets.root_moon_hq.h as f32*MOON_SCALE).round() as i32;
+    let moon_x=(300.0*s-anchor_x*MOON_SCALE).round() as i32;
+    let moon_y=(130.0*s-anchor_y*MOON_SCALE).round() as i32;
+    blit(fb,&assets.root_moon_hq,moon_x,moon_y,moon_w,moon_h,false);
+}
+
+fn render_upper_backdrop_rgba(fb:&mut RenderSurface,game:&Game,assets:&Assets){
+    const BG_SX:f32=1.029632568359375;
+    const BG_SY:f32=1.029754638671875;
+    const BG_ORIGIN_X:f32=-0.98048095703125;
+    const BG_ORIGIN_Y:f32=66.1;
+    const BG_TX:f32=0.0;
+    const BG_TY:f32=-13.1;
+    let bg_x=(game.camera_x+game.background_x+BG_TX+BG_ORIGIN_X*BG_SX).round() as i32;
+    let bg_y=(game.camera_y+game.background_y+BG_TY+BG_ORIGIN_Y*BG_SY).round() as i32;
+    let bg_w=(assets.city_background.w as f32*BG_SX).round() as i32;
+    let bg_h=(assets.city_background.h as f32*BG_SY).round() as i32;
+    blit_rgba(fb,&assets.city_background,bg_x,bg_y,bg_w,bg_h,false);
+    draw_tiles_rgba(fb,game,&assets.level1a_tiles_hq_base);
 }
 
 fn draw_world_objects_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
@@ -577,6 +669,27 @@ fn draw_tiles(fb:&mut RenderSurface,game:&Game,tiles:&LevelTileSet){
     }
 }
 
+fn draw_tiles_rgba(fb:&mut RenderSurface,game:&Game,tiles:&LevelTileSet){
+    debug_assert!((tiles.logical_pixel_scale-1.0).abs()<0.001);
+    let fw=((-game.camera_x/600.0).floor() as i32)*600;
+    let lw=((((600.0-game.camera_x)/600.0).ceil() as i32)-1)*600;
+    let fh=((-game.camera_y/400.0).floor() as i32)*400;
+    let lh=((((400.0-game.camera_y)/400.0).ceil() as i32)-1)*400;
+    let mut y=fh;
+    while y<=lh{
+        let mut x=fw;
+        while x<=lw{
+            if let Some(t)=tiles.tile(x,y){
+                let px=(x as f32+game.camera_x).round() as i32+t.crop_x;
+                let py=(y as f32+game.camera_y).round() as i32+t.crop_y;
+                blit_rgba(fb,&t.image,px,py,t.image.w as i32,t.image.h as i32,false);
+            }
+            x+=600;
+        }
+        y+=400;
+    }
+}
+
 fn draw_tiles_hq(fb:&mut RenderSurface,game:&Game,tiles:&LevelTileSet){
     debug_assert!((tiles.logical_pixel_scale-HQ_SCALE as f32).abs()<0.001);
     let fw=((-game.camera_x/600.0).floor() as i32)*600;
@@ -601,6 +714,38 @@ fn draw_tiles_hq(fb:&mut RenderSurface,game:&Game,tiles:&LevelTileSet){
             x+=600;
         }
         y+=400;
+    }
+}
+fn blend_rgba(dst:&mut u32,src:u32){
+    let sa=(src>>24)&255;
+    if sa==0{return;}
+    if sa==255{*dst=src;return;}
+    let da=(*dst>>24)&255;
+    if da==0{*dst=src;return;}
+    let inv=255-sa;
+    let out_a_num=sa*255+da*inv;
+    let out_a=(out_a_num+127)/255;
+    let sr=(src>>16)&255;let sg=(src>>8)&255;let sb=src&255;
+    let dr=(*dst>>16)&255;let dg=(*dst>>8)&255;let db=*dst&255;
+    let r=(sr*sa*255+dr*da*inv+out_a_num/2)/out_a_num;
+    let g=(sg*sa*255+dg*da*inv+out_a_num/2)/out_a_num;
+    let b=(sb*sa*255+db*da*inv+out_a_num/2)/out_a_num;
+    *dst=(out_a<<24)|(r<<16)|(g<<8)|b;
+}
+fn blit_rgba(dst:&mut RenderSurface,src:&Image,x:i32,y:i32,rw:i32,rh:i32,flip:bool){
+    if rw<=0||rh<=0{return;}
+    for oy in 0..rh{
+        let dy=y+oy;
+        if dy<0||dy>=dst.h as i32{continue;}
+        let sy=(oy as usize*src.h/rh as usize).min(src.h-1);
+        for ox in 0..rw{
+            let dx=x+ox;
+            if dx<0||dx>=dst.w as i32{continue;}
+            let raw=(ox as usize*src.w/rw as usize).min(src.w-1);
+            let sx=if flip{src.w-1-raw}else{raw};
+            let sp=src.pixels[sy*src.w+sx];
+            blend_rgba(&mut dst.pixels[dy as usize*dst.w+dx as usize],sp);
+        }
     }
 }
 fn blend(dst:&mut u32,src:u32){let a=(src>>24)&255;if a==0{return}let sr=(src>>16)&255;let sg=(src>>8)&255;let sb=src&255;if a==255{*dst=(sr<<16)|(sg<<8)|sb;return}let inv=255-a;let dr=(*dst>>16)&255;let dg=(*dst>>8)&255;let db=*dst&255;*dst=(((sr*a+dr*inv+127)/255)<<16)|(((sg*a+dg*inv+127)/255)<<8)|((sb*a+db*inv+127)/255);}
