@@ -21,6 +21,7 @@ impl std::ops::Deref for SpriteSet {
 
 pub struct Assets {
     pub batman_frames: SpriteSet,
+    pub batman_frames_hq: SpriteSet,
     pub root_sky: Image,
     pub root_moon: Image,
     pub city_background: Image,
@@ -42,6 +43,7 @@ impl Assets {
     pub fn load() -> Self {
         Self {
             batman_frames: decode_sprite_frames_expected(include_bytes!("../assets/batman_frames.bin"),1.0,"batman_frames"),
+            batman_frames_hq: decode_sprite_frames_expected(include_bytes!("../assets/batman_frames_hq.bin"),3.0,"batman_frames_hq"),
             root_sky: decode_png(include_bytes!("../assets/root_bg_131.png")),
             root_moon: decode_png(include_bytes!("../assets/root_bg_134.png")),
             city_background: decode_png(include_bytes!("../assets/level1a_bg.png")),

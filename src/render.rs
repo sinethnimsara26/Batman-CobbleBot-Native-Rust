@@ -49,13 +49,21 @@ pub fn render_with_config(
             assert_eq!(base.w,LOGICAL_W);
             assert_eq!(base.h,LOGICAL_H);
 
-            // Round 3 deliberately keeps every source asset at its existing
-            // 1x resolution. Render the known-good legacy frame first, then
-            // promote that complete opaque frame to the 3x presentation
-            // surface. Later rounds replace Batman/UI/overlays with true HQ
-            // assets composited 1:1 over this presentation surface.
-            render_legacy(base,game,assets);
-            upscale_opaque_base(base,target);
+            if game.screen!=AppScreen::Playing{
+                // Title/instructions still use the exact Round-3 path.
+                render_legacy(base,game,assets);
+                upscale_opaque_base(base,target);
+            }else{
+                // Round 5 splits the playing frame at Batman's original depth:
+                // world at 1x -> promote -> true 3x Batman -> promoted 1x UI.
+                // This avoids drawing sharp Batman over a blurry baked Batman
+                // while preserving the original world/player/foreground order.
+                base.fill(0xff000000);
+                render_world_legacy(base,game,assets);
+                upscale_opaque_base(base,target);
+                draw_batman_hq(target,game,assets);
+                draw_foreground_hq(target,game,assets);
+            }
         }
     }
 }
@@ -123,11 +131,14 @@ fn render_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
         AppScreen::Instructions=>{blit(fb,&assets.instructions_screen,0,0,600,400,false);return},
         AppScreen::Playing=>{}
     }
+    render_world_legacy(fb,game,assets);
+    draw_batman_legacy(fb,game,assets);
+    draw_foreground_legacy(fb,game,assets);
+}
+
+fn render_world_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     // Original root gameplay backdrop, frame 19:
-    // depth 1 = symbol 131 at the inherited identity transform;
-    // depth 2 = symbol 134 at (300,130), scale 0.769348.
-    // These are stage-fixed and therefore do NOT move with the game camera.
-    // Both images are native-bounds crops, so subtract their baked anchors.
+    // depth 1 = symbol 131 at identity; depth 2 = symbol 134 at (300,130).
     blit(
         fb,&assets.root_sky,
         -1,-1,
@@ -141,10 +152,6 @@ fn render_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     let moon_y=(130.0-MOON_ANCHOR*MOON_SCALE).round() as i32;
     blit(fb,&assets.root_moon,moon_x,moon_y,moon_w,moon_h,false);
 
-    // Original game-sprite placement for background symbol 142:
-    // sx=1.029632568359375, sy=1.029754638671875, tx=0, ty=-13.1.
-    // The baked PNG is native-bounds cropped; its top-left represents
-    // symbol-space (-0.980480957, 66.1), so transform that crop origin too.
     const BG_SX:f32=1.029632568359375;
     const BG_SY:f32=1.029754638671875;
     const BG_ORIGIN_X:f32=-0.98048095703125;
@@ -158,8 +165,6 @@ fn render_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     blit(fb,&assets.city_background,bg_x,bg_y,bg_w,bg_h,false);
     draw_tiles(fb,game,&assets.level1a_tiles);
 
-    // Original collectible Batarangs (symbol 695) live in game-space, not
-    // inside the level sprite, so render them independently like the SWF does.
     if !assets.pickup_frames.is_empty() {
         let pf=&assets.pickup_frames[(game.ticks as usize)%assets.pickup_frames.len()];
         for (i,&(wx,wy)) in crate::game::PICKUPS.iter().enumerate() {
@@ -170,7 +175,6 @@ fn render_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
         }
     }
 
-    // Thrown Batarang projectile (symbol 694).
     if !assets.batarang_frames.is_empty() {
         let bf=&assets.batarang_frames[(game.ticks as usize)%assets.batarang_frames.len()];
         for shot in &game.shots {
@@ -179,18 +183,40 @@ fn render_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
             blit(fb,&bf.image,px,py,bf.image.w as i32,bf.image.h as i32,shot.dir<0);
         }
     }
+}
 
+fn draw_batman_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     let sx=(game.player.x+LEVEL_X+game.camera_x).round() as i32;
     let sy=(game.player.y+LEVEL_Y+game.camera_y).round() as i32;
-    let frame=&assets.batman_frames[game.animation_frame()]; let flip=game.player.dir<0;
+    let frame=&assets.batman_frames[game.animation_frame()];
+    let flip=game.player.dir<0;
     let ax=if flip{frame.image.w as f32-frame.anchor_x}else{frame.anchor_x};
-    blit(fb,&frame.image,sx-ax.round() as i32,sy-frame.anchor_y.round() as i32,frame.image.w as i32,frame.image.h as i32,flip);
+    blit(
+        fb,&frame.image,
+        sx-ax.round() as i32,sy-frame.anchor_y.round() as i32,
+        frame.image.w as i32,frame.image.h as i32,flip
+    );
+}
 
-    // Root depth 1443: original HUD symbol 716.
+fn draw_batman_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
+    debug_assert!((assets.batman_frames_hq.logical_pixel_scale-HQ_SCALE as f32).abs()<0.001);
+    let sx=(game.player.x+LEVEL_X+game.camera_x).round() as i32*HQ_SCALE as i32;
+    let sy=(game.player.y+LEVEL_Y+game.camera_y).round() as i32*HQ_SCALE as i32;
+    let frame=&assets.batman_frames_hq[game.animation_frame()];
+    let flip=game.player.dir<0;
+    let ax=if flip{frame.image.w as f32-frame.anchor_x}else{frame.anchor_x};
+    // True HQ frames are already at final presentation resolution: 1:1 copy,
+    // never nearest-neighbor enlargement at runtime.
+    blit(
+        fb,&frame.image,
+        sx-ax.round() as i32,sy-frame.anchor_y.round() as i32,
+        frame.image.w as i32,frame.image.h as i32,flip
+    );
+}
+
+fn draw_foreground_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     draw_hud(fb,game,assets);
 
-    // Root depth 1490: original tutorial overlay symbol 737.
-    // Its frame is controlled by the recovered checkpoint scripts.
     if !assets.tutorial_overlay_frames.is_empty(){
         let i=game.overlay_frame.min(assets.tutorial_overlay_frames.len()-1);
         let f=&assets.tutorial_overlay_frames[i];
@@ -202,15 +228,143 @@ fn render_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
         );
     }
 
-    // Root frame 19 places the original level-title clip at (318.7,76.75)
-    // and the original fade-in clip above it at (301,205). Both child
-    // timelines play at the movie's 25 Hz and Stop() on their final frame.
     draw_root_timeline(fb,&assets.level_title_frames,game.ticks,318.7,76.75);
     draw_root_timeline(fb,&assets.fadein_frames,game.ticks,301.0,205.0);
     if let Some(t)=game.fadeout_tick{
         draw_root_timeline(fb,&assets.fadeout_frames,t as u64,301.0,205.0);
     }
 }
+
+fn draw_foreground_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
+    // Round 5 keeps UI assets at 1x, but draws them at the correct depth after
+    // HQ Batman using the same 3x pixel-center bilinear promotion semantics.
+    draw_hud_hq(fb,game,assets);
+
+    if !assets.tutorial_overlay_frames.is_empty(){
+        let i=game.overlay_frame.min(assets.tutorial_overlay_frames.len()-1);
+        let f=&assets.tutorial_overlay_frames[i];
+        blit_region_hq3(
+            fb,&f.image,0,0,f.image.w,f.image.h,
+            (311.4-f.anchor_x).round() as i32,
+            (190.0-f.anchor_y).round() as i32
+        );
+    }
+
+    draw_root_timeline_hq(fb,&assets.level_title_frames,game.ticks,318.7,76.75);
+    draw_root_timeline_hq(fb,&assets.fadein_frames,game.ticks,301.0,205.0);
+    if let Some(t)=game.fadeout_tick{
+        draw_root_timeline_hq(fb,&assets.fadeout_frames,t as u64,301.0,205.0);
+    }
+}
+
+fn draw_hud_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
+    const ROOT_X:f32=159.0;
+    const ROOT_Y:f32=-11.0;
+    const ANCHOR_X:f32=0.48106384;
+    const ANCHOR_Y:f32=1.1601379;
+    let x=(ROOT_X-ANCHOR_X).round() as i32;
+    let y=(ROOT_Y-ANCHOR_Y).round() as i32;
+    blit_region_hq3(fb,&assets.hud_base,0,0,assets.hud_base.w,assets.hud_base.h,x,y);
+    draw_number_centered_hq(fb,&assets.hud_digits_small,x+53,y+68,game.batarangs.max(0));
+    draw_number_centered_hq(fb,&assets.hud_digits_large,x+228,y+47,game.score.max(0));
+    draw_number_centered_hq(fb,&assets.hud_digits_small,x+155,y+69,game.lives.max(0));
+}
+
+fn draw_number_centered_hq(fb:&mut RenderSurface,atlas:&Image,cx:i32,cy:i32,value:i32){
+    if atlas.w<10||atlas.h==0{return;}
+    let cell_w=atlas.w/10;
+    if cell_w==0{return;}
+    let text=value.to_string();
+    let total=(cell_w*text.len()) as i32;
+    let mut x=cx-total/2;
+    let y=cy-atlas.h as i32/2;
+    for byte in text.bytes(){
+        if !(b'0'..=b'9').contains(&byte){continue;}
+        let digit=(byte-b'0') as usize;
+        blit_region_hq3(fb,atlas,digit*cell_w,0,cell_w,atlas.h,x,y);
+        x+=cell_w as i32;
+    }
+}
+
+fn draw_root_timeline_hq(
+    fb:&mut RenderSurface,
+    frames:&[crate::assets::SpriteFrame],
+    tick:u64,x:f32,y:f32
+){
+    if frames.is_empty(){return;}
+    let i=(tick as usize).min(frames.len()-1);
+    let f=&frames[i];
+    blit_region_hq3(
+        fb,&f.image,0,0,f.image.w,f.image.h,
+        (x-f.anchor_x).round() as i32,
+        (y-f.anchor_y).round() as i32
+    );
+}
+
+fn sample_region(src:&Image,sx0:usize,sy0:usize,sw:usize,sh:usize,x:i32,y:i32)->u32{
+    if x<0||y<0||x>=sw as i32||y>=sh as i32{return 0;}
+    src.pixels[(sy0+y as usize)*src.w+(sx0+x as usize)]
+}
+
+fn blend_bilinear_premul_3x(dst:&mut u32,p00:u32,p10:u32,p01:u32,p11:u32,w00:u32,w10:u32,w01:u32,w11:u32){
+    let a00=(p00>>24)&255; let a10=(p10>>24)&255; let a01=(p01>>24)&255; let a11=(p11>>24)&255;
+    let asum=a00*w00+a10*w10+a01*w01+a11*w11;
+    let a=(asum+4)/9;
+    if a==0{return;}
+
+    let rsum=((p00>>16)&255)*a00*w00+((p10>>16)&255)*a10*w10+((p01>>16)&255)*a01*w01+((p11>>16)&255)*a11*w11;
+    let gsum=((p00>>8)&255)*a00*w00+((p10>>8)&255)*a10*w10+((p01>>8)&255)*a01*w01+((p11>>8)&255)*a11*w11;
+    let bsum=(p00&255)*a00*w00+(p10&255)*a10*w10+(p01&255)*a01*w01+(p11&255)*a11*w11;
+    let pr=(rsum+4)/9; let pg=(gsum+4)/9; let pb=(bsum+4)/9;
+
+    let dr=(*dst>>16)&255; let dg=(*dst>>8)&255; let db=*dst&255;
+    let inv=255-a;
+    let r=(pr+dr*inv+127)/255;
+    let g=(pg+dg*inv+127)/255;
+    let b=(pb+db*inv+127)/255;
+    *dst=(r<<16)|(g<<8)|b;
+}
+
+fn blit_region_hq3(
+    dst:&mut RenderSurface,src:&Image,
+    sx0:usize,sy0:usize,sw:usize,sh:usize,
+    logical_x:i32,logical_y:i32
+){
+    if sw==0||sh==0{return;}
+    debug_assert_eq!(HQ_SCALE,3);
+    let scale=HQ_SCALE as i32;
+    let out_w=sw as i32*scale;
+    let out_h=sh as i32*scale;
+
+    // Include the one-HQ-pixel filter fringe so transparent edges receive the
+    // same pixel-center bilinear treatment as the Round-3 full-frame scaler.
+    for oy in -1..=out_h{
+        let dy=logical_y*scale+oy;
+        if dy<0||dy>=dst.h as i32{continue;}
+        let yn=oy-1;
+        let yq=yn.div_euclid(scale);
+        let yr=yn.rem_euclid(scale) as u32;
+        let wy0=3-yr; let wy1=yr;
+        for ox in -1..=out_w{
+            let dx=logical_x*scale+ox;
+            if dx<0||dx>=dst.w as i32{continue;}
+            let xn=ox-1;
+            let xq=xn.div_euclid(scale);
+            let xr=xn.rem_euclid(scale) as u32;
+            let wx0=3-xr; let wx1=xr;
+
+            let p00=sample_region(src,sx0,sy0,sw,sh,xq,yq);
+            let p10=sample_region(src,sx0,sy0,sw,sh,xq+1,yq);
+            let p01=sample_region(src,sx0,sy0,sw,sh,xq,yq+1);
+            let p11=sample_region(src,sx0,sy0,sw,sh,xq+1,yq+1);
+            blend_bilinear_premul_3x(
+                &mut dst.pixels[dy as usize*dst.w+dx as usize],
+                p00,p10,p01,p11,wx0*wy0,wx1*wy0,wx0*wy1,wx1*wy1
+            );
+        }
+    }
+}
+
 fn draw_hud(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     // Root frame 19 placement of symbol 716.
     const ROOT_X:f32=159.0;

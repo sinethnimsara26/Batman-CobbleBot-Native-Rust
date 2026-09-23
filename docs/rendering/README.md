@@ -11,6 +11,7 @@ This folder contains the research and implementation blueprint for improving the
 - [HQ_ROUND2_SURFACE_RESULTS.md](HQ_ROUND2_SURFACE_RESULTS.md) — executed Phase 2 render-surface refactor and exact legacy pixel-identity proof.
 - [HQ_ROUND3_3X_SURFACE_RESULTS.md](HQ_ROUND3_3X_SURFACE_RESULTS.md) — executed Phase 3 1800×1200 HQ surface, alignment proof, and render benchmark.
 - [HQ_ROUND4_PACK_V2_RESULTS.md](HQ_ROUND4_PACK_V2_RESULTS.md) — executed Phase 4 BCBFRM02 metadata, V1 compatibility, and mismatch-rejection proof.
+- [HQ_ROUND5_BATMAN_3X_RESULTS.md](HQ_ROUND5_BATMAN_3X_RESULTS.md) — executed Phase 5 true 3× Batman rerasterization, runtime-memory proof, visual A/B gates, and Windows validation.
 
 ## Decision summary
 

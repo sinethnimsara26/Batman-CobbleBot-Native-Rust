@@ -2,7 +2,7 @@ name: build-level1a-fidelity
 
 on:
   push:
-    branches: [main, level1a-cxform-fidelity, hq-rendering-phase1-halftone, hq-rendering-phase2-surfaces, hq-rendering-phase3-3x-surface, hq-rendering-phase4-pack-v2]
+    branches: [main, level1a-cxform-fidelity, hq-rendering-phase1-halftone, hq-rendering-phase2-surfaces, hq-rendering-phase3-3x-surface, hq-rendering-phase4-pack-v2, hq-rendering-phase5-batman-3x]
   workflow_dispatch:
 
 concurrency:
@@ -51,7 +51,7 @@ jobs:
           $tools = "reverse-engineering/tools"
           $work = ".generated"
           $swf = "$work/cobblebot.swf"
-          New-Item -ItemType Directory -Force -Path "$work/reports","$work/bitmaps","$work/sounds","$work/batman-frames","$work/pickup-frames","$work/batarang-frames","$work/level-title","$work/fadein","$work/fadeout","$work/tutorial-overlay","$work/hud","$work/level1a-tiles","assets","reverse-engineering/generated/collision_masks" | Out-Null
+          New-Item -ItemType Directory -Force -Path "$work/reports","$work/bitmaps","$work/sounds","$work/batman-frames","$work/batman-frames-hq","$work/pickup-frames","$work/batarang-frames","$work/level-title","$work/fadein","$work/fadeout","$work/tutorial-overlay","$work/hud","$work/level1a-tiles","assets","reverse-engineering/generated/collision_masks" | Out-Null
 
           python "$tools/swf_re.py" "$swf" "$work/reports"
           @'
@@ -98,8 +98,16 @@ jobs:
 
           python "$tools/render_collision_masks.py" "$swf" "$work/reports/symbols.json" "reverse-engineering/manifests/level-instances.json" "reverse-engineering/generated/collision_masks" --level level1a
 
+          # Preserve the exact 1x player pack as the legacy regression oracle.
           python "$tools/bake_player_states.py" "$swf" "$work/reports/symbols.json" "$work/batman-frames" --bitmaps "$work/bitmaps" --symbol 691 --scale 0.163742
-          python "$tools/pack_sprite_frames.py" "$work/batman-frames" "assets/batman_frames.bin"
+          python "$tools/pack_sprite_frames.py" "$work/batman-frames" "assets/batman_frames.bin" --format-version 2 --logical-pixel-scale 1.0
+
+          # Round 5: rerasterize the same 279 true child frames at final 3x,
+          # first at 6x (3x output * 2x supersample), then premultiplied-alpha
+          # Lanczos downsample to the final 3x pack.
+          python "$tools/bake_player_states.py" "$swf" "$work/reports/symbols.json" "$work/batman-frames-hq" --bitmaps "$work/bitmaps" --symbol 691 --scale 0.163742 --output-scale 3 --supersample 2 --downsample lanczos
+          python "$tools/pack_sprite_frames.py" "$work/batman-frames-hq" "assets/batman_frames_hq.bin" --format-version 2 --logical-pixel-scale 3.0
+
           python "$tools/extract_player_sound_events.py" "$swf" "$work/reports/symbols.json" "$work/batman-frames/manifest.json" "reverse-engineering/manifests/sound-manifest.json" "$work/player_sound_events.json"
 
           python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/pickup-frames" --bitmaps "$work/bitmaps" --symbol 695 --scale 1.130691 --all-frames
@@ -434,6 +442,88 @@ jobs:
 
           print("Round 4 pack contract OK: v1 compatibility + v2 explicit scale metadata.")
 
+      - name: Validate Round 5 true-3x Batman contract
+        shell: python
+        run: |
+          import json,struct
+          from pathlib import Path
+          from PIL import Image
+
+          legacy=json.loads(Path(".generated/batman-frames/manifest.json").read_text())
+          hq=json.loads(Path(".generated/batman-frames-hq/manifest.json").read_text())
+
+          assert legacy["frame_count"] == hq["frame_count"] == 279
+          legacy_states=[(x["name"],x["frame_count"],x["start"],x["end"]) for x in legacy["states"]]
+          hq_states=[(x["name"],x["frame_count"],x["start"],x["end"]) for x in hq["states"]]
+          assert hq_states == legacy_states
+          assert legacy["unsupported_fills"] == hq["unsupported_fills"] == []
+          assert legacy["missing_bitmap_ids"] == hq["missing_bitmap_ids"] == []
+
+          assert legacy["output_scale"] == 1 and legacy["supersample"] == 1
+          assert hq["output_scale"] == 3, hq
+          assert hq["supersample"] == 2, hq
+          assert hq["downsample"] == "lanczos", hq
+          assert abs(hq["base_scale"]-legacy["base_scale"]) < 1e-12
+          assert abs(hq["scale"][0]-legacy["scale"][0]*3.0) < 1e-9
+          assert abs(hq["scale"][1]-legacy["scale"][1]*3.0) < 1e-9
+          for hv,lv in zip(hq["anchor_in_bitmap"],legacy["anchor_in_bitmap"]):
+              assert abs(hv-lv*3.0) < 1e-5, (legacy["anchor_in_bitmap"],hq["anchor_in_bitmap"])
+
+          data=Path("assets/batman_frames_hq.bin").read_bytes()
+          assert data[:8] == b"BCBFRM02"
+          assert struct.unpack_from("<I",data,8)[0] == 279
+          assert abs(struct.unpack_from("<f",data,12)[0]-3.0) < 1e-6
+
+          assets=Path("src/assets.rs").read_text()
+          render=Path("src/render.rs").read_text()
+          baker=Path("reverse-engineering/tools/bake_player_states.py").read_text()
+          for needle in (
+              '"--output-scale"','"--supersample"','"--downsample"',
+              'convert("RGBa").resize',
+          ):
+              assert needle in baker, needle
+          for needle in (
+              "batman_frames_hq: SpriteSet",
+              'decode_sprite_frames_expected(include_bytes!("../assets/batman_frames_hq.bin"),3.0',
+          ):
+              assert needle in assets, needle
+          for needle in (
+              "draw_batman_hq",
+              "render_world_legacy(base,game,assets)",
+              "draw_foreground_hq(target,game,assets)",
+              "True HQ frames are already at final presentation resolution",
+          ):
+              assert needle in render, needle
+
+          # The baker intentionally uses a common full canvas so all frames
+          # share one stable origin while rasterizing. pack_sprite_frames.py
+          # then alpha-crops every PNG and rewrites each frame's anchor. Rust
+          # decodes those CROPPED records, so the runtime budget must be based
+          # on the pack sidecars rather than temporary .generated canvases.
+          legacy_pack=json.loads(Path("assets/batman_frames.json").read_text())
+          hq_pack=json.loads(Path("assets/batman_frames_hq.json").read_text())
+          def packed_decoded_bytes(sidecar):
+              return sum(frame["size"][0]*frame["size"][1]*4 for frame in sidecar["frames"])
+
+          report={
+              "legacy_pack_bytes":Path("assets/batman_frames.bin").stat().st_size,
+              "hq_pack_bytes":Path("assets/batman_frames_hq.bin").stat().st_size,
+              "legacy_runtime_decoded_rgba_bytes":packed_decoded_bytes(legacy_pack),
+              "hq_runtime_decoded_rgba_bytes":packed_decoded_bytes(hq_pack),
+              "legacy_bake_canvas":legacy["size"],
+              "hq_bake_canvas":hq["size"],
+              "frames":279,
+              "output_scale":3,
+              "supersample":2,
+              "downsample":"lanczos",
+          }
+          runtime_total=report["legacy_runtime_decoded_rgba_bytes"]+report["hq_runtime_decoded_rgba_bytes"]
+          report["combined_runtime_decoded_rgba_bytes"]=runtime_total
+          Path(".generated/hq-batman-asset-report.json").write_text(json.dumps(report,indent=2))
+          assert runtime_total < 500*1024*1024, report
+          print(json.dumps(report,indent=2))
+          print("Round 5 asset contract PASS: same 279 timelines, proportional anchors, explicit true-3x pack.")
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-pc-windows-msvc
@@ -463,8 +553,8 @@ jobs:
 
           $legacyShots = Get-ChildItem ".generated/visual-smoke/*.png"
           $hqShots = Get-ChildItem ".generated/visual-smoke-hq/*.png"
-          if ($legacyShots.Count -ne 15) { throw "Expected 15 legacy smoke screenshots, got $($legacyShots.Count)" }
-          if ($hqShots.Count -ne 15) { throw "Expected 15 HQ smoke screenshots, got $($hqShots.Count)" }
+          if ($legacyShots.Count -ne 16) { throw "Expected 16 legacy smoke screenshots, got $($legacyShots.Count)" }
+          if ($hqShots.Count -ne 16) { throw "Expected 16 HQ smoke screenshots, got $($hqShots.Count)" }
           $legacyShots | Format-Table Name,Length
           $hqShots | Format-Table Name,Length
           Get-Content ".generated/render-benchmark.json"
@@ -494,46 +584,31 @@ jobs:
           }
           root=Path(".generated/visual-smoke")
           actual={p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in root.glob("*.png")}
-          if set(actual)!=set(expected):
-              raise SystemExit(f"Round 2 screenshot set changed: expected {sorted(expected)}, got {sorted(actual)}")
+          missing=set(expected)-set(actual)
+          extra=set(actual)-set(expected)
+          if missing or extra!={"04_walk.png"}:
+              raise SystemExit(f"legacy screenshot set changed unexpectedly: missing={sorted(missing)} extra={sorted(extra)}")
           bad={name:(expected[name],actual[name]) for name in expected if actual[name]!=expected[name]}
           if bad:
               raise SystemExit(f"Round 2 changed legacy pixels: {bad}")
-          print(f"Round 2 pixel identity PASS: {len(expected)}/{len(expected)} screenshots match Run 45 exactly.")
+          print(f"Legacy pixel identity PASS: {len(expected)}/{len(expected)} historical screenshots still match Run 45 exactly; 04_walk.png is the new Round-5 checkpoint.")
 
-      - name: Verify Round 3 HQ dimensions and logical alignment
+      - name: Verify Round 5 HQ output and render timing
         shell: python
         run: |
           import json
           from pathlib import Path
           from PIL import Image
 
-          legacy_root=Path(".generated/visual-smoke")
-          hq_root=Path(".generated/visual-smoke-hq")
-          legacy=sorted(legacy_root.glob("*.png"))
-          hq=sorted(hq_root.glob("*.png"))
+          legacy=sorted(Path(".generated/visual-smoke").glob("*.png"))
+          hq=sorted(Path(".generated/visual-smoke-hq").glob("*.png"))
           assert [p.name for p in legacy] == [p.name for p in hq]
-          assert len(legacy) == 15
-
-          checked=0
+          assert len(legacy) == 16
           for lp,hp in zip(legacy,hq):
-              with Image.open(lp).convert("RGB") as lo, Image.open(hp).convert("RGB") as hi:
+              with Image.open(lp) as lo, Image.open(hp) as hi:
                   assert lo.size == (600,400), (lp.name,lo.size)
                   assert hi.size == (1800,1200), (hp.name,hi.size)
                   assert hi.width*2 == hi.height*3
-                  lop=lo.load(); hip=hi.load()
-                  # Pixel-center mapping invariant of the Round 3 bilinear
-                  # kernel: every logical sample survives exactly at the
-                  # center sample of its corresponding 3x cell.
-                  for y in range(400):
-                      hy=3*y+1
-                      for x in range(600):
-                          if hip[3*x+1,hy] != lop[x,y]:
-                              raise SystemExit(
-                                  f"logical drift in {lp.name} at {(x,y)}: "
-                                  f"legacy={lop[x,y]} hq={hip[3*x+1,hy]}"
-                              )
-                  checked += 1
 
           bench=json.loads(Path(".generated/render-benchmark.json").read_text())
           assert bench["mode"] == "hq3x", bench
@@ -542,10 +617,45 @@ jobs:
           assert bench["framebuffer_bytes"] == 9600000, bench
           for key in ("mean_ms","p50_ms","p95_ms","max_ms"):
               assert bench[key] >= 0.0, (key,bench[key])
-          print(f"Round 3 alignment PASS: {checked}/15 HQ frames preserve every logical pixel center.")
-          print("Round 3 render benchmark:",json.dumps(bench,indent=2))
-          # Timing is telemetry-only in Round 3. Do not fail on speed until
-          # repeated CI runs establish a stable runner baseline.
+
+          print("Round 5 HQ dimensions PASS: 16/16 frames are 1800x1200.")
+          print("Round 5 render benchmark:",json.dumps(bench,indent=2))
+
+      - name: Build Round 5 Batman A-B comparison sheets
+        shell: python
+        run: |
+          import json
+          from pathlib import Path
+          from PIL import Image,ImageDraw
+
+          legacy_root=Path(".generated/batman-frames")
+          hq_root=Path(".generated/batman-frames-hq")
+          out=Path(".generated/batman-hq-comparisons")
+          out.mkdir(parents=True,exist_ok=True)
+          legacy=json.loads((legacy_root/"manifest.json").read_text())
+          hq=json.loads((hq_root/"manifest.json").read_text())
+          states={x["name"]:x for x in legacy["states"]}
+          wanted=["stand","walk","run","jump","glide","punch","kick"]
+
+          for name in wanted:
+              state=states[name]
+              frame=state["start"]+state["frame_count"]//2
+              with Image.open(legacy_root/f"{frame:03}.png") as a0, Image.open(hq_root/f"{frame:03}.png") as b0:
+                  a=a0.convert("RGBA").resize((a0.width*3,a0.height*3),Image.Resampling.BILINEAR)
+                  b=b0.convert("RGBA")
+              panel_w=max(a.width,b.width)
+              panel_h=max(a.height,b.height)
+              top=28
+              sheet=Image.new("RGBA",(panel_w*2+12,panel_h+top),(28,28,28,255))
+              sheet.alpha_composite(a,((panel_w-a.width)//2,top+(panel_h-a.height)//2))
+              sheet.alpha_composite(b,(panel_w+12+(panel_w-b.width)//2,top+(panel_h-b.height)//2))
+              draw=ImageDraw.Draw(sheet)
+              draw.text((6,6),f"{name}: legacy 1x -> bilinear 3x",fill=(255,255,255,255))
+              draw.text((panel_w+18,6),f"{name}: true SWF reraster 3x",fill=(255,255,255,255))
+              sheet.save(out/f"{name}.png")
+
+          assert len(list(out.glob("*.png"))) == 7
+          print("Built 7 Batman A/B comparison sheets:",wanted)
 
       - uses: actions/upload-artifact@v4
         with:
@@ -569,6 +679,18 @@ jobs:
         with:
           name: Batman-CobbleBot-Level1A-HQ3x-Benchmark
           path: .generated/render-benchmark.json
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Batman-CobbleBot-Level1A-Round5-Batman-Comparisons
+          path: .generated/batman-hq-comparisons/*.png
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Batman-CobbleBot-Level1A-Round5-Asset-Report
+          path: .generated/hq-batman-asset-report.json
           if-no-files-found: error
 
       - uses: actions/upload-artifact@v4

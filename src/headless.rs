@@ -58,7 +58,11 @@ fn render_smoke_mode(out:&str,hq:bool){
     // Original acceleration: walk frames should ramp into run rather than
     // teleporting straight to full speed.
     input.set(VK_RIGHT,true);
-    for _ in 0..18 { game.tick(&mut input,&ground); }
+    for _ in 0..4 { game.tick(&mut input,&ground); }
+    assert_eq!(format!("{:?}",game.player.state),"Walk");
+    snapshot(hq,&out,"04_walk.png",&mut game,&assets);
+    for _ in 0..14 { game.tick(&mut input,&ground); }
+    assert_eq!(format!("{:?}",game.player.state),"Run");
     snapshot(hq,&out,"04_running.png",&mut game,&assets);
     input.set(VK_RIGHT,false);
     game.tick(&mut input,&ground);
