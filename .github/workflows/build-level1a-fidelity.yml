@@ -974,7 +974,7 @@ jobs:
               {"scale_percent":125,"client":[1125,750],"expected":[0,0,1125,750]},
               {"scale_percent":150,"client":[1350,900],"expected":[0,0,1350,900]},
               {"scale_percent":100,"client":[930,660],"expected":[0,20,930,620]},
-              {"scale_percent":125,"client":[1163,825],"expected":[0,24,1163,775]},
+              {"scale_percent":125,"client":[1163,825],"expected":[0,25,1163,775]},
               {"scale_percent":150,"client":[1395,990],"expected":[0,30,1395,930]},
           ]
           for case in cases:
