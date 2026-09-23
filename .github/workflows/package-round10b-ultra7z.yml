@@ -1,0 +1,70 @@
+name: package-round10b-ultra7z
+
+on:
+  push:
+    branches: [package-round10b-ultra7z]
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  package:
+    runs-on: windows-latest
+    steps:
+      - name: Download validated Run 101 executable
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          New-Item -ItemType Directory -Force -Path input | Out-Null
+          gh run download 35886997923 --repo "${{ github.repository }}" --name "Batman-CobbleBot-Level1A-Fidelity-Windows-x64" --dir input
+          $exe = Get-ChildItem input -Recurse -Filter batman_cobblebot_native.exe | Select-Object -First 1
+          if (-not $exe) { throw "Validated executable not found" }
+          Copy-Item $exe.FullName .\batman_cobblebot_native.exe
+
+      - name: Build competing Ultra 7z archives
+        shell: pwsh
+        run: |
+          $seven = "C:\Program Files\7-Zip\7z.exe"
+          if (-not (Test-Path $seven)) { $seven = (Get-Command 7z.exe -ErrorAction Stop).Source }
+          & $seven a -t7z .\round10b-plain.7z .\batman_cobblebot_native.exe -mx=9 -m0=LZMA2:d=64m:fb=273 -ms=on -mmt=on
+          if ($LASTEXITCODE -ne 0) { throw "Plain Ultra 7z failed" }
+          & $seven a -t7z .\round10b-bcj.7z .\batman_cobblebot_native.exe -mx=9 -m0=BCJ -m1=LZMA2:d=64m:fb=273 -mb0:1 -ms=on -mmt=on
+          if ($LASTEXITCODE -ne 0) { throw "BCJ Ultra 7z failed" }
+          $plain = Get-Item .\round10b-plain.7z
+          $bcj = Get-Item .\round10b-bcj.7z
+          $best = if ($bcj.Length -lt $plain.Length) { $bcj } else { $plain }
+          Copy-Item $best.FullName .\Batman-CobbleBot-Level1A-Round10B-Ultra.7z
+          $report = [ordered]@{
+            source_exe_bytes = (Get-Item .\batman_cobblebot_native.exe).Length
+            plain_lzma2_bytes = $plain.Length
+            bcj_lzma2_bytes = $bcj.Length
+            selected = $best.Name
+            final_7z_bytes = (Get-Item .\Batman-CobbleBot-Level1A-Round10B-Ultra.7z).Length
+            exe_sha256 = (Get-FileHash .\batman_cobblebot_native.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+            archive_sha256 = (Get-FileHash .\Batman-CobbleBot-Level1A-Round10B-Ultra.7z -Algorithm SHA256).Hash.ToLowerInvariant()
+          }
+          $report | ConvertTo-Json | Set-Content -Encoding UTF8 .\compression-report.json
+          Get-Content .\compression-report.json
+
+      - name: Verify archive extracts byte-identically
+        shell: pwsh
+        run: |
+          $seven = "C:\Program Files\7-Zip\7z.exe"
+          if (-not (Test-Path $seven)) { $seven = (Get-Command 7z.exe -ErrorAction Stop).Source }
+          New-Item -ItemType Directory -Force -Path verify | Out-Null
+          & $seven x .\Batman-CobbleBot-Level1A-Round10B-Ultra.7z -o.\verify -y
+          if ($LASTEXITCODE -ne 0) { throw "7z verification extraction failed" }
+          $original = (Get-FileHash .\batman_cobblebot_native.exe -Algorithm SHA256).Hash
+          $roundtrip = (Get-FileHash .\verify\batman_cobblebot_native.exe -Algorithm SHA256).Hash
+          if ($original -ne $roundtrip) { throw "Extracted EXE hash mismatch" }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Batman-CobbleBot-Level1A-Round10B-Ultra-7z
+          path: |
+            Batman-CobbleBot-Level1A-Round10B-Ultra.7z
+            compression-report.json
+          compression-level: 0
+          if-no-files-found: error
