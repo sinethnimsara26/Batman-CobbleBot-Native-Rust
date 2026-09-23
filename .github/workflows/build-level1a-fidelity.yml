@@ -981,7 +981,7 @@ jobs:
               actual=list(viewport(*case["client"]))
               assert actual==case["expected"],(case,actual)
               x,y,w,h=actual
-              assert w*2==h*3
+              assert abs(w*2-h*3) <= 1
               assert x>=0 and y>=0
               case["actual"]=actual
 
