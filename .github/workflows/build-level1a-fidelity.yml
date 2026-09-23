@@ -136,21 +136,22 @@ jobs:
           # Round 7: resolve each foreground timeline at 6x so embedded
           # DefineText, masks and CXFORMWITHALPHA are already applied before
           # premultiplied-alpha Lanczos downsampling to the final true 3x pack.
-          python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/level-title-hq-super" --bitmaps "$work/bitmaps" --symbol 746 --scale 6.0 --all-frames
+          # The baker clips against the real 600x400 stage at each root
+          # placement, so huge off-screen fade geometry never allocates a
+          # giant native-bounds canvas.
+          python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/level-title-hq-super" --bitmaps "$work/bitmaps" --symbol 746 --scale 6.0 --all-frames --clip-stage-width 600 --clip-stage-height 400 --place-x 318.7 --place-y 76.75
           python "$tools/finalize_hq_timeline.py" "$work/level-title-hq-super" "$work/level-title-hq" --output-scale 3 --supersample 2
           python "$tools/pack_sprite_frames.py" "$work/level-title-hq" "assets/level_title_frames_hq.bin" --format-version 2 --logical-pixel-scale 3.0
 
-          # The fade clips have very large union bounds at 6x while containing
-          # simple alpha-transformed vector transition art. Bake them directly
-          # at final 3x: CXFORMWITHALPHA is still applied during rasterization,
-          # while avoiding enormous temporary transparent canvases.
-          python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/fadein-hq" --bitmaps "$work/bitmaps" --symbol 747 --scale 3.0 --all-frames
+          python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/fadein-hq-super" --bitmaps "$work/bitmaps" --symbol 747 --scale 6.0 --all-frames --clip-stage-width 600 --clip-stage-height 400 --place-x 301 --place-y 205
+          python "$tools/finalize_hq_timeline.py" "$work/fadein-hq-super" "$work/fadein-hq" --output-scale 3 --supersample 2
           python "$tools/pack_sprite_frames.py" "$work/fadein-hq" "assets/fadein_frames_hq.bin" --format-version 2 --logical-pixel-scale 3.0
 
-          python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/fadeout-hq" --bitmaps "$work/bitmaps" --symbol 34 --scale 3.0 --all-frames
+          python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/fadeout-hq-super" --bitmaps "$work/bitmaps" --symbol 34 --scale 6.0 --all-frames --clip-stage-width 600 --clip-stage-height 400 --place-x 301 --place-y 205
+          python "$tools/finalize_hq_timeline.py" "$work/fadeout-hq-super" "$work/fadeout-hq" --output-scale 3 --supersample 2
           python "$tools/pack_sprite_frames.py" "$work/fadeout-hq" "assets/fadeout_frames_hq.bin" --format-version 2 --logical-pixel-scale 3.0
 
-          python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/tutorial-overlay-hq-super" --bitmaps "$work/bitmaps" --symbol 737 --scale 6.0 --all-frames
+          python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/tutorial-overlay-hq-super" --bitmaps "$work/bitmaps" --symbol 737 --scale 6.0 --all-frames --clip-stage-width 600 --clip-stage-height 400 --place-x 311.4 --place-y 190
           python "$tools/finalize_hq_timeline.py" "$work/tutorial-overlay-hq-super" "$work/tutorial-overlay-hq" --output-scale 3 --supersample 2
           python "$tools/pack_sprite_frames.py" "$work/tutorial-overlay-hq" "assets/tutorial_overlay_frames_hq.bin" --format-version 2 --logical-pixel-scale 3.0
 
@@ -687,19 +688,18 @@ jobs:
               assert [x.get("animation") for x in legacy["frames"]] == [x.get("animation") for x in hq["frames"]]
               assert legacy["scale"] == [1.0,1.0]
               assert hq["scale"] == [3.0,3.0]
-              if hq_name in ("tutorial-overlay-hq","level-title-hq"):
-                  final=hq["hq_finalize"]
-                  assert final == {
-                      "source_scale":6.0,
-                      "output_scale":3.0,
-                      "supersample":2,
-                      "downsample":"lanczos",
-                      "alpha_filtering":"premultiplied",
-                  }, final
-                  strategy="6x-premultiplied-lanczos-to-3x"
-              else:
-                  assert "hq_finalize" not in hq
-                  strategy="direct-3x-cxform-raster"
+              clip=hq["stage_clip"]
+              assert clip is not None
+              assert clip["stage_size"] == [600.0,400.0]
+              final=hq["hq_finalize"]
+              assert final == {
+                  "source_scale":6.0,
+                  "output_scale":3.0,
+                  "supersample":2,
+                  "downsample":"lanczos",
+                  "alpha_filtering":"premultiplied",
+              }, final
+              strategy="stage-clipped-6x-premultiplied-lanczos-to-3x"
 
               data=Path("assets")/pack_name
               raw=data.read_bytes()
@@ -760,8 +760,12 @@ jobs:
           for needle in ('convert("RGBa")',"Image.Resampling.LANCZOS","hq_finalize"):
               assert needle in finalizer, needle
           workflow=Path(".github/workflows/build-level1a-fidelity.yml").read_text()
-          assert '--symbol 747 --scale 3.0 --all-frames' in workflow
-          assert '--symbol 34 --scale 3.0 --all-frames' in workflow
+          for symbol in ("746","747","34","737"):
+              needle=f"--symbol {symbol} --scale 6.0 --all-frames --clip-stage-width 600 --clip-stage-height 400"
+              assert needle in workflow, needle
+          baker=Path("reverse-engineering/tools/bake_sprite_frames.py").read_text()
+          for needle in ("--clip-stage-width","--clip-stage-height","stage_clip"):
+              assert needle in baker, needle
 
           report["lazy_cache_upper_bound_rgba_bytes"]=lazy_cache_upper
           # Add the eagerly decoded Round-5 player packs as the dominant known
