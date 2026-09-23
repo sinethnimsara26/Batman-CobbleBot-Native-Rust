@@ -204,20 +204,21 @@ jobs:
 
           # Round 10 selective scenery split.
           #
-          # HQ base: retain the cheap flat/low-detail geometry (including 147)
-          # but remove window/facade detail symbols 144-146 before 1x promotion.
-          python "$tools/bake_level_tiles.py" "$swf" "$work/reports/symbols.json" "$work/level1a-tiles-hq-base" --bitmaps "$work/bitmaps" --symbol 152 --place-x 2467.65 --place-y 239.25 --exclude-symbol 149 --exclude-symbol 151 --exclude-symbol 153 --exclude-symbol 144 --exclude-symbol 145 --exclude-symbol 146
+          # HQ base: retain only the cheap depth-1 symbol 14. Symbol 146
+          # crosses through the 147 depth band, so 144-147 must remain
+          # together in the HQ layer to preserve the original Flash order.
+          python "$tools/bake_level_tiles.py" "$swf" "$work/reports/symbols.json" "$work/level1a-tiles-hq-base" --bitmaps "$work/bitmaps" --symbol 152 --place-x 2467.65 --place-y 239.25 --exclude-symbol 149 --exclude-symbol 151 --exclude-symbol 153 --exclude-symbol 144 --exclude-symbol 145 --exclude-symbol 146 --exclude-symbol 147
           python "$tools/pack_level_tiles.py" "$work/level1a-tiles-hq-base" "assets/level1a_tiles_hq_base.bin"
 
-          # 1x detail oracle: keep only 144-146. This is used to prove that
+          # 1x detail oracle: keep 144-147 together. This is used to prove
           # base + detail can reproduce the original full level exactly before
-          # the same logical detail is replaced by true 3x pixels.
-          python "$tools/bake_level_tiles.py" "$swf" "$work/reports/symbols.json" "$work/level1a-detail-tiles-1x" --bitmaps "$work/bitmaps" --symbol 152 --place-x 2467.65 --place-y 239.25 --exclude-symbol 149 --exclude-symbol 151 --exclude-symbol 153 --exclude-symbol 14 --exclude-symbol 147
+          # the same logical layer is replaced by true 3x pixels.
+          python "$tools/bake_level_tiles.py" "$swf" "$work/reports/symbols.json" "$work/level1a-detail-tiles-1x" --bitmaps "$work/bitmaps" --symbol 152 --place-x 2467.65 --place-y 239.25 --exclude-symbol 149 --exclude-symbol 151 --exclude-symbol 153 --exclude-symbol 14
 
           # True-HQ detail: rasterize the same selected display-list content at
           # 6x with tile overscan, premultiplied-alpha Lanczos to final 3x,
           # then crop transparent margins in BCLVT002 for runtime efficiency.
-          python "$tools/bake_level_tiles.py" "$swf" "$work/reports/symbols.json" "$work/level1a-detail-tiles-hq" --bitmaps "$work/bitmaps" --symbol 152 --place-x 2467.65 --place-y 239.25 --exclude-symbol 149 --exclude-symbol 151 --exclude-symbol 153 --exclude-symbol 14 --exclude-symbol 147 --output-scale 3 --supersample 2 --downsample lanczos
+          python "$tools/bake_level_tiles.py" "$swf" "$work/reports/symbols.json" "$work/level1a-detail-tiles-hq" --bitmaps "$work/bitmaps" --symbol 152 --place-x 2467.65 --place-y 239.25 --exclude-symbol 149 --exclude-symbol 151 --exclude-symbol 153 --exclude-symbol 14 --output-scale 3 --supersample 2 --downsample lanczos
           python "$tools/pack_level_tiles.py" "$work/level1a-detail-tiles-hq" "assets/level1a_detail_tiles_hq.bin" --format-version 2 --logical-pixel-scale 3.0 --crop-transparent
 
       - name: Validate recovered assets and reject leaked control geometry
@@ -1102,9 +1103,9 @@ jobs:
           assert detail3["logical_tile_size"] == [600,400]
           assert detail3["tile_size"] == [1800,1200]
           assert full["excluded_symbols"] == [149,151,153]
-          assert base["excluded_symbols"] == [144,145,146,149,151,153]
-          assert detail1["excluded_symbols"] == [14,147,149,151,153]
-          assert detail3["excluded_symbols"] == [14,147,149,151,153]
+          assert base["excluded_symbols"] == [144,145,146,147,149,151,153]
+          assert detail1["excluded_symbols"] == [14,149,151,153]
+          assert detail3["excluded_symbols"] == [14,149,151,153]
           for m in (full,base,detail1,detail3):
               assert m["unsupported_fills"] == [], m["unsupported_fills"]
               assert m["missing_ids"] == [], m["missing_ids"]
@@ -1114,10 +1115,10 @@ jobs:
           fi,bi,di=index(full),index(base),index(detail1)
           keys=set(fi)|set(bi)|set(di)
 
-          # Depth-safety proof: if the selected 144-146 layer can be drawn
-          # above the retained base without changing a single 1x pixel, then
-          # moving only that layer to true 3x preserves the original display
-          # ordering for every place where the two groups actually overlap.
+          # Depth-safety proof: 146 and 147 interleave in the original Flash
+          # display list, so they stay together with 144/145 in one selected
+          # layer. If symbol 14 + selected 144-147 reconstructs every 1x tile
+          # exactly, the split preserves all internal scenery depth ordering.
           changed_tiles=[]
           changed_pixels=0
           for key in sorted(keys):
@@ -1205,8 +1206,8 @@ jobs:
               assert needle in baker, needle
 
           report={
-              "selected_symbols":[144,145,146],
-              "retained_low_detail_symbol":147,
+              "selected_symbols":[144,145,146,147],
+              "retained_base_symbol":14,
               "split_recomposition_exact":True,
               "split_changed_pixels":0,
               "legacy_full_tiles":full["rendered_tiles"],
@@ -1221,11 +1222,11 @@ jobs:
               "previous_known_sprite_upper_bound":known,
               "combined_known_decoded_upper_bound":combined,
               "headroom_to_500_mib":500*1024*1024-combined,
-              "hq_detail_strategy":"symbol152 selected children 144-146, 6x overscan render -> premultiplied Lanczos -> 3x, transparent-cropped BCLVT002",
+              "hq_detail_strategy":"symbol152 selected children 144-147 with original internal depth order, 6x overscan render -> premultiplied Lanczos -> 3x, transparent-cropped BCLVT002",
           }
           Path(".generated/hq-scenery-asset-report.json").write_text(json.dumps(report,indent=2))
           print(json.dumps(report,indent=2))
-          print("Round 10 scenery contract PASS: exact 1x split proof + true-3x selected facade/window layer.")
+          print("Round 10 scenery contract PASS: exact 1x split proof + true-3x depth-preserved scenery layer 144-147.")
 
       - name: Validate Round 9 per-monitor DPI-awareness contract
         shell: python
