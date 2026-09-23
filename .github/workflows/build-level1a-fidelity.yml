@@ -1321,6 +1321,9 @@ jobs:
           $bench = Start-Process -FilePath $exe -ArgumentList @("--benchmark-render", "60", ".generated/render-benchmark.json") -Wait -PassThru
           if ($bench.ExitCode -ne 0) { throw "Render benchmark failed with exit code $($bench.ExitCode)" }
 
+          $scroll = Start-Process -FilePath $exe -ArgumentList @("--benchmark-scenery-scroll", ".generated/scenery-scroll-benchmark.json") -Wait -PassThru
+          if ($scroll.ExitCode -ne 0) { throw "Scenery-scroll benchmark failed with exit code $($scroll.ExitCode)" }
+
           $legacyShots = Get-ChildItem ".generated/visual-smoke/*.png"
           $hqShots = Get-ChildItem ".generated/visual-smoke-hq/*.png"
           if ($legacyShots.Count -ne 17) { throw "Expected 17 legacy smoke screenshots, got $($legacyShots.Count)" }
@@ -1328,6 +1331,7 @@ jobs:
           $legacyShots | Format-Table Name,Length
           $hqShots | Format-Table Name,Length
           Get-Content ".generated/render-benchmark.json"
+          Get-Content ".generated/scenery-scroll-benchmark.json"
 
       - name: Verify Round 2 legacy pixels against renderer-repair baseline
         shell: python
@@ -1390,8 +1394,15 @@ jobs:
               assert bench[key] >= 0.0, (key,bench[key])
           assert bench["p95_ms"] < 40.0, bench
 
+          scroll=json.loads(Path(".generated/scenery-scroll-benchmark.json").read_text())
+          assert scroll["mode"] == "hq3x-scenery-scroll", scroll
+          assert scroll["step_pixels"] == 600, scroll
+          assert scroll["samples_count"] >= 40, scroll
+          assert scroll["p95_ms"] < 40.0, scroll
+
           print("HQ dimensions PASS: 17/17 frames are 1800x1200, including the Round-8 world-object checkpoint.")
           print("Round 5 render benchmark:",json.dumps(bench,indent=2))
+          print("Round 10 scenery-scroll benchmark:",json.dumps(scroll,indent=2))
 
       - name: Build Round 5 Batman A-B comparison sheets
         shell: python
@@ -1600,6 +1611,12 @@ jobs:
         with:
           name: Batman-CobbleBot-Level1A-HQ3x-Benchmark
           path: .generated/render-benchmark.json
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Batman-CobbleBot-Level1A-Round10-Scenery-Scroll-Benchmark
+          path: .generated/scenery-scroll-benchmark.json
           if-no-files-found: error
 
       - uses: actions/upload-artifact@v4
