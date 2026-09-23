@@ -31,6 +31,12 @@ def main():
         raise ValueError("transparent tile cropping requires BCLVT002")
 
     manifest = json.loads((args.tiles / "manifest.json").read_text(encoding="utf-8"))
+    manifest_scale = float(manifest.get("logical_pixel_scale", 1.0))
+    if abs(manifest_scale - args.logical_pixel_scale) > 1e-6:
+        raise ValueError(
+            f"manifest logical_pixel_scale {manifest_scale} does not match "
+            f"--logical-pixel-scale {args.logical_pixel_scale}"
+        )
     tiles = sorted(manifest["tiles"], key=lambda item: (item["world_y"], item["world_x"]))
     magic = MAGIC_V2 if args.format_version == 2 else MAGIC_V1
     payload = bytearray(magic + struct.pack("<I", len(tiles)))
