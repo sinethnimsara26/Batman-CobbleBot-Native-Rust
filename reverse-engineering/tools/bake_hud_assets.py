@@ -5,6 +5,12 @@ The HUD is character 716. Static vector art is rendered by bake_sprite_frames.py
 Static DefineEditText labels (_sans) are recreated with Windows Arial, which is
 what Flash's _sans device-font alias resolves to on the original target platform.
 Dynamic fields remain Rust-owned at runtime.
+
+Round 6 makes this tool scale-aware. HQ mode may receive a supersampled HUD
+render (for example 6x), rasterize Arial at that same temporary scale, then
+premultiplied-alpha Lanczos downsample the complete shell and digit atlases to
+the final 3x presentation scale. The optional pack directory emits a one-frame
+manifest so pack_sprite_frames.py can preserve the exact final HUD anchor.
 """
 from __future__ import annotations
 
@@ -128,19 +134,33 @@ def draw_field(image,info,transform,anchor,font_path):
     return box
 
 
-def digit_atlas(font_path:Path,size:int,path:Path):
+def resize_premultiplied(image:Image.Image,size:tuple[int,int],method:str):
+    if image.size==size:
+        return image.copy()
+    if method!="lanczos":
+        raise ValueError("HQ HUD downsample currently supports only lanczos")
+    # Pillow's RGBa mode keeps RGB premultiplied while filtering transparent
+    # edges, preventing dark/bright fringes around text and vector artwork.
+    return image.convert("RGBa").resize(size,Image.Resampling.LANCZOS).convert("RGBA")
+
+
+def digit_atlas(font_path:Path,base_size:int,pixel_scale:float):
+    size=max(1,round(base_size*pixel_scale))
     font=ImageFont.truetype(str(font_path),size=size)
     probe=Image.new("RGBA",(8,8),(0,0,0,0))
     draw=ImageDraw.Draw(probe)
     bounds=[draw.textbbox((0,0),str(i),font=font,anchor="lt") for i in range(10)]
-    cell_w=max(b[2]-b[0] for b in bounds)+6
-    cell_h=max(b[3]-b[1] for b in bounds)+8
+    cell_w=max(b[2]-b[0] for b in bounds)+max(1,round(6*pixel_scale))
+    cell_h=max(b[3]-b[1] for b in bounds)+max(1,round(8*pixel_scale))
     atlas=Image.new("RGBA",(cell_w*10,cell_h),(0,0,0,0))
     draw=ImageDraw.Draw(atlas)
     for i in range(10):
         draw.text((i*cell_w+cell_w/2.0,cell_h/2.0),str(i),font=font,fill=(255,255,255,255),anchor="mm")
-    atlas.save(path)
-    return {"cell_w":cell_w,"cell_h":cell_h,"font_px":size}
+    return atlas,{"cell_w":cell_w,"cell_h":cell_h,"font_px":size}
+
+
+def scale_box(box,factor):
+    return [value/factor for value in box]
 
 
 def main():
@@ -150,7 +170,24 @@ def main():
     ap.add_argument("hud_frames",type=Path,help="symbol 716 --all-frames output")
     ap.add_argument("outdir",type=Path)
     ap.add_argument("--font",type=Path,required=True,help="Arial-compatible TTF for Flash _sans")
+    ap.add_argument("--output-scale",type=float,default=1.0,
+                    help="final presentation pixels per logical stage pixel")
+    ap.add_argument("--supersample",type=int,default=1,
+                    help="temporary raster scale multiplier before final downsample")
+    ap.add_argument("--downsample",choices=("none","lanczos"),default="none")
+    ap.add_argument("--suffix",default="",help="output suffix, e.g. _hq")
+    ap.add_argument("--pack-dir",type=Path,
+                    help="optional one-frame pack-ready directory for the final HUD shell")
     ns=ap.parse_args()
+
+    if ns.output_scale<=0:
+        raise ValueError("--output-scale must be positive")
+    if ns.supersample<1:
+        raise ValueError("--supersample must be >= 1")
+    if ns.supersample>1 and ns.downsample=="none":
+        raise ValueError("supersampled HUD output requires --downsample lanczos")
+    if ns.supersample==1 and ns.downsample!="none":
+        raise ValueError("--downsample is only meaningful with --supersample > 1")
 
     symbols=json.loads(ns.symbols_json.read_text(encoding="utf-8"))
     edit=parse_edit_texts(ns.swf)
@@ -158,37 +195,107 @@ def main():
     if missing:
         raise ValueError(f"HUD DefineEditText IDs missing: {sorted(missing)}")
 
+    manifest=json.loads((ns.hud_frames/"manifest.json").read_text(encoding="utf-8"))
+    input_scale=float(manifest["scale"][0])
+    if abs(float(manifest["scale"][1])-input_scale)>1e-9:
+        raise ValueError("HUD source must use uniform scale")
+    expected_input_scale=ns.output_scale*ns.supersample
+    if abs(input_scale-expected_input_scale)>1e-6:
+        raise ValueError(
+            f"HUD source scale mismatch: expected {expected_input_scale}, got {input_scale}"
+        )
+
+    # EditText placement coordinates must live in the same pixel space as the
+    # supersampled/vector HUD shell.
     found={}
-    find_edit_placements(716,0,(1.0,0.0,0.0,1.0,0.0,0.0),symbols,found)
+    root_transform=(input_scale,0.0,0.0,input_scale,0.0,0.0)
+    find_edit_placements(716,0,root_transform,symbols,found)
     if set(found)!=HUD_IDS:
         raise ValueError(f"HUD edit placements mismatch: {sorted(found)}")
 
-    manifest=json.loads((ns.hud_frames/"manifest.json").read_text(encoding="utf-8"))
-    anchor=manifest["anchor_in_bitmap"]
+    temp_anchor=[float(v) for v in manifest["anchor_in_bitmap"]]
     image=Image.open(ns.hud_frames/"000.png").convert("RGBA")
-    fields={}
+    temp_fields={}
 
     for cid in sorted(HUD_IDS):
         info=edit[cid]
         if cid in STATIC_IDS:
-            fields[str(cid)]=draw_field(image,info,found[cid],anchor,ns.font)
+            temp_fields[str(cid)]=draw_field(image,info,found[cid],temp_anchor,ns.font)
         else:
-            fields[str(cid)]=field_box(info,found[cid],anchor)
+            temp_fields[str(cid)]=field_box(info,found[cid],temp_anchor)
+
+    temp_scale=ns.output_scale*ns.supersample
+    small_image,small_meta=digit_atlas(ns.font,16,temp_scale)
+    large_image,large_meta=digit_atlas(ns.font,32,temp_scale)
+
+    factor=float(ns.supersample)
+    if ns.supersample>1:
+        final_size=(
+            max(1,round(image.width/factor)),
+            max(1,round(image.height/factor)),
+        )
+        image=resize_premultiplied(image,final_size,ns.downsample)
+
+        def finish_atlas(atlas,meta):
+            final_cell_w=max(1,round(meta["cell_w"]/factor))
+            final_cell_h=max(1,round(meta["cell_h"]/factor))
+            final=resize_premultiplied(
+                atlas,(final_cell_w*10,final_cell_h),ns.downsample
+            )
+            return final,{
+                "cell_w":final_cell_w,
+                "cell_h":final_cell_h,
+                "font_px":round(meta["font_px"]/factor),
+            }
+
+        small_image,small_meta=finish_atlas(small_image,small_meta)
+        large_image,large_meta=finish_atlas(large_image,large_meta)
+
+    final_anchor=[value/factor for value in temp_anchor]
+    fields={key:scale_box(box,factor) for key,box in temp_fields.items()}
 
     ns.outdir.mkdir(parents=True,exist_ok=True)
-    image.save(ns.outdir/"hud_base.png")
-    small=digit_atlas(ns.font,16,ns.outdir/"hud_digits_small.png")
-    large=digit_atlas(ns.font,32,ns.outdir/"hud_digits_large.png")
+    base_name=f"hud_base{ns.suffix}.png"
+    small_name=f"hud_digits_small{ns.suffix}.png"
+    large_name=f"hud_digits_large{ns.suffix}.png"
+    json_name=f"hud{ns.suffix}.json"
+    image.save(ns.outdir/base_name)
+    small_image.save(ns.outdir/small_name)
+    large_image.save(ns.outdir/large_name)
+
     meta={
         "hud_size":list(image.size),
-        "anchor_in_bitmap":anchor,
+        "anchor_in_bitmap":final_anchor,
         "fields":fields,
-        "small_digits":small,
-        "large_digits":large,
+        "small_digits":small_meta,
+        "large_digits":large_meta,
         "variables":{str(cid):edit[cid].get("variable","") for cid in sorted(DYNAMIC_IDS)},
         "static_text":{str(cid):edit[cid].get("initial_text","").replace("\r","") for cid in sorted(STATIC_IDS)},
+        "output_scale":ns.output_scale,
+        "supersample":ns.supersample,
+        "temporary_scale":temp_scale,
+        "downsample":ns.downsample,
     }
-    (ns.outdir/"hud.json").write_text(json.dumps(meta,indent=2),encoding="utf-8")
+    (ns.outdir/json_name).write_text(json.dumps(meta,indent=2),encoding="utf-8")
+
+    if ns.pack_dir is not None:
+        ns.pack_dir.mkdir(parents=True,exist_ok=True)
+        image.save(ns.pack_dir/"000.png")
+        pack_manifest={
+            "symbol":716,
+            "frame_count":1,
+            "size":list(image.size),
+            "scale":[ns.output_scale,ns.output_scale],
+            "source_bounds":manifest.get("source_bounds"),
+            "anchor_in_bitmap":final_anchor,
+            "unsupported_fills":manifest.get("unsupported_fills",[]),
+            "missing_bitmap_ids":manifest.get("missing_bitmap_ids",[]),
+            "frames":[{"frame":0,"animation":"hud","file":"000.png"}],
+        }
+        (ns.pack_dir/"manifest.json").write_text(
+            json.dumps(pack_manifest,indent=2),encoding="utf-8"
+        )
+
     print(json.dumps(meta,indent=2))
 
 
