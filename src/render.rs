@@ -54,13 +54,14 @@ pub fn render_with_config(
                 render_legacy(base,game,assets);
                 upscale_opaque_base(base,target);
             }else{
-                // Round 5 splits the playing frame at Batman's original depth:
-                // world at 1x -> promote -> true 3x Batman -> promoted 1x UI.
-                // This avoids drawing sharp Batman over a blurry baked Batman
-                // while preserving the original world/player/foreground order.
+                // Round 8 preserves the original depth split while removing
+                // the last small moving objects from the blurry 1x world:
+                // scenery at 1x -> promote -> true 3x pickups/Batarangs ->
+                // true 3x Batman -> true 3x foreground UI/overlays.
                 base.fill(0xff000000);
-                render_world_legacy(base,game,assets);
+                render_world_base_legacy(base,game,assets);
                 upscale_opaque_base(base,target);
+                draw_world_objects_hq(target,game,assets);
                 draw_batman_hq(target,game,assets);
                 draw_foreground_hq(target,game,assets);
             }
@@ -137,6 +138,11 @@ fn render_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
 }
 
 fn render_world_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
+    render_world_base_legacy(fb,game,assets);
+    draw_world_objects_legacy(fb,game,assets);
+}
+
+fn render_world_base_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     // Original root gameplay backdrop, frame 19:
     // depth 1 = symbol 131 at identity; depth 2 = symbol 134 at (300,130).
     blit(
@@ -165,6 +171,9 @@ fn render_world_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     blit(fb,&assets.city_background,bg_x,bg_y,bg_w,bg_h,false);
     draw_tiles(fb,game,&assets.level1a_tiles);
 
+}
+
+fn draw_world_objects_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     if !assets.pickup_frames.is_empty() {
         let pf=&assets.pickup_frames[(game.ticks as usize)%assets.pickup_frames.len()];
         for (i,&(wx,wy)) in crate::game::PICKUPS.iter().enumerate() {
@@ -180,6 +189,31 @@ fn render_world_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
         for shot in &game.shots {
             let px=(shot.x+game.camera_x-bf.anchor_x).round() as i32;
             let py=(shot.y+game.camera_y-bf.anchor_y).round() as i32;
+            blit(fb,&bf.image,px,py,bf.image.w as i32,bf.image.h as i32,shot.dir<0);
+        }
+    }
+}
+
+fn draw_world_objects_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
+    let scale=HQ_SCALE as f32;
+    debug_assert!((assets.pickup_frames_hq.logical_pixel_scale-scale).abs()<0.001);
+    debug_assert!((assets.batarang_frames_hq.logical_pixel_scale-scale).abs()<0.001);
+
+    if !assets.pickup_frames_hq.is_empty() {
+        let pf=&assets.pickup_frames_hq[(game.ticks as usize)%assets.pickup_frames_hq.len()];
+        for (i,&(wx,wy)) in crate::game::PICKUPS.iter().enumerate() {
+            if game.pickups[i] { continue; }
+            let px=((wx+game.camera_x)*scale-pf.anchor_x).round() as i32;
+            let py=((wy+game.camera_y)*scale-pf.anchor_y).round() as i32;
+            blit(fb,&pf.image,px,py,pf.image.w as i32,pf.image.h as i32,false);
+        }
+    }
+
+    if !assets.batarang_frames_hq.is_empty() {
+        let bf=&assets.batarang_frames_hq[(game.ticks as usize)%assets.batarang_frames_hq.len()];
+        for shot in &game.shots {
+            let px=((shot.x+game.camera_x)*scale-bf.anchor_x).round() as i32;
+            let py=((shot.y+game.camera_y)*scale-bf.anchor_y).round() as i32;
             blit(fb,&bf.image,px,py,bf.image.w as i32,bf.image.h as i32,shot.dir<0);
         }
     }
