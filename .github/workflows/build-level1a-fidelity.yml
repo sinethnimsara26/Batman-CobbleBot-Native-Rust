@@ -1141,7 +1141,11 @@ jobs:
           assert side["format"] == "BCLVT002"
           assert abs(side["logical_pixel_scale"]-3.0) < 1e-6
           assert side["tile_count"] == detail3["rendered_tiles"]
-          assert all(x["crop_offset"][0]>=0 and x["crop_offset"][1]>=0 for x in side["tiles"])
+          for rec in side["tiles"]:
+              cx,cy=rec["crop_offset"]
+              w,h=rec["size"]
+              assert cx>=0 and cy>=0, rec
+              assert cx+w <= 1800 and cy+h <= 1200, rec
 
           # Conservative cache accounting. The HQ path uses a 4-tile cache for
           # both its 1x retained base and 3x selected detail. Include the
@@ -1372,6 +1376,7 @@ jobs:
           assert bench["framebuffer_bytes"] == 9600000, bench
           for key in ("mean_ms","p50_ms","p95_ms","max_ms"):
               assert bench[key] >= 0.0, (key,bench[key])
+          assert bench["p95_ms"] < 40.0, bench
 
           print("HQ dimensions PASS: 17/17 frames are 1800x1200, including the Round-8 world-object checkpoint.")
           print("Round 5 render benchmark:",json.dumps(bench,indent=2))
