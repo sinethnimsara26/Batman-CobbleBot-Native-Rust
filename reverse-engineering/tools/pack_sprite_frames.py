@@ -16,19 +16,31 @@ import struct
 from PIL import Image
 
 
-MAGIC = b"BCBFRM01"
+MAGIC_V1 = b"BCBFRM01"
+MAGIC_V2 = b"BCBFRM02"
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("frames", type=Path, help="directory written by bake_sprite_frames.py --all-frames")
     parser.add_argument("output", type=Path, help="packed binary output, normally assets/batman_frames.bin")
+    parser.add_argument("--format-version", choices=(1,2), type=int, default=2,
+                        help="BCBFRM container version (default: 2)")
+    parser.add_argument("--logical-pixel-scale", type=float, default=1.0,
+                        help="presentation pixels represented by one logical stage pixel (v2 only)")
     args = parser.parse_args()
+    if not (args.logical_pixel_scale > 0.0):
+        raise ValueError("--logical-pixel-scale must be > 0")
+    if args.format_version == 1 and args.logical_pixel_scale != 1.0:
+        raise ValueError("BCBFRM01 has implicit logical pixel scale 1.0")
 
     manifest = json.loads((args.frames / "manifest.json").read_text(encoding="utf-8"))
     anchor_x, anchor_y = manifest["anchor_in_bitmap"]
     frame_records = []
-    payload = bytearray(MAGIC + struct.pack("<I", manifest["frame_count"]))
+    magic = MAGIC_V2 if args.format_version == 2 else MAGIC_V1
+    payload = bytearray(magic + struct.pack("<I", manifest["frame_count"]))
+    if args.format_version == 2:
+        payload.extend(struct.pack("<f", args.logical_pixel_scale))
     for entry in manifest["frames"]:
         with Image.open(args.frames / entry["file"]) as opened:
             frame = opened.convert("RGBA")
@@ -64,12 +76,13 @@ def main():
             if previous is not None:
                 animations.append({"name": previous, "frame": frame["frame"]})
     sidecar.write_text(json.dumps({
-        "format": MAGIC.decode("ascii"),
+        "format": magic.decode("ascii"),
         "frame_count": len(frame_records),
+        "logical_pixel_scale": 1.0 if args.format_version == 1 else args.logical_pixel_scale,
         "animations": animations,
         "frames": frame_records,
     }, indent=2), encoding="utf-8")
-    print(json.dumps({"frames": len(frame_records), "packed_bytes": len(payload), "sidecar": str(sidecar)}, indent=2))
+    print(json.dumps({"format": magic.decode("ascii"), "frames": len(frame_records), "logical_pixel_scale": 1.0 if args.format_version == 1 else args.logical_pixel_scale, "packed_bytes": len(payload), "sidecar": str(sidecar)}, indent=2))
 
 
 if __name__ == "__main__":
