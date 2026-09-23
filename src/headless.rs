@@ -132,6 +132,23 @@ fn render_smoke_mode(out:&str,hq:bool){
     assert_eq!(game.fadeout_tick,Some(40));
     snapshot(hq,&out,"12_level1a_complete.png",&mut game,&assets);
 
+    // Round 8 visual checkpoint: isolate an uncollected pickup and a live
+    // Batarang in the same viewport. Legacy mode proves the original 1x path;
+    // HQ mode proves both objects are composited from their true-3x packs.
+    let mut object_game=Game::new();
+    object_game.screen=AppScreen::Playing;
+    object_game.ticks=105;
+    object_game.camera_x=-PICKUPS[0].0+180.0;
+    object_game.camera_y=-PICKUPS[0].1+180.0;
+    object_game.player.x=-LEVEL_X-object_game.camera_x-1000.0;
+    object_game.player.y=-LEVEL_Y-object_game.camera_y-1000.0;
+    object_game.shots.push(crate::game::Shot{
+        x:PICKUPS[0].0+160.0,
+        y:PICKUPS[0].1,
+        dir:1,
+    });
+    snapshot(hq,&out,"13_world_objects.png",&mut object_game,&assets);
+
     // Audio/item regression gate from original itemLogic.
     let mut item_game=Game::new();
     item_game.screen=AppScreen::Playing;
