@@ -1152,7 +1152,7 @@ jobs:
           side=json.loads(Path("assets/level1a_detail_tiles_hq.json").read_text())
           assert side["format"] == "BCLVT002"
           assert abs(side["logical_pixel_scale"]-3.0) < 1e-6
-          assert side["tile_count"] == detail3["rendered_tiles"]
+          assert side["tile_count"] == len(detail3["tiles"])
           for rec in side["tiles"]:
               cx,cy=rec["crop_offset"]
               w,h=rec["size"]
@@ -1210,9 +1210,9 @@ jobs:
               "retained_base_symbol":14,
               "split_recomposition_exact":True,
               "split_changed_pixels":0,
-              "legacy_full_tiles":full["rendered_tiles"],
-              "hq_base_tiles":base["rendered_tiles"],
-              "hq_detail_tiles":detail3["rendered_tiles"],
+              "legacy_full_tiles":len(full["tiles"]),
+              "hq_base_tiles":len(base["tiles"]),
+              "hq_detail_tiles":len(detail3["tiles"]),
               "legacy_pack_bytes":Path("assets/level1a_tiles.bin").stat().st_size,
               "hq_base_pack_bytes":Path("assets/level1a_tiles_hq_base.bin").stat().st_size,
               "hq_detail_pack_bytes":Path("assets/level1a_detail_tiles_hq.bin").stat().st_size,
