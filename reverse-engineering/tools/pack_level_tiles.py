@@ -4,11 +4,15 @@ from __future__ import annotations
 
 from pathlib import Path
 import argparse
+import io
 import json
 import struct
 
+from PIL import Image
 
-MAGIC = b"BCLVT001"
+
+MAGIC_V1 = b"BCLVT001"
+MAGIC_V2 = b"BCLVT002"
 
 
 def main():
