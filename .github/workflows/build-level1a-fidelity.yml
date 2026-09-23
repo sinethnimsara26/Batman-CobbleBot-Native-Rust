@@ -2,7 +2,7 @@ name: build-level1a-fidelity
 
 on:
   push:
-    branches: [main, level1a-cxform-fidelity, hq-rendering-phase1-halftone, hq-rendering-phase2-surfaces, hq-rendering-phase3-3x-surface, hq-rendering-phase4-pack-v2, hq-rendering-phase5-batman-3x]
+    branches: [main, level1a-cxform-fidelity, hq-rendering-phase1-halftone, hq-rendering-phase2-surfaces, hq-rendering-phase3-3x-surface, hq-rendering-phase4-pack-v2, hq-rendering-phase5-batman-3x, hq-rendering-phase6-hud-3x]
   workflow_dispatch:
 
 concurrency:
@@ -51,7 +51,7 @@ jobs:
           $tools = "reverse-engineering/tools"
           $work = ".generated"
           $swf = "$work/cobblebot.swf"
-          New-Item -ItemType Directory -Force -Path "$work/reports","$work/bitmaps","$work/sounds","$work/batman-frames","$work/batman-frames-hq","$work/pickup-frames","$work/batarang-frames","$work/level-title","$work/fadein","$work/fadeout","$work/tutorial-overlay","$work/hud","$work/level1a-tiles","assets","reverse-engineering/generated/collision_masks" | Out-Null
+          New-Item -ItemType Directory -Force -Path "$work/reports","$work/bitmaps","$work/sounds","$work/batman-frames","$work/batman-frames-hq","$work/pickup-frames","$work/batarang-frames","$work/level-title","$work/fadein","$work/fadeout","$work/tutorial-overlay","$work/hud","$work/hud-hq-super","$work/hud-hq-final","$work/level1a-tiles","assets","reverse-engineering/generated/collision_masks" | Out-Null
 
           python "$tools/swf_re.py" "$swf" "$work/reports"
           @'
@@ -135,10 +135,16 @@ jobs:
           python "$tools/pack_sprite_frames.py" "$work/tutorial-overlay" "assets/tutorial_overlay_frames.bin"
 
           # Original HUD shell (symbol 716). Flash _sans resolves to Arial on
-          # Windows; bake only the static labels and a numeric atlas. Rust owns
+          # Windows; bake only the static labels and numeric atlases. Rust owns
           # the changing Batarang/Score/Lives values at runtime.
           python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/hud" --bitmaps "$work/bitmaps" --symbol 716 --scale 1.0 --all-frames
           python "$tools/bake_hud_assets.py" "$swf" "$work/reports/symbols.json" "$work/hud" "assets" --font "C:/Windows/Fonts/arial.ttf"
+
+          # Round 6: rasterize HUD vector/device-font content at 6x, then
+          # premultiplied-alpha Lanczos downsample to the final true 3x assets.
+          python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/hud-hq-super" --bitmaps "$work/bitmaps" --symbol 716 --scale 6.0 --all-frames
+          python "$tools/bake_hud_assets.py" "$swf" "$work/reports/symbols.json" "$work/hud-hq-super" "assets" --font "C:/Windows/Fonts/arial.ttf" --output-scale 3 --supersample 2 --downsample lanczos --suffix "_hq" --pack-dir "$work/hud-hq-final"
+          python "$tools/pack_sprite_frames.py" "$work/hud-hq-final" "assets/hud_shell_hq.bin" --format-version 2 --logical-pixel-scale 3.0
           python "$tools/bake_level_tiles.py" "$swf" "$work/reports/symbols.json" "$work/level1a-tiles" --bitmaps "$work/bitmaps" --symbol 152 --place-x 2467.65 --place-y 239.25 --exclude-symbol 149 --exclude-symbol 151 --exclude-symbol 153
           python "$tools/pack_level_tiles.py" "$work/level1a-tiles" "assets/level1a_tiles.bin"
 
@@ -524,6 +530,116 @@ jobs:
           print(json.dumps(report,indent=2))
           print("Round 5 asset contract PASS: same 279 timelines, proportional anchors, explicit true-3x pack.")
 
+      - name: Validate Round 6 true-3x HUD/text contract
+        shell: python
+        run: |
+          import json,struct
+          from pathlib import Path
+          from PIL import Image
+
+          legacy=json.loads(Path("assets/hud.json").read_text())
+          hq=json.loads(Path("assets/hud_hq.json").read_text())
+
+          assert legacy["variables"] == hq["variables"] == {
+              "702":"_root.batarangs","713":"_root.score","714":"_root.lives"
+          }
+          assert legacy["static_text"] == hq["static_text"] == {
+              "700":"BATARANG","710":"HEALTH","711":"SCORE","715":"lives x"
+          }
+          assert legacy["output_scale"] == 1.0
+          assert legacy["supersample"] == 1
+          assert legacy["downsample"] == "none"
+          assert hq["output_scale"] == 3.0
+          assert hq["supersample"] == 2
+          assert hq["temporary_scale"] == 6.0
+          assert hq["downsample"] == "lanczos"
+
+          data=Path("assets/hud_shell_hq.bin").read_bytes()
+          assert data[:8] == b"BCBFRM02"
+          assert struct.unpack_from("<I",data,8)[0] == 1
+          assert abs(struct.unpack_from("<f",data,12)[0]-3.0) < 1e-6
+
+          # Compare stage-space centers, not raw bitmap coordinates: the
+          # supersampled baker is free to use different transparent padding.
+          ROOT_X,ROOT_Y=159.0,-11.0
+          la=legacy["anchor_in_bitmap"]
+          ha=hq["anchor_in_bitmap"]
+          for cid in ("702","713","714"):
+              lb=legacy["fields"][cid]; hb=hq["fields"][cid]
+              lcx=ROOT_X-la[0]+(lb[0]+lb[2])/2.0
+              lcy=ROOT_Y-la[1]+(lb[1]+lb[3])/2.0
+              hcx=ROOT_X*3.0-ha[0]+(hb[0]+hb[2])/2.0
+              hcy=ROOT_Y*3.0-ha[1]+(hb[1]+hb[3])/2.0
+              dx=abs(hcx-lcx*3.0); dy=abs(hcy-lcy*3.0)
+              print("field",cid,"legacy center",(lcx,lcy),"HQ center",(hcx,hcy),"drift",(dx,dy))
+              assert dx <= 1.0 and dy <= 1.0, (cid,dx,dy)
+
+          with Image.open("assets/hud_base.png") as lo, Image.open("assets/hud_base_hq.png") as hi:
+              la=lo.convert("RGBA").getchannel("A")
+              ha=hi.convert("RGBA").getchannel("A")
+              lb=la.getbbox(); hb=ha.getbbox()
+              assert lb is not None and hb is not None
+              lw,lh=lb[2]-lb[0],lb[3]-lb[1]
+              hw,hh=hb[2]-hb[0],hb[3]-hb[1]
+              # Compare visible artwork instead of raw canvas dimensions:
+              # the native-bounds baker uses fixed pixel padding, so a 1x
+              # canvas and a 6x->3x canvas do not have exactly 3x outer size.
+              print("HUD visible bounds legacy",lb,(lw,lh),"HQ",hb,(hw,hh))
+              assert abs(hw-lw*3) <= 12, (lw,hw)
+              assert abs(hh-lh*3) <= 12, (lh,hh)
+              lpartial=sum(la.histogram()[1:255])
+              hpartial=sum(ha.histogram()[1:255])
+              assert lpartial > 10000
+              assert hpartial > lpartial*5, (lpartial,hpartial)
+
+          with Image.open("assets/hud_digits_small.png") as lo, Image.open("assets/hud_digits_small_hq.png") as hi:
+              assert hi.width > lo.width*2.5 and hi.height > lo.height*2.5
+          with Image.open("assets/hud_digits_large.png") as lo, Image.open("assets/hud_digits_large_hq.png") as hi:
+              assert hi.width > lo.width*2.5 and hi.height > lo.height*2.5
+
+          baker=Path("reverse-engineering/tools/bake_hud_assets.py").read_text()
+          assets=Path("src/assets.rs").read_text()
+          render=Path("src/render.rs").read_text()
+          for needle in (
+              '"--output-scale"','"--supersample"','"--downsample"',
+              'convert("RGBa").resize',
+          ):
+              assert needle in baker, needle
+          for needle in (
+              "hud_shell_hq: SpriteSet",
+              "hud_digits_small_hq: Image",
+              "hud_digits_large_hq: Image",
+              'decode_sprite_frames_expected(include_bytes!("../assets/hud_shell_hq.bin"),3.0',
+          ):
+              assert needle in assets, needle
+          for needle in (
+              "draw_number_centered_hq_1to1",
+              "blit_region_1to1",
+              "Round 6 HUD assets already live at final presentation resolution",
+          ):
+              assert needle in render, needle
+
+          hud_fn=render.split("fn draw_hud_hq",1)[1].split("fn draw_number_centered_hq_1to1",1)[0]
+          digits_fn=render.split("fn draw_number_centered_hq_1to1",1)[1].split("fn draw_root_timeline_hq",1)[0]
+          assert "blit_region_hq3" not in hud_fn
+          assert "blit_region_hq3" not in digits_fn
+
+          report={
+              "legacy_hud_png_bytes":Path("assets/hud_base.png").stat().st_size,
+              "hq_hud_png_bytes":Path("assets/hud_base_hq.png").stat().st_size,
+              "hq_shell_pack_bytes":Path("assets/hud_shell_hq.bin").stat().st_size,
+              "legacy_small_digits_png_bytes":Path("assets/hud_digits_small.png").stat().st_size,
+              "hq_small_digits_png_bytes":Path("assets/hud_digits_small_hq.png").stat().st_size,
+              "legacy_large_digits_png_bytes":Path("assets/hud_digits_large.png").stat().st_size,
+              "hq_large_digits_png_bytes":Path("assets/hud_digits_large_hq.png").stat().st_size,
+              "output_scale":3,
+              "supersample":2,
+              "downsample":"lanczos",
+          }
+          Path(".generated/hq-hud-asset-report.json").write_text(json.dumps(report,indent=2))
+          print(json.dumps(report,indent=2))
+          print("Round 6 HUD contract PASS: true 3x shell/text/digits, 1:1 runtime path, field centers locked.")
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-pc-windows-msvc
@@ -657,6 +773,35 @@ jobs:
           assert len(list(out.glob("*.png"))) == 7
           print("Built 7 Batman A/B comparison sheets:",wanted)
 
+      - name: Build Round 6 HUD A-B comparison sheets
+        shell: python
+        run: |
+          from pathlib import Path
+          from PIL import Image,ImageDraw
+
+          out=Path(".generated/hud-hq-comparisons")
+          out.mkdir(parents=True,exist_ok=True)
+
+          pairs=[
+              ("hud-shell","assets/hud_base.png","assets/hud_base_hq.png"),
+              ("small-digits","assets/hud_digits_small.png","assets/hud_digits_small_hq.png"),
+              ("large-digits","assets/hud_digits_large.png","assets/hud_digits_large_hq.png"),
+          ]
+          for name,legacy_path,hq_path in pairs:
+              with Image.open(legacy_path) as a0, Image.open(hq_path) as b0:
+                  a0=a0.convert("RGBA"); b=b0.convert("RGBA")
+                  a=a0.resize((a0.width*3,a0.height*3),Image.Resampling.BILINEAR)
+              panel_w=max(a.width,b.width); panel_h=max(a.height,b.height); top=28
+              sheet=Image.new("RGBA",(panel_w*2+12,panel_h+top),(28,28,28,255))
+              sheet.alpha_composite(a,((panel_w-a.width)//2,top+(panel_h-a.height)//2))
+              sheet.alpha_composite(b,(panel_w+12+(panel_w-b.width)//2,top+(panel_h-b.height)//2))
+              draw=ImageDraw.Draw(sheet)
+              draw.text((6,6),f"{name}: legacy 1x -> bilinear 3x",fill=(255,255,255,255))
+              draw.text((panel_w+18,6),f"{name}: true HUD reraster 3x",fill=(255,255,255,255))
+              sheet.save(out/f"{name}.png")
+          assert len(list(out.glob("*.png"))) == 3
+          print("Built 3 Round-6 HUD A/B comparison sheets.")
+
       - uses: actions/upload-artifact@v4
         with:
           name: Batman-CobbleBot-Level1A-Fidelity-Windows-x64
@@ -695,6 +840,18 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
+          name: Batman-CobbleBot-Level1A-Round6-HUD-Comparisons
+          path: .generated/hud-hq-comparisons/*.png
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Batman-CobbleBot-Level1A-Round6-HUD-Asset-Report
+          path: .generated/hq-hud-asset-report.json
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
           name: Batman-CobbleBot-Level1A-Renderer-Diagnostics
           path: |
             .generated/background-tree.json
@@ -703,4 +860,7 @@ jobs:
             assets/root_bg_134.png
             assets/level1a_bg.png
             assets/hud_base.png
+            assets/hud_base_hq.png
+            assets/hud_digits_small_hq.png
+            assets/hud_digits_large_hq.png
           if-no-files-found: error

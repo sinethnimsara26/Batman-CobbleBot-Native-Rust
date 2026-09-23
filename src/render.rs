@@ -260,17 +260,45 @@ fn draw_foreground_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
 fn draw_hud_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     const ROOT_X:f32=159.0;
     const ROOT_Y:f32=-11.0;
-    const ANCHOR_X:f32=0.48106384;
-    const ANCHOR_Y:f32=1.1601379;
-    let x=(ROOT_X-ANCHOR_X).round() as i32;
-    let y=(ROOT_Y-ANCHOR_Y).round() as i32;
-    blit_region_hq3(fb,&assets.hud_base,0,0,assets.hud_base.w,assets.hud_base.h,x,y);
-    draw_number_centered_hq(fb,&assets.hud_digits_small,x+53,y+68,game.batarangs.max(0));
-    draw_number_centered_hq(fb,&assets.hud_digits_large,x+228,y+47,game.score.max(0));
-    draw_number_centered_hq(fb,&assets.hud_digits_small,x+155,y+69,game.lives.max(0));
+    const LEGACY_ANCHOR_X:f32=0.48106384;
+    const LEGACY_ANCHOR_Y:f32=1.1601379;
+
+    debug_assert!((assets.hud_shell_hq.logical_pixel_scale-HQ_SCALE as f32).abs()<0.001);
+    debug_assert_eq!(assets.hud_shell_hq.len(),1);
+    let shell=&assets.hud_shell_hq[0];
+    let scale=assets.hud_shell_hq.logical_pixel_scale;
+    let shell_x=(ROOT_X*scale-shell.anchor_x).round() as i32;
+    let shell_y=(ROOT_Y*scale-shell.anchor_y).round() as i32;
+
+    // Round 6 HUD assets already live at final presentation resolution.
+    // Copy them 1:1; never enlarge the 1x HUD or digit atlases at runtime.
+    blit(
+        fb,&shell.image,
+        shell_x,shell_y,
+        shell.image.w as i32,shell.image.h as i32,false
+    );
+
+    // Preserve the exact legacy logical centers, then convert only at the
+    // presentation boundary. This makes field registration independently
+    // testable and keeps Game/HUD state in the original 600x400 coordinate system.
+    let legacy_x=(ROOT_X-LEGACY_ANCHOR_X).round() as i32;
+    let legacy_y=(ROOT_Y-LEGACY_ANCHOR_Y).round() as i32;
+    let s=HQ_SCALE as i32;
+    draw_number_centered_hq_1to1(
+        fb,&assets.hud_digits_small_hq,
+        (legacy_x+53)*s,(legacy_y+68)*s,game.batarangs.max(0)
+    );
+    draw_number_centered_hq_1to1(
+        fb,&assets.hud_digits_large_hq,
+        (legacy_x+228)*s,(legacy_y+47)*s,game.score.max(0)
+    );
+    draw_number_centered_hq_1to1(
+        fb,&assets.hud_digits_small_hq,
+        (legacy_x+155)*s,(legacy_y+69)*s,game.lives.max(0)
+    );
 }
 
-fn draw_number_centered_hq(fb:&mut RenderSurface,atlas:&Image,cx:i32,cy:i32,value:i32){
+fn draw_number_centered_hq_1to1(fb:&mut RenderSurface,atlas:&Image,cx:i32,cy:i32,value:i32){
     if atlas.w<10||atlas.h==0{return;}
     let cell_w=atlas.w/10;
     if cell_w==0{return;}
@@ -281,7 +309,9 @@ fn draw_number_centered_hq(fb:&mut RenderSurface,atlas:&Image,cx:i32,cy:i32,valu
     for byte in text.bytes(){
         if !(b'0'..=b'9').contains(&byte){continue;}
         let digit=(byte-b'0') as usize;
-        blit_region_hq3(fb,atlas,digit*cell_w,0,cell_w,atlas.h,x,y);
+        blit_region_1to1(
+            fb,atlas,digit*cell_w,0,cell_w,atlas.h,x,y
+        );
         x+=cell_w as i32;
     }
 }
@@ -403,6 +433,28 @@ fn draw_number_centered(fb:&mut RenderSurface,atlas:&Image,cx:i32,cy:i32,value:i
             x,y,cell_w as i32,atlas.h as i32
         );
         x+=cell_w as i32;
+    }
+}
+
+fn blit_region_1to1(
+    dst:&mut RenderSurface,src:&Image,
+    sx0:usize,sy0:usize,sw:usize,sh:usize,
+    x:i32,y:i32
+){
+    if sw==0||sh==0{return;}
+    for oy in 0..sh{
+        let dy=y+oy as i32;
+        if dy<0||dy>=dst.h as i32{continue;}
+        let sy=sy0+oy;
+        if sy>=src.h{continue;}
+        for ox in 0..sw{
+            let dx=x+ox as i32;
+            if dx<0||dx>=dst.w as i32{continue;}
+            let sx=sx0+ox;
+            if sx>=src.w{continue;}
+            let sp=src.pixels[sy*src.w+sx];
+            blend(&mut dst.pixels[dy as usize*dst.w+dx as usize],sp);
+        }
     }
 }
 
