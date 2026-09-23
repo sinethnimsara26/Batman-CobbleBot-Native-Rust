@@ -52,7 +52,7 @@ impl LazySpriteSet {
             let image=Rc::new(decode_png(&self.bytes[meta.offset..meta.offset+meta.len]));
             assert_eq!((image.w,image.h),(meta.w,meta.h));
             cache.push_back((index,Rc::clone(&image)));
-            if cache.len()>4{cache.pop_front();}
+            if cache.len()>2{cache.pop_front();}
             image
         };
         LazySpriteFrame{image,anchor_x:meta.anchor_x,anchor_y:meta.anchor_y}
