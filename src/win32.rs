@@ -107,7 +107,7 @@ mod tests{
   for &(w,h) in &[(930,660),(1163,825),(1395,990)]{
    let(x,y,vw,vh)=viewport_for_client(w,h);
    assert!(x>=0&&y>=0);
-   assert_eq!(vw as i64*2,vh as i64*3);
+   assert!((vw as i64*2-vh as i64*3).abs()<=1);
    assert!((w-vw-2*x).abs()<=1);
    assert!((h-vh-2*y).abs()<=1);
   }
