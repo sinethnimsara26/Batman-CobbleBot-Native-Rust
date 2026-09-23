@@ -439,7 +439,7 @@ jobs:
           targets: x86_64-pc-windows-msvc
 
       - name: Run sprite-pack compatibility tests
-        run: cargo test --release --target x86_64-pc-windows-msvc --lib
+        run: cargo test --release --target x86_64-pc-windows-msvc
 
       - name: Build Level 1A fidelity slice
         run: cargo build --release --target x86_64-pc-windows-msvc
