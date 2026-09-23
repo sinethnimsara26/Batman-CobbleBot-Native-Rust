@@ -278,7 +278,7 @@ mod tests{
     fn lazy_v2_reports_embedded_scale(){
         let set=decode_sprite_frames_lazy(include_bytes!("../assets/scale_probe.bin"));
         assert!((set.logical_pixel_scale-3.0).abs()<0.0001);
-        assert_eq!(set.len(),1);
+        assert_eq!(set.len(),5);
         let frame=set.frame(0);
         assert!(frame.image.w>0 && frame.image.h>0);
     }
