@@ -556,7 +556,7 @@ jobs:
               assert needle in assets, needle
           for needle in (
               "draw_batman_hq",
-              "render_world_base_legacy(base,game,assets)",
+              "upscale_opaque_base(base,target)",
               "draw_foreground_hq(target,game,assets)",
               "True HQ frames are already at final presentation resolution",
           ):
@@ -940,7 +940,7 @@ jobs:
           ):
               assert needle in assets, needle
           for needle in (
-              "render_world_base_legacy(base,game,assets)",
+              "upscale_opaque_base(base,target)",
               "draw_world_objects_hq(target,game,assets)",
               "fn draw_world_objects_hq",
               "scenery at 1x -> promote -> true 3x pickups/Batarangs",
