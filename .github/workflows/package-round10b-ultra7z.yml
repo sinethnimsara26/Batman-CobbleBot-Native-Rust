@@ -54,7 +54,11 @@ jobs:
           $seven = "C:\Program Files\7-Zip\7z.exe"
           if (-not (Test-Path $seven)) { $seven = (Get-Command 7z.exe -ErrorAction Stop).Source }
           New-Item -ItemType Directory -Force -Path verify | Out-Null
-          & $seven x .\Batman-CobbleBot-Level1A-Round10B-Ultra.7z -o.\verify -y
+          & $seven t .\Batman-CobbleBot-Level1A-Round10B-Ultra.7z
+          if ($LASTEXITCODE -ne 0) { throw "7z integrity test failed" }
+          $verifyPath = (Resolve-Path .\verify).Path
+          $outSwitch = "-o" + $verifyPath
+          & $seven x .\Batman-CobbleBot-Level1A-Round10B-Ultra.7z $outSwitch -y
           if ($LASTEXITCODE -ne 0) { throw "7z verification extraction failed" }
           $original = (Get-FileHash .\batman_cobblebot_native.exe -Algorithm SHA256).Hash
           $roundtrip = (Get-FileHash .\verify\batman_cobblebot_native.exe -Algorithm SHA256).Hash
