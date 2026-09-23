@@ -1030,6 +1030,8 @@ jobs:
                   "known_sprite_upper_bound_before_tiles":known,
                   "known_plus_legacy_plus_hq4":known+legacy_tile_cache+hq_full_tile_4_cache,
                   "known_plus_legacy_plus_hq12":known+legacy_tile_cache+hq_full_tile_12_cache,
+                  "hq4_headroom_to_500_mib":500*1024*1024-(known+legacy_tile_cache+hq_full_tile_4_cache),
+                  "hq12_headroom_to_500_mib":500*1024*1024-(known+legacy_tile_cache+hq_full_tile_12_cache),
               },
               "decision_gate":"inspect symbol 144-147 probes and preserve internal display depth; do not blindly adopt full 3x tiles",
           }
@@ -1037,9 +1039,11 @@ jobs:
           assert len(placements)==38, len(placements)
           assert counts=={"144":6,"145":6,"146":14,"147":12}, counts
           assert report["hypothetical_full_3x_tiles"]["known_plus_legacy_plus_hq4"] < 500*1024*1024
-          assert report["hypothetical_full_3x_tiles"]["known_plus_legacy_plus_hq12"] > 500*1024*1024
+          assert report["hypothetical_full_3x_tiles"]["known_plus_legacy_plus_hq12"] < 500*1024*1024
+          assert report["hypothetical_full_3x_tiles"]["hq4_headroom_to_500_mib"] > 90*1024*1024
+          assert report["hypothetical_full_3x_tiles"]["hq12_headroom_to_500_mib"] < 40*1024*1024
           print(json.dumps(report,indent=2))
-          print("Round 10 evaluation PASS: four visible scenery symbols isolated; full 12-tile HQ cache rejected by memory gate.")
+          print("Round 10 evaluation PASS: four visible scenery symbols isolated; 4-tile HQ cache has healthy headroom while 12-tile HQ cache is too close to the 500 MiB stop condition for casual adoption.")
 
       - name: Validate Round 9 per-monitor DPI-awareness contract
         shell: python
