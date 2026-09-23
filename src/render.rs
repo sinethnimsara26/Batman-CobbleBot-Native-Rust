@@ -203,8 +203,13 @@ fn draw_world_objects_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
         let pf=&assets.pickup_frames_hq[(game.ticks as usize)%assets.pickup_frames_hq.len()];
         for (i,&(wx,wy)) in crate::game::PICKUPS.iter().enumerate() {
             if game.pickups[i] { continue; }
-            let px=((wx+game.camera_x)*scale-pf.anchor_x).round() as i32;
-            let py=((wy+game.camera_y)*scale-pf.anchor_y).round() as i32;
+            // Lock the stage origin to the exact same logical integer pixel
+            // used by the legacy renderer, then convert that origin to HQ.
+            // This avoids inventing sub-pixel world placement in Round 8.
+            let logical_x=(wx+game.camera_x).round() as i32;
+            let logical_y=(wy+game.camera_y).round() as i32;
+            let px=logical_x*HQ_SCALE as i32-pf.anchor_x.round() as i32;
+            let py=logical_y*HQ_SCALE as i32-pf.anchor_y.round() as i32;
             blit(fb,&pf.image,px,py,pf.image.w as i32,pf.image.h as i32,false);
         }
     }
@@ -212,8 +217,10 @@ fn draw_world_objects_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     if !assets.batarang_frames_hq.is_empty() {
         let bf=&assets.batarang_frames_hq[(game.ticks as usize)%assets.batarang_frames_hq.len()];
         for shot in &game.shots {
-            let px=((shot.x+game.camera_x)*scale-bf.anchor_x).round() as i32;
-            let py=((shot.y+game.camera_y)*scale-bf.anchor_y).round() as i32;
+            let logical_x=(shot.x+game.camera_x).round() as i32;
+            let logical_y=(shot.y+game.camera_y).round() as i32;
+            let px=logical_x*HQ_SCALE as i32-bf.anchor_x.round() as i32;
+            let py=logical_y*HQ_SCALE as i32-bf.anchor_y.round() as i32;
             blit(fb,&bf.image,px,py,bf.image.w as i32,bf.image.h as i32,shot.dir<0);
         }
     }
