@@ -676,7 +676,8 @@ jobs:
           ]
 
           report={"timelines":{},"lazy_cache_frames_per_timeline":2}
-          lazy_cache_upper=0
+          legacy_cache_upper=0
+          hq_cache_upper=0
           for legacy_name,hq_name,pack_name,symbol,count in specs:
               legacy=json.loads(Path(f".generated/{legacy_name}/manifest.json").read_text())
               hq=json.loads(Path(f".generated/{hq_name}/manifest.json").read_text())
@@ -707,17 +708,23 @@ jobs:
               assert struct.unpack_from("<I",raw,8)[0] == count
               assert abs(struct.unpack_from("<f",raw,12)[0]-3.0) < 1e-6
 
-              frame_bytes=hq["size"][0]*hq["size"][1]*4
-              cache_bytes=frame_bytes*min(2,count)
-              lazy_cache_upper+=cache_bytes
+              legacy_frame_bytes=legacy["size"][0]*legacy["size"][1]*4
+              hq_frame_bytes=hq["size"][0]*hq["size"][1]*4
+              legacy_cache_bytes=legacy_frame_bytes*min(2,count)
+              hq_cache_bytes=hq_frame_bytes*min(2,count)
+              legacy_cache_upper+=legacy_cache_bytes
+              hq_cache_upper+=hq_cache_bytes
               report["timelines"][hq_name]={
                   "symbol":symbol,
                   "frames":count,
                   "legacy_canvas":legacy["size"],
                   "hq_canvas":hq["size"],
-                  "pack_bytes":data.stat().st_size,
-                  "one_decoded_frame_rgba_bytes":frame_bytes,
-                  "two_frame_cache_upper_bound":cache_bytes,
+                  "legacy_pack_bytes":Path("assets",pack_name.replace("_hq.bin",".bin")).stat().st_size,
+                  "hq_pack_bytes":data.stat().st_size,
+                  "legacy_one_decoded_frame_rgba_bytes":legacy_frame_bytes,
+                  "hq_one_decoded_frame_rgba_bytes":hq_frame_bytes,
+                  "legacy_two_frame_cache_upper_bound":legacy_cache_bytes,
+                  "hq_two_frame_cache_upper_bound":hq_cache_bytes,
                   "strategy":strategy,
               }
 
@@ -745,6 +752,10 @@ jobs:
               "pub struct LazySpriteSet",
               "decode_sprite_frames_lazy_expected",
               "if cache.len()>2{cache.pop_front();}",
+              "level_title_frames: LazySpriteSet",
+              "fadein_frames: LazySpriteSet",
+              "fadeout_frames: LazySpriteSet",
+              "tutorial_overlay_frames: LazySpriteSet",
               "level_title_frames_hq: LazySpriteSet",
               "tutorial_overlay_frames_hq: LazySpriteSet",
           ):
@@ -767,13 +778,16 @@ jobs:
           for needle in ("--clip-stage-width","--clip-stage-height","stage_clip"):
               assert needle in baker, needle
 
-          report["lazy_cache_upper_bound_rgba_bytes"]=lazy_cache_upper
-          # Add the eagerly decoded Round-5 player packs as the dominant known
-          # resident sprite cost; lazy foreground overlays should remain modest.
+          report["legacy_overlay_lazy_cache_upper_bound_rgba_bytes"]=legacy_cache_upper
+          report["hq_overlay_lazy_cache_upper_bound_rgba_bytes"]=hq_cache_upper
+          report["all_overlay_lazy_cache_upper_bound_rgba_bytes"]=legacy_cache_upper+hq_cache_upper
+          # Include both legacy+HQ Batman eager packs and both legacy+HQ overlay
+          # cache upper bounds. This is deliberately conservative: a normal HQ
+          # process never fills every legacy and HQ timeline cache at once.
           batman=json.loads(Path(".generated/hq-batman-asset-report.json").read_text())
           report["batman_eager_rgba_bytes"]=batman["combined_runtime_decoded_rgba_bytes"]
           report["combined_known_sprite_rgba_upper_bound"]=(
-              lazy_cache_upper+batman["combined_runtime_decoded_rgba_bytes"]
+              legacy_cache_upper+hq_cache_upper+batman["combined_runtime_decoded_rgba_bytes"]
           )
           assert report["combined_known_sprite_rgba_upper_bound"] < 500*1024*1024, report
           Path(".generated/hq-overlay-asset-report.json").write_text(json.dumps(report,indent=2))
