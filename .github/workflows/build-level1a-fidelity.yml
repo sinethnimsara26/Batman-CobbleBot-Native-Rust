@@ -2,7 +2,7 @@ name: build-level1a-fidelity
 
 on:
   push:
-    branches: [main, level1a-cxform-fidelity, hq-rendering-phase1-halftone, hq-rendering-phase2-surfaces, hq-rendering-phase3-3x-surface, hq-rendering-phase4-pack-v2, hq-rendering-phase5-batman-3x, hq-rendering-phase6-hud-3x, hq-rendering-phase7-overlays-3x, hq-rendering-phase8-world-objects-3x]
+    branches: [main, level1a-cxform-fidelity, hq-rendering-phase1-halftone, hq-rendering-phase2-surfaces, hq-rendering-phase3-3x-surface, hq-rendering-phase4-pack-v2, hq-rendering-phase5-batman-3x, hq-rendering-phase6-hud-3x, hq-rendering-phase7-overlays-3x, hq-rendering-phase8-world-objects-3x, hq-rendering-phase9-dpi-awareness]
   workflow_dispatch:
 
 concurrency:
@@ -934,6 +934,72 @@ jobs:
           print(json.dumps(report,indent=2))
           print("Round 8 contract PASS: pickup 695 and projectile 694 are true-3x, depth-correct, and 1:1 at runtime.")
 
+      - name: Validate Round 9 per-monitor DPI-awareness contract
+        shell: python
+        run: |
+          import json
+          from pathlib import Path
+
+          src=Path("src/win32.rs").read_text()
+          required=[
+              "DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2:isize=-4",
+              'GetProcAddress(user32,b"SetProcessDpiAwarenessContext\\0".as_ptr())',
+              "SetProcessDPIAware()!=0",
+              "fn enable_best_dpi_awareness()->bool",
+              "const WM_DPICHANGED:u32=0x02E0",
+              "SetWindowPos(hwnd,null_mut(),r.left,r.top,width,height,SWP_NOZORDER|SWP_NOACTIVATE)",
+              "fn viewport_for_client(cw:i32,ch:i32)",
+              "dpi_scaled_3_by_2_clients_fill_exactly",
+              "dpi_scaled_nonmatching_clients_keep_centered_3_by_2_viewport",
+              "let _dpi_aware=enable_best_dpi_awareness()",
+          ]
+          missing=[x for x in required if x not in src]
+          if missing:
+              raise SystemExit(f"Round 9 DPI source contract missing: {missing}")
+
+          # Model the exact integer viewport helper for representative physical
+          # client sizes at Windows 100%, 125% and 150% scaling. Per-monitor-V2
+          # means GetClientRect is already in physical pixels, so no extra DPI
+          # multiplier is allowed in renderer/game coordinates.
+          def viewport(cw,ch):
+              cw=max(1,cw); ch=max(1,ch)
+              if cw*400 <= ch*600:
+                  dw=cw; dh=cw*400//600
+              else:
+                  dw=ch*600//400; dh=ch
+              return ((cw-dw)//2,(ch-dh)//2,dw,dh)
+
+          cases=[
+              {"scale_percent":100,"client":[900,600],"expected":[0,0,900,600]},
+              {"scale_percent":125,"client":[1125,750],"expected":[0,0,1125,750]},
+              {"scale_percent":150,"client":[1350,900],"expected":[0,0,1350,900]},
+              {"scale_percent":100,"client":[930,660],"expected":[0,20,930,620]},
+              {"scale_percent":125,"client":[1163,825],"expected":[0,24,1163,775]},
+              {"scale_percent":150,"client":[1395,990],"expected":[0,30,1395,930]},
+          ]
+          for case in cases:
+              actual=list(viewport(*case["client"]))
+              assert actual==case["expected"],(case,actual)
+              x,y,w,h=actual
+              assert w*2==h*3
+              assert x>=0 and y>=0
+              case["actual"]=actual
+
+          report={
+              "preferred_mode":"PER_MONITOR_AWARE_V2",
+              "preferred_context":-4,
+              "fallback":"SetProcessDPIAware",
+              "api_resolution":"dynamic GetProcAddress from user32.dll",
+              "monitor_move":"WM_DPICHANGED -> SetWindowPos(suggested RECT)",
+              "framebuffer":[1800,1200],
+              "logical_stage":[600,400],
+              "simulated_viewports":cases,
+              "manual_note":"CI validates source contract and physical-pixel viewport math; real multi-monitor DPI transition remains a live Windows presentation check.",
+          }
+          Path(".generated/dpi-awareness-report.json").write_text(json.dumps(report,indent=2))
+          print(json.dumps(report,indent=2))
+          print("Round 9 DPI contract PASS: Per-Monitor-V2 preferred, legacy fallback retained, 3:2 viewport stable at 100/125/150%.")
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-pc-windows-msvc
@@ -1247,6 +1313,12 @@ jobs:
         with:
           name: Batman-CobbleBot-Level1A-Round8-World-Object-Asset-Report
           path: .generated/hq-world-object-asset-report.json
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Batman-CobbleBot-Level1A-Round9-DPI-Awareness-Report
+          path: .generated/dpi-awareness-report.json
           if-no-files-found: error
 
       - uses: actions/upload-artifact@v4
