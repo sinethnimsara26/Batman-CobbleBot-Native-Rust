@@ -721,12 +721,22 @@ jobs:
                   "strategy":strategy,
               }
 
-          # Preserve the known title alpha/CXFORM fade after the HQ
-          # supersample/downsample path.
+          # The Flash CXFORM must be exact BEFORE the Lanczos filter.
+          # Lanczos has negative lobes, so post-filter edge alpha can ring
+          # above the source maximum (for example 204 -> 236) without changing
+          # the intended timeline opacity. Validate exact source semantics,
+          # then validate the filtered frames retain the fade ordering.
+          final_title_alpha=[]
           for frame,expected in [(44,204),(45,153),(46,102),(47,51),(50,51)]:
+              with Image.open(Path(".generated/level-title-hq-super")/f"{frame:03}.png") as im:
+                  source_max=im.convert("RGBA").getchannel("A").getextrema()[1]
+                  assert source_max == expected, (frame,source_max,expected)
               with Image.open(Path(".generated/level-title-hq")/f"{frame:03}.png") as im:
-                  maximum=im.convert("RGBA").getchannel("A").getextrema()[1]
-                  assert maximum == expected, (frame,maximum,expected)
+                  final_max=im.convert("RGBA").getchannel("A").getextrema()[1]
+                  final_title_alpha.append((frame,final_max))
+          assert final_title_alpha[0][1] > final_title_alpha[1][1] > final_title_alpha[2][1] > final_title_alpha[3][1], final_title_alpha
+          assert final_title_alpha[3][1] == final_title_alpha[4][1], final_title_alpha
+          print("Round 7 title alpha: exact prefilter CXFORM + filtered fade order",final_title_alpha)
 
           assets=Path("src/assets.rs").read_text()
           render=Path("src/render.rs").read_text()
