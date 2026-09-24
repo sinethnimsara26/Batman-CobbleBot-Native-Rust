@@ -1723,6 +1723,54 @@ jobs:
           assert len(list(out.glob("*.png"))) == min(3,len(scored))
           print("Built Round-10 scenery detail A/B sheets for", [x[1] for x in chosen])
 
+      - name: Build Round 11 backdrop A-B comparison sheets
+        shell: python
+        run: |
+          from pathlib import Path
+          from PIL import Image,ImageDraw
+
+          out=Path(".generated/backdrop-hq-comparisons")
+          out.mkdir(parents=True,exist_ok=True)
+
+          # Sky: compare the exact legacy 1x image promoted to 3x against the
+          # source-rerasterized 6x -> Lanczos 3x result.
+          with Image.open("assets/root_bg_131.png") as lo0, Image.open(".generated/root-sky-hq/000.png") as hi0:
+              lo=lo0.convert("RGBA")
+              hi=hi0.convert("RGBA")
+              legacy=lo.resize((lo.width*3,lo.height*3),Image.Resampling.BILINEAR)
+          pw=max(legacy.width,hi.width); ph=max(legacy.height,hi.height); top=30
+          sheet=Image.new("RGBA",(pw*2+12,ph+top),(28,28,28,255))
+          sheet.alpha_composite(legacy,((pw-legacy.width)//2,top+(ph-legacy.height)//2))
+          sheet.alpha_composite(hi,(pw+12+(pw-hi.width)//2,top+(ph-hi.height)//2))
+          d=ImageDraw.Draw(sheet)
+          d.text((6,7),"sky 131: current 1x -> bilinear 3x",fill=(255,255,255,255))
+          d.text((pw+18,7),"sky 131: SWF 6x -> Lanczos 3x",fill=(255,255,255,255))
+          sheet.save(out/"sky-131.png")
+
+          # Moon: reproduce the current legacy sequence first: symbol134 1x,
+          # nearest-neighbor placement scale 0.769348..., then 3x bilinear
+          # promotion. Compare against the placement-scaled true-HQ bake.
+          placement=0.76934814453125
+          with Image.open("assets/root_bg_134.png") as lo0, Image.open(".generated/root-moon-hq/000.png") as hi0:
+              lo=lo0.convert("RGBA")
+              hi=hi0.convert("RGBA")
+              logical=lo.resize((
+                  max(1,round(lo.width*placement)),
+                  max(1,round(lo.height*placement))
+              ),Image.Resampling.NEAREST)
+              legacy=logical.resize((logical.width*3,logical.height*3),Image.Resampling.BILINEAR)
+          pw=max(legacy.width,hi.width); ph=max(legacy.height,hi.height); top=30
+          sheet=Image.new("RGBA",(pw*2+12,ph+top),(28,28,28,255))
+          sheet.alpha_composite(legacy,((pw-legacy.width)//2,top+(ph-legacy.height)//2))
+          sheet.alpha_composite(hi,(pw+12+(pw-hi.width)//2,top+(ph-hi.height)//2))
+          d=ImageDraw.Draw(sheet)
+          d.text((6,7),"moon 134: current 1x placement -> bilinear 3x",fill=(255,255,255,255))
+          d.text((pw+18,7),"moon 134: placement-aware SWF 6x -> Lanczos 3x",fill=(255,255,255,255))
+          sheet.save(out/"moon-134.png")
+
+          assert len(list(out.glob("*.png"))) == 2
+          print("Built 2 Round-11 backdrop A/B sheets.")
+
       - uses: actions/upload-artifact@v4
         with:
           name: Batman-CobbleBot-Level1A-Fidelity-Windows-x64
@@ -1823,6 +1871,18 @@ jobs:
         with:
           name: Batman-CobbleBot-Level1A-Round10-Scenery-Evaluation-Report
           path: .generated/scenery-evaluation-report.json
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Batman-CobbleBot-Level1A-Round11-Backdrop-Comparisons
+          path: .generated/backdrop-hq-comparisons/*.png
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Batman-CobbleBot-Level1A-Round11-Backdrop-Asset-Report
+          path: .generated/hq-backdrop-asset-report.json
           if-no-files-found: error
 
       - uses: actions/upload-artifact@v4
