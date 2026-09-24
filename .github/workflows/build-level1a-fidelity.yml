@@ -2,7 +2,7 @@ name: build-level1a-fidelity
 
 on:
   push:
-    branches: [main, level1a-cxform-fidelity, hq-rendering-phase1-halftone, hq-rendering-phase2-surfaces, hq-rendering-phase3-3x-surface, hq-rendering-phase4-pack-v2, hq-rendering-phase5-batman-3x, hq-rendering-phase6-hud-3x, hq-rendering-phase7-overlays-3x, hq-rendering-phase8-world-objects-3x, hq-rendering-phase9-dpi-awareness, hq-rendering-phase10-scenery-eval]
+    branches: [main, level1a-cxform-fidelity, hq-rendering-phase1-halftone, hq-rendering-phase2-surfaces, hq-rendering-phase3-3x-surface, hq-rendering-phase4-pack-v2, hq-rendering-phase5-batman-3x, hq-rendering-phase6-hud-3x, hq-rendering-phase7-overlays-3x, hq-rendering-phase8-world-objects-3x, hq-rendering-phase9-dpi-awareness, hq-rendering-phase10-scenery-eval, hq-rendering-phase11-backdrop-3x]
   workflow_dispatch:
 
 concurrency:
@@ -62,7 +62,7 @@ jobs:
           $tools = "reverse-engineering/tools"
           $work = ".generated"
           $swf = "$work/cobblebot.swf"
-          New-Item -ItemType Directory -Force -Path "$work/reports","$work/bitmaps","$work/sounds","$work/batman-frames","$work/batman-frames-hq","$work/pickup-frames","$work/pickup-frames-hq-super","$work/pickup-frames-hq","$work/batarang-frames","$work/batarang-frames-hq-super","$work/batarang-frames-hq","$work/level-title","$work/level-title-hq-super","$work/level-title-hq","$work/fadein","$work/fadein-hq-super","$work/fadein-hq","$work/fadeout","$work/fadeout-hq-super","$work/fadeout-hq","$work/tutorial-overlay","$work/tutorial-overlay-hq-super","$work/tutorial-overlay-hq","$work/hud","$work/hud-hq-super","$work/hud-hq-final","$work/level1a-tiles","$work/level1a-tiles-hq-base","$work/level1a-detail-tiles-1x","$work/level1a-detail-tiles-hq","$work/scenery-probes","assets","reverse-engineering/generated/collision_masks" | Out-Null
+          New-Item -ItemType Directory -Force -Path "$work/reports","$work/bitmaps","$work/sounds","$work/batman-frames","$work/batman-frames-hq","$work/pickup-frames","$work/pickup-frames-hq-super","$work/pickup-frames-hq","$work/batarang-frames","$work/batarang-frames-hq-super","$work/batarang-frames-hq","$work/level-title","$work/level-title-hq-super","$work/level-title-hq","$work/fadein","$work/fadein-hq-super","$work/fadein-hq","$work/fadeout","$work/fadeout-hq-super","$work/fadeout-hq","$work/tutorial-overlay","$work/tutorial-overlay-hq-super","$work/tutorial-overlay-hq","$work/hud","$work/hud-hq-super","$work/hud-hq-final","$work/level1a-tiles","$work/level1a-tiles-hq-base","$work/level1a-detail-tiles-1x","$work/level1a-detail-tiles-hq","$work/scenery-probes","$work/root-sky-hq-super","$work/root-sky-hq","$work/root-moon-hq-super","$work/root-moon-hq","assets","reverse-engineering/generated/collision_masks" | Out-Null
 
           python "$tools/swf_re.py" "$swf" "$work/reports"
           @'
@@ -153,6 +153,20 @@ jobs:
           # scaled 0.769348. Preserve both; omitting them leaves a black sky.
           python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "assets/root_bg_131.png" --bitmaps "$work/bitmaps" --symbol 131 --frame 0 --scale 1.0 --native-bounds
           python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "assets/root_bg_134.png" --bitmaps "$work/bitmaps" --symbol 134 --frame 0 --scale 1.0 --native-bounds
+
+          # Round 11: rebuild the root sky at temporary 6x -> final 3x.
+          # Symbol 131 is a static definition, so bake_sprite_frames treats it
+          # as a one-frame timeline for the normal BCBFRM02 pack path.
+          python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/root-sky-hq-super" --bitmaps "$work/bitmaps" --symbol 131 --scale 6.0 --all-frames
+          python "$tools/finalize_hq_timeline.py" "$work/root-sky-hq-super" "$work/root-sky-hq" --output-scale 3.0 --supersample 2
+          python "$tools/pack_sprite_frames.py" "$work/root-sky-hq" "assets/root_bg_131_hq.bin" --format-version 2 --logical-pixel-scale 3.0
+
+          # Root moon 134 is placed at scale 0.76934814453125. Bake that
+          # placement scale into the asset itself, exactly like Batman/pickups:
+          # temporary effective scale = placement*6, final = placement*3.
+          python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/root-moon-hq-super" --bitmaps "$work/bitmaps" --symbol 134 --scale 4.6160888671875 --all-frames
+          python "$tools/finalize_hq_timeline.py" "$work/root-moon-hq-super" "$work/root-moon-hq" --output-scale 2.30804443359375 --supersample 2
+          python "$tools/pack_sprite_frames.py" "$work/root-moon-hq" "assets/root_bg_134_hq.bin" --format-version 2 --logical-pixel-scale 3.0
 
           python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "assets/level1a_bg.png" --bitmaps "$work/bitmaps" --symbol 142 --frame 0 --scale 1.0 --native-bounds
 
