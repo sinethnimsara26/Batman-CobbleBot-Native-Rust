@@ -968,7 +968,9 @@ def main():
     if args.all_frames:
         symbol = symbols.get(str(args.symbol))
         if symbol is None:
-            raise ValueError(f"symbol {args.symbol} is not a movie clip in symbols.json")
+            if args.symbol not in shapes:
+                raise ValueError(f"symbol {args.symbol} is not present as a movie clip or static shape")
+            symbol = {}
         # Static DefineShape-style symbols do not have a movie-clip
         # frame count in symbols.json, but they are still valid one-frame
         # timelines for packing/HQ finalization.
