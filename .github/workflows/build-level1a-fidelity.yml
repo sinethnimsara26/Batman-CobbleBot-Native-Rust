@@ -1207,13 +1207,14 @@ jobs:
               "cache_limit",
           ):
               assert needle in assets, needle
+          # Round 11 evolves the lower-backdrop composition, but the
+          # Round-10 selected true-3x scenery layer itself must remain intact.
           for needle in (
-              "render_backdrop_legacy(base,game,assets)",
-              "draw_tiles(base,game,&assets.level1a_tiles_hq_base)",
+              "level1a_tiles_hq_base",
               "draw_tiles_hq(target,game,&assets.level1a_detail_tiles_hq)",
               "fn draw_tiles_hq",
           ):
-              assert needle in render, needle
+              assert needle in render or needle in assets, needle
           for needle in ("MAGIC_V2 = b\"BCLVT002\"","--crop-transparent","<iiiiI"):
               assert needle in packer, needle
           for needle in ("--output-scale","--supersample","--downsample","margin = 2"):
@@ -1241,6 +1242,125 @@ jobs:
           Path(".generated/hq-scenery-asset-report.json").write_text(json.dumps(report,indent=2))
           print(json.dumps(report,indent=2))
           print("Round 10 scenery contract PASS: exact 1x split proof + true-3x depth-preserved scenery layer 144-147.")
+
+      - name: Validate Round 11 true-3x root backdrop
+        shell: python
+        run: |
+          import json,math,struct
+          from pathlib import Path
+          from PIL import Image
+
+          sky=json.loads(Path(".generated/root-sky-hq/manifest.json").read_text())
+          moon=json.loads(Path(".generated/root-moon-hq/manifest.json").read_text())
+
+          assert sky["symbol"] == 131 and sky["frame_count"] == 1
+          assert moon["symbol"] == 134 and moon["frame_count"] == 1
+          assert sky["unsupported_fills"] == [] and sky["missing_bitmap_ids"] == []
+          assert moon["unsupported_fills"] == [] and moon["missing_bitmap_ids"] == []
+          assert all(math.isclose(v,3.0,abs_tol=1e-6) for v in sky["scale"])
+          assert all(math.isclose(v,2.30804443359375,abs_tol=1e-6) for v in moon["scale"])
+
+          sf=sky["hq_finalize"]
+          mf=moon["hq_finalize"]
+          assert math.isclose(sf["source_scale"],6.0,abs_tol=1e-6)
+          assert math.isclose(sf["output_scale"],3.0,abs_tol=1e-6)
+          assert sf["supersample"] == 2 and sf["downsample"] == "lanczos"
+          assert sf["alpha_filtering"] == "premultiplied"
+          assert math.isclose(mf["source_scale"],4.6160888671875,abs_tol=1e-6)
+          assert math.isclose(mf["output_scale"],2.30804443359375,abs_tol=1e-6)
+          assert mf["supersample"] == 2 and mf["downsample"] == "lanczos"
+          assert mf["alpha_filtering"] == "premultiplied"
+
+          for pack in ("root_bg_131_hq","root_bg_134_hq"):
+              raw=Path("assets",pack+".bin").read_bytes()
+              assert raw[:8] == b"BCBFRM02",pack
+              assert struct.unpack_from("<I",raw,8)[0] == 1
+              assert abs(struct.unpack_from("<f",raw,12)[0]-3.0) < 1e-6
+              side=json.loads(Path("assets",pack+".json").read_text())
+              assert side["format"] == "BCBFRM02"
+              assert side["frame_count"] == 1
+              assert abs(side["logical_pixel_scale"]-3.0) < 1e-6
+
+          assets=Path("src/assets.rs").read_text()
+          render=Path("src/render.rs").read_text()
+          baker=Path("reverse-engineering/tools/bake_sprite_frames.py").read_text()
+
+          for needle in (
+              "root_sky_hq: SpriteSet",
+              "root_moon_hq: SpriteSet",
+              'root_bg_131_hq.bin"),3.0,"root_sky_hq"',
+              'root_bg_134_hq.bin"),3.0,"root_moon_hq"',
+          ):
+              assert needle in assets,needle
+
+          for needle in (
+              "draw_root_backdrop_hq(target,assets)",
+              "base.fill(0x00000000)",
+              "draw_city_background_alpha(base,game,assets)",
+              "draw_tiles_alpha(base,game,&assets.level1a_tiles_hq_base)",
+              "upscale_alpha_layer(base,target)",
+              "fn blend_rgba",
+              "fn blit_alpha",
+          ):
+              assert needle in render,needle
+
+          hq_block=render.split("target.fill(0xff000000);",1)[1].split("draw_world_objects_hq",1)[0]
+          ordered=[
+              "draw_root_backdrop_hq(target,assets)",
+              "draw_city_background_alpha(base,game,assets)",
+              "draw_tiles_alpha(base,game,&assets.level1a_tiles_hq_base)",
+              "upscale_alpha_layer(base,target)",
+              "draw_tiles_hq(target,game,&assets.level1a_detail_tiles_hq)",
+          ]
+          positions=[hq_block.index(x) for x in ordered]
+          assert positions == sorted(positions),positions
+
+          # Legacy path stays separate and unchanged in semantics.
+          legacy=render.split("fn render_backdrop_legacy",1)[1].split("fn draw_root_backdrop_hq",1)[0]
+          assert "draw_root_backdrop_legacy(fb,assets)" in legacy
+          assert "draw_city_background_legacy(fb,game,assets)" in legacy
+
+          assert 'frame_count = max(1, int(symbol.get("frames", 0) or 0))' in baker
+
+          def rgba_bytes(path):
+              with Image.open(path) as im:
+                  return im.width*im.height*4
+
+          legacy_backdrop=(
+              rgba_bytes("assets/root_bg_131.png")+
+              rgba_bytes("assets/root_bg_134.png")+
+              rgba_bytes("assets/level1a_bg.png")
+          )
+          sky_side=json.loads(Path("assets/root_bg_131_hq.json").read_text())
+          moon_side=json.loads(Path("assets/root_bg_134_hq.json").read_text())
+          hq_backdrop=sum(
+              rec["size"][0]*rec["size"][1]*4
+              for side in (sky_side,moon_side)
+              for rec in side["frames"]
+          )
+          previous=json.loads(Path(".generated/hq-scenery-asset-report.json").read_text())
+          previous_bound=previous["combined_known_decoded_upper_bound"]
+          combined=previous_bound+legacy_backdrop+hq_backdrop
+          limit=500*1024*1024
+          assert combined < limit,(combined,limit)
+
+          report={
+              "sky_symbol":131,
+              "moon_symbol":134,
+              "root_depth_order":["sky-131","moon-134","legacy-city-142","retained-scenery-base","true3x-scenery-144-147"],
+              "sky_strategy":"6x SWF -> premultiplied Lanczos -> 3x",
+              "moon_placement_scale":0.76934814453125,
+              "moon_strategy":"effective 4.6160888671875x SWF -> premultiplied Lanczos -> effective 2.30804443359375x (3x stage)",
+              "legacy_backdrop_eager_rgba_bytes_added_conservatively":legacy_backdrop,
+              "hq_sky_moon_decoded_rgba_bytes":hq_backdrop,
+              "previous_round10_upper_bound":previous_bound,
+              "combined_known_decoded_upper_bound":combined,
+              "headroom_to_500_mib":limit-combined,
+              "city_panorama":"retained at legacy source resolution; alpha-promoted above true-3x root sky/moon",
+          }
+          Path(".generated/hq-backdrop-asset-report.json").write_text(json.dumps(report,indent=2))
+          print(json.dumps(report,indent=2))
+          print("Round 11 backdrop contract PASS: true-3x sky/moon below alpha-promoted legacy city/scenery.")
 
       - name: Validate Round 9 per-monitor DPI-awareness contract
         shell: python
