@@ -66,7 +66,6 @@ pub fn render_with_config(
                 // The 600x400 scratch surface becomes a transparent midground
                 // only in HQ play. Legacy rendering still uses the historical
                 // opaque composition path unchanged.
-                target.fill(0xff000000);
                 draw_root_backdrop_hq(target,assets);
                 base.fill(0x00000000);
                 draw_city_background_alpha(base,game,assets);
@@ -222,18 +221,15 @@ fn draw_root_backdrop_legacy(fb:&mut RenderSurface,assets:&Assets){
 }
 
 fn draw_root_backdrop_hq(fb:&mut RenderSurface,assets:&Assets){
-    debug_assert_eq!(assets.root_sky_hq.len(),1);
-    debug_assert_eq!(assets.root_moon_hq.len(),1);
-    debug_assert!((assets.root_sky_hq.logical_pixel_scale-HQ_SCALE as f32).abs()<0.001);
-    debug_assert!((assets.root_moon_hq.logical_pixel_scale-HQ_SCALE as f32).abs()<0.001);
+    // Symbol 131 is exactly one opaque RGB color across the visible stage:
+    // (161,22,0). Its transparent pixels are only native-bounds bake padding.
+    // Filling the presentation surface with that recovered source color is
+    // pixel-faithful at every scale and avoids carrying/blitting an 8+ MiB
+    // redundant 3x texture.
+    fb.fill(0xffa11600);
 
-    let sky=&assets.root_sky_hq[0];
-    blit(
-        fb,&sky.image,
-        -sky.anchor_x.round() as i32,
-        -sky.anchor_y.round() as i32,
-        sky.image.w as i32,sky.image.h as i32,false
-    );
+    debug_assert_eq!(assets.root_moon_hq.len(),1);
+    debug_assert!((assets.root_moon_hq.logical_pixel_scale-HQ_SCALE as f32).abs()<0.001);
 
     let moon=&assets.root_moon_hq[0];
     let s=HQ_SCALE as f32;
