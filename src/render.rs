@@ -744,3 +744,35 @@ fn blit_alpha(dst:&mut RenderSurface,src:&Image,x:i32,y:i32,rw:i32,rh:i32,flip:b
 }
 fn blend(dst:&mut u32,src:u32){let a=(src>>24)&255;if a==0{return}let sr=(src>>16)&255;let sg=(src>>8)&255;let sb=src&255;if a==255{*dst=(sr<<16)|(sg<<8)|sb;return}let inv=255-a;let dr=(*dst>>16)&255;let dg=(*dst>>8)&255;let db=*dst&255;*dst=(((sr*a+dr*inv+127)/255)<<16)|(((sg*a+dg*inv+127)/255)<<8)|((sb*a+db*inv+127)/255);}
 fn blit(dst:&mut RenderSurface,src:&Image,x:i32,y:i32,rw:i32,rh:i32,flip:bool){if rw<=0||rh<=0{return}for oy in 0..rh{let dy=y+oy;if dy<0||dy>=dst.h as i32{continue}let sy=(oy as usize*src.h/rh as usize).min(src.h-1);for ox in 0..rw{let dx=x+ox;if dx<0||dx>=dst.w as i32{continue}let raw=(ox as usize*src.w/rw as usize).min(src.w-1);let sx=if flip{src.w-1-raw}else{raw};let sp=src.pixels[sy*src.w+sx];blend(&mut dst.pixels[dy as usize*dst.w+dx as usize],sp);}}}
+
+#[cfg(test)]
+mod tests{
+    use super::{blend,blend_rgba};
+
+    #[test]
+    fn rgba_scratch_blend_matches_legacy_over_opaque_destination(){
+        let cases=[
+            (0xff102030u32,0x8040a0e0u32),
+            (0xffabcdefu32,0x20ff0000u32),
+            (0xff000000u32,0xffffffffu32),
+            (0xffffffffu32,0x00010203u32),
+        ];
+        for &(dst0,src) in &cases{
+            let mut legacy=dst0;
+            let mut rgba=dst0;
+            blend(&mut legacy,src);
+            blend_rgba(&mut rgba,src);
+            assert_eq!(rgba>>24,0xff);
+            assert_eq!(rgba&0x00ff_ffff,legacy&0x00ff_ffff);
+        }
+    }
+
+    #[test]
+    fn rgba_scratch_blend_preserves_source_over_transparent_destination(){
+        for &src in &[0x8040a0e0u32,0xffffffffu32,0x01020304u32]{
+            let mut dst=0u32;
+            blend_rgba(&mut dst,src);
+            assert_eq!(dst,src);
+        }
+    }
+}
