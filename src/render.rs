@@ -482,6 +482,21 @@ fn sample_region(src:&Image,sx0:usize,sy0:usize,sw:usize,sh:usize,x:i32,y:i32)->
 
 fn blend_bilinear_premul_3x(dst:&mut u32,p00:u32,p10:u32,p01:u32,p11:u32,w00:u32,w10:u32,w01:u32,w11:u32){
     let a00=(p00>>24)&255; let a10=(p10>>24)&255; let a01=(p01>>24)&255; let a11=(p11>>24)&255;
+
+    // Round 11 hot path: city/scenery pixels are overwhelmingly either fully
+    // transparent or fully opaque. Avoid the premultiply/unpremultiply work
+    // for both cases; only antialiased edges need the general RGBA path.
+    let a_or=a00|a10|a01|a11;
+    if a_or==0{return;}
+    let a_and=a00&a10&a01&a11;
+    if a_and==255{
+        let r=((((p00>>16)&255)*w00+((p10>>16)&255)*w10+((p01>>16)&255)*w01+((p11>>16)&255)*w11+4)/9)&255;
+        let g=((((p00>>8)&255)*w00+((p10>>8)&255)*w10+((p01>>8)&255)*w01+((p11>>8)&255)*w11+4)/9)&255;
+        let b=((p00&255)*w00+(p10&255)*w10+(p01&255)*w01+(p11&255)*w11+4)/9;
+        *dst=(r<<16)|(g<<8)|b;
+        return;
+    }
+
     let asum=a00*w00+a10*w10+a01*w01+a11*w11;
     let a=(asum+4)/9;
     if a==0{return;}
