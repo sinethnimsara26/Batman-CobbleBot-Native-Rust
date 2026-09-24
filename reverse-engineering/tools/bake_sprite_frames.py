@@ -968,8 +968,13 @@ def main():
     if args.all_frames:
         symbol = symbols.get(str(args.symbol))
         if symbol is None:
-            raise ValueError(f"symbol {args.symbol} is not a movie clip in symbols.json")
-        frame_count = symbol.get("frames", 0)
+            if args.symbol not in shapes:
+                raise ValueError(f"symbol {args.symbol} is not present as a movie clip or static shape")
+            symbol = {}
+        # Static DefineShape-style symbols do not have a movie-clip
+        # frame count in symbols.json, but they are still valid one-frame
+        # timelines for packing/HQ finalization.
+        frame_count = max(1, int(symbol.get("frames", 0) or 0))
         frame_bounds = [
             symbol_bounds(args.symbol, frame, (1.0, 0.0, 0.0, 1.0, 0.0, 0.0), symbols, shapes)
             for frame in range(frame_count)

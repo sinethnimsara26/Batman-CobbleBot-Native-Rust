@@ -2,7 +2,7 @@ name: build-level1a-fidelity
 
 on:
   push:
-    branches: [main, level1a-cxform-fidelity, hq-rendering-phase1-halftone, hq-rendering-phase2-surfaces, hq-rendering-phase3-3x-surface, hq-rendering-phase4-pack-v2, hq-rendering-phase5-batman-3x, hq-rendering-phase6-hud-3x, hq-rendering-phase7-overlays-3x, hq-rendering-phase8-world-objects-3x, hq-rendering-phase9-dpi-awareness, hq-rendering-phase10-scenery-eval]
+    branches: [main, level1a-cxform-fidelity, hq-rendering-phase1-halftone, hq-rendering-phase2-surfaces, hq-rendering-phase3-3x-surface, hq-rendering-phase4-pack-v2, hq-rendering-phase5-batman-3x, hq-rendering-phase6-hud-3x, hq-rendering-phase7-overlays-3x, hq-rendering-phase8-world-objects-3x, hq-rendering-phase9-dpi-awareness, hq-rendering-phase10-scenery-eval, hq-rendering-phase11-backdrop-3x]
   workflow_dispatch:
 
 concurrency:
@@ -62,7 +62,7 @@ jobs:
           $tools = "reverse-engineering/tools"
           $work = ".generated"
           $swf = "$work/cobblebot.swf"
-          New-Item -ItemType Directory -Force -Path "$work/reports","$work/bitmaps","$work/sounds","$work/batman-frames","$work/batman-frames-hq","$work/pickup-frames","$work/pickup-frames-hq-super","$work/pickup-frames-hq","$work/batarang-frames","$work/batarang-frames-hq-super","$work/batarang-frames-hq","$work/level-title","$work/level-title-hq-super","$work/level-title-hq","$work/fadein","$work/fadein-hq-super","$work/fadein-hq","$work/fadeout","$work/fadeout-hq-super","$work/fadeout-hq","$work/tutorial-overlay","$work/tutorial-overlay-hq-super","$work/tutorial-overlay-hq","$work/hud","$work/hud-hq-super","$work/hud-hq-final","$work/level1a-tiles","$work/level1a-tiles-hq-base","$work/level1a-detail-tiles-1x","$work/level1a-detail-tiles-hq","$work/scenery-probes","assets","reverse-engineering/generated/collision_masks" | Out-Null
+          New-Item -ItemType Directory -Force -Path "$work/reports","$work/bitmaps","$work/sounds","$work/batman-frames","$work/batman-frames-hq","$work/pickup-frames","$work/pickup-frames-hq-super","$work/pickup-frames-hq","$work/batarang-frames","$work/batarang-frames-hq-super","$work/batarang-frames-hq","$work/level-title","$work/level-title-hq-super","$work/level-title-hq","$work/fadein","$work/fadein-hq-super","$work/fadein-hq","$work/fadeout","$work/fadeout-hq-super","$work/fadeout-hq","$work/tutorial-overlay","$work/tutorial-overlay-hq-super","$work/tutorial-overlay-hq","$work/hud","$work/hud-hq-super","$work/hud-hq-final","$work/level1a-tiles","$work/level1a-tiles-hq-base","$work/level1a-detail-tiles-1x","$work/level1a-detail-tiles-hq","$work/scenery-probes","$work/root-moon-hq-super","$work/root-moon-hq","assets","reverse-engineering/generated/collision_masks" | Out-Null
 
           python "$tools/swf_re.py" "$swf" "$work/reports"
           @'
@@ -153,6 +153,17 @@ jobs:
           # scaled 0.769348. Preserve both; omitting them leaves a black sky.
           python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "assets/root_bg_131.png" --bitmaps "$work/bitmaps" --symbol 131 --frame 0 --scale 1.0 --native-bounds
           python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "assets/root_bg_134.png" --bitmaps "$work/bitmaps" --symbol 134 --frame 0 --scale 1.0 --native-bounds
+
+          # Round 11: symbol 131 is a flat stage-sized color field. CI proves
+          # its visible pixels are exactly RGB(161,22,0), so HQ presentation
+          # uses that source color directly instead of a redundant 3x texture.
+
+          # Root moon 134 is placed at scale 0.76934814453125. Bake that
+          # placement scale into the asset itself, exactly like Batman/pickups:
+          # temporary effective scale = placement*6, final = placement*3.
+          python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/root-moon-hq-super" --bitmaps "$work/bitmaps" --symbol 134 --scale 4.6160888671875 --all-frames
+          python "$tools/finalize_hq_timeline.py" "$work/root-moon-hq-super" "$work/root-moon-hq" --output-scale 2.30804443359375 --supersample 2
+          python "$tools/pack_sprite_frames.py" "$work/root-moon-hq" "assets/root_bg_134_hq.bin" --format-version 2 --logical-pixel-scale 3.0
 
           python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "assets/level1a_bg.png" --bitmaps "$work/bitmaps" --symbol 142 --frame 0 --scale 1.0 --native-bounds
 
@@ -1193,13 +1204,14 @@ jobs:
               "cache_limit",
           ):
               assert needle in assets, needle
+          # Round 11 evolves the lower-backdrop composition, but the
+          # Round-10 selected true-3x scenery layer itself must remain intact.
           for needle in (
-              "render_backdrop_legacy(base,game,assets)",
-              "draw_tiles(base,game,&assets.level1a_tiles_hq_base)",
+              "level1a_tiles_hq_base",
               "draw_tiles_hq(target,game,&assets.level1a_detail_tiles_hq)",
               "fn draw_tiles_hq",
           ):
-              assert needle in render, needle
+              assert needle in render or needle in assets, needle
           for needle in ("MAGIC_V2 = b\"BCLVT002\"","--crop-transparent","<iiiiI"):
               assert needle in packer, needle
           for needle in ("--output-scale","--supersample","--downsample","margin = 2"):
@@ -1227,6 +1239,125 @@ jobs:
           Path(".generated/hq-scenery-asset-report.json").write_text(json.dumps(report,indent=2))
           print(json.dumps(report,indent=2))
           print("Round 10 scenery contract PASS: exact 1x split proof + true-3x depth-preserved scenery layer 144-147.")
+
+      - name: Validate Round 11 true-3x root backdrop
+        shell: python
+        run: |
+          import json,math,struct
+          from pathlib import Path
+          from PIL import Image
+
+          moon=json.loads(Path(".generated/root-moon-hq/manifest.json").read_text())
+
+          assert moon["symbol"] == 134 and moon["frame_count"] == 1
+          assert moon["unsupported_fills"] == [] and moon["missing_bitmap_ids"] == []
+          assert all(math.isclose(v,2.30804443359375,abs_tol=1e-6) for v in moon["scale"])
+
+          # Prove the root sky's visible stage is truly a single opaque color.
+          # root_bg_131.png has native-bounds padding, but the legacy renderer
+          # places it at (-1,-1), exposing source rect x=1..600, y=1..400.
+          with Image.open("assets/root_bg_131.png") as opened:
+              legacy_sky=opened.convert("RGBA")
+          stage=legacy_sky.crop((1,1,601,401))
+          colors=set(stage.getdata())
+          assert colors == {(161,22,0,255)}, colors
+          recovered_sky_rgb=[161,22,0]
+
+          mf=moon["hq_finalize"]
+          assert math.isclose(mf["source_scale"],4.6160888671875,abs_tol=1e-6)
+          assert math.isclose(mf["output_scale"],2.30804443359375,abs_tol=1e-6)
+          assert mf["supersample"] == 2 and mf["downsample"] == "lanczos"
+          assert mf["alpha_filtering"] == "premultiplied"
+
+          pack="root_bg_134_hq"
+          raw=Path("assets",pack+".bin").read_bytes()
+          assert raw[:8] == b"BCBFRM02",pack
+          assert struct.unpack_from("<I",raw,8)[0] == 1
+          assert abs(struct.unpack_from("<f",raw,12)[0]-3.0) < 1e-6
+          side=json.loads(Path("assets",pack+".json").read_text())
+          assert side["format"] == "BCBFRM02"
+          assert side["frame_count"] == 1
+          assert abs(side["logical_pixel_scale"]-3.0) < 1e-6
+
+          assets=Path("src/assets.rs").read_text()
+          render=Path("src/render.rs").read_text()
+          baker=Path("reverse-engineering/tools/bake_sprite_frames.py").read_text()
+
+          for needle in (
+              "root_moon_hq: SpriteSet",
+              'root_bg_134_hq.bin"),3.0,"root_moon_hq"',
+          ):
+              assert needle in assets,needle
+          assert "root_sky_hq" not in assets
+
+          for needle in (
+              "draw_root_backdrop_hq(target,assets)",
+              "fb.fill(0xffa11600)",
+              "base.fill(0x00000000)",
+              "draw_city_background_alpha(base,game,assets)",
+              "draw_tiles_alpha(base,game,&assets.level1a_tiles_hq_base)",
+              "upscale_alpha_layer(base,target)",
+              "fn blend_rgba",
+              "fn blit_alpha",
+          ):
+              assert needle in render,needle
+
+          hq_block=render.split("target.fill(0xff000000);",1)[1].split("draw_world_objects_hq",1)[0]
+          ordered=[
+              "draw_root_backdrop_hq(target,assets)",
+              "draw_city_background_alpha(base,game,assets)",
+              "draw_tiles_alpha(base,game,&assets.level1a_tiles_hq_base)",
+              "upscale_alpha_layer(base,target)",
+              "draw_tiles_hq(target,game,&assets.level1a_detail_tiles_hq)",
+          ]
+          positions=[hq_block.index(x) for x in ordered]
+          assert positions == sorted(positions),positions
+
+          # Legacy path stays separate and unchanged in semantics.
+          legacy=render.split("fn render_backdrop_legacy",1)[1].split("fn draw_root_backdrop_hq",1)[0]
+          assert "draw_root_backdrop_legacy(fb,assets)" in legacy
+          assert "draw_city_background_legacy(fb,game,assets)" in legacy
+
+          assert 'frame_count = max(1, int(symbol.get("frames", 0) or 0))' in baker
+
+          def rgba_bytes(path):
+              with Image.open(path) as im:
+                  return im.width*im.height*4
+
+          legacy_backdrop=(
+              rgba_bytes("assets/root_bg_131.png")+
+              rgba_bytes("assets/root_bg_134.png")+
+              rgba_bytes("assets/level1a_bg.png")
+          )
+          moon_side=json.loads(Path("assets/root_bg_134_hq.json").read_text())
+          hq_backdrop=sum(
+              rec["size"][0]*rec["size"][1]*4
+              for rec in moon_side["frames"]
+          )
+          previous=json.loads(Path(".generated/hq-scenery-asset-report.json").read_text())
+          previous_bound=previous["combined_known_decoded_upper_bound"]
+          combined=previous_bound+legacy_backdrop+hq_backdrop
+          limit=500*1024*1024
+          assert combined < limit,(combined,limit)
+
+          report={
+              "sky_symbol":131,
+              "moon_symbol":134,
+              "root_depth_order":["sky-131","moon-134","legacy-city-142","retained-scenery-base","true3x-scenery-144-147"],
+              "sky_strategy":"exact recovered flat fill RGB(161,22,0); no HQ texture needed",
+              "sky_recovered_rgb":recovered_sky_rgb,
+              "moon_placement_scale":0.76934814453125,
+              "moon_strategy":"effective 4.6160888671875x SWF -> premultiplied Lanczos -> effective 2.30804443359375x (3x stage)",
+              "legacy_backdrop_eager_rgba_bytes_added_conservatively":legacy_backdrop,
+              "hq_moon_decoded_rgba_bytes":hq_backdrop,
+              "previous_round10_upper_bound":previous_bound,
+              "combined_known_decoded_upper_bound":combined,
+              "headroom_to_500_mib":limit-combined,
+              "city_panorama":"retained at legacy source resolution; alpha-promoted above true-3x root sky/moon",
+          }
+          Path(".generated/hq-backdrop-asset-report.json").write_text(json.dumps(report,indent=2))
+          print(json.dumps(report,indent=2))
+          print("Round 11 backdrop contract PASS: exact flat sky + true-3x moon below alpha-promoted legacy city/scenery.")
 
       - name: Validate Round 9 per-monitor DPI-awareness contract
         shell: python
@@ -1589,6 +1720,42 @@ jobs:
           assert len(list(out.glob("*.png"))) == min(3,len(scored))
           print("Built Round-10 scenery detail A/B sheets for", [x[1] for x in chosen])
 
+      - name: Build Round 11 backdrop A-B comparison sheets
+        shell: python
+        run: |
+          from pathlib import Path
+          from PIL import Image,ImageDraw
+
+          out=Path(".generated/backdrop-hq-comparisons")
+          out.mkdir(parents=True,exist_ok=True)
+
+          # Sky 131 is proven to be a single opaque color on the visible
+          # stage; no A/B raster sheet is useful because the exact HQ result is
+          # the same flat RGB fill at every resolution.
+          # Moon: reproduce the current legacy sequence first: symbol134 1x,
+          # nearest-neighbor placement scale 0.769348..., then 3x bilinear
+          # promotion. Compare against the placement-scaled true-HQ bake.
+          placement=0.76934814453125
+          with Image.open("assets/root_bg_134.png") as lo0, Image.open(".generated/root-moon-hq/000.png") as hi0:
+              lo=lo0.convert("RGBA")
+              hi=hi0.convert("RGBA")
+              logical=lo.resize((
+                  max(1,round(lo.width*placement)),
+                  max(1,round(lo.height*placement))
+              ),Image.Resampling.NEAREST)
+              legacy=logical.resize((logical.width*3,logical.height*3),Image.Resampling.BILINEAR)
+          pw=max(legacy.width,hi.width); ph=max(legacy.height,hi.height); top=30
+          sheet=Image.new("RGBA",(pw*2+12,ph+top),(28,28,28,255))
+          sheet.alpha_composite(legacy,((pw-legacy.width)//2,top+(ph-legacy.height)//2))
+          sheet.alpha_composite(hi,(pw+12+(pw-hi.width)//2,top+(ph-hi.height)//2))
+          d=ImageDraw.Draw(sheet)
+          d.text((6,7),"moon 134: current 1x placement -> bilinear 3x",fill=(255,255,255,255))
+          d.text((pw+18,7),"moon 134: placement-aware SWF 6x -> Lanczos 3x",fill=(255,255,255,255))
+          sheet.save(out/"moon-134.png")
+
+          assert len(list(out.glob("*.png"))) == 1
+          print("Built Round-11 moon A/B sheet; sky 131 is an exact flat fill and needs no raster comparison.")
+
       - uses: actions/upload-artifact@v4
         with:
           name: Batman-CobbleBot-Level1A-Fidelity-Windows-x64
@@ -1689,6 +1856,18 @@ jobs:
         with:
           name: Batman-CobbleBot-Level1A-Round10-Scenery-Evaluation-Report
           path: .generated/scenery-evaluation-report.json
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Batman-CobbleBot-Level1A-Round11-Backdrop-Comparisons
+          path: .generated/backdrop-hq-comparisons/*.png
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Batman-CobbleBot-Level1A-Round11-Backdrop-Asset-Report
+          path: .generated/hq-backdrop-asset-report.json
           if-no-files-found: error
 
       - uses: actions/upload-artifact@v4
