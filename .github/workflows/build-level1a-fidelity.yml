@@ -62,7 +62,7 @@ jobs:
           $tools = "reverse-engineering/tools"
           $work = ".generated"
           $swf = "$work/cobblebot.swf"
-          New-Item -ItemType Directory -Force -Path "$work/reports","$work/bitmaps","$work/sounds","$work/batman-frames","$work/batman-frames-hq","$work/pickup-frames","$work/pickup-frames-hq-super","$work/pickup-frames-hq","$work/batarang-frames","$work/batarang-frames-hq-super","$work/batarang-frames-hq","$work/level-title","$work/level-title-hq-super","$work/level-title-hq","$work/fadein","$work/fadein-hq-super","$work/fadein-hq","$work/fadeout","$work/fadeout-hq-super","$work/fadeout-hq","$work/tutorial-overlay","$work/tutorial-overlay-hq-super","$work/tutorial-overlay-hq","$work/hud","$work/hud-hq-super","$work/hud-hq-final","$work/level1a-tiles","$work/level1a-tiles-hq-base","$work/level1a-detail-tiles-1x","$work/level1a-detail-tiles-hq","$work/scenery-probes","$work/root-moon-hq-super","$work/root-moon-hq","assets","reverse-engineering/generated/collision_masks" | Out-Null
+          New-Item -ItemType Directory -Force -Path "$work/reports","$work/bitmaps","$work/sounds","$work/batman-frames","$work/batman-frames-hq","$work/pickup-frames","$work/pickup-frames-hq-super","$work/pickup-frames-hq","$work/batarang-frames","$work/batarang-frames-hq-super","$work/batarang-frames-hq","$work/level-title","$work/level-title-hq-super","$work/level-title-hq","$work/fadein","$work/fadein-hq-super","$work/fadein-hq","$work/fadeout","$work/fadeout-hq-super","$work/fadeout-hq","$work/tutorial-overlay","$work/tutorial-overlay-hq-super","$work/tutorial-overlay-hq","$work/hud","$work/hud-hq-super","$work/hud-hq-final","$work/level1a-tiles","$work/level1a-tiles-hq-base","$work/level1a-detail-tiles-1x","$work/level1a-detail-tiles-hq","$work/scenery-probes","$work/root-moon-hq-super","$work/root-moon-hq","$work/intro","assets","reverse-engineering/generated/collision_masks" | Out-Null
 
           python "$tools/swf_re.py" "$swf" "$work/reports"
           python "$tools/inspect_intro_hud.py" "$swf" "$work/reports/symbols.json" "$work/reports/root_placements.json" "$work/intro-hud-source-report.json"
@@ -116,6 +116,11 @@ jobs:
           Copy-Item "$work/sounds/0248_sound_0248.mp3" "assets/jump.mp3"
           Copy-Item "$work/sounds/0004_item.mp3" "assets/item.mp3"
           python "$tools/stage_ui_screens.py" "$work/bitmaps" "assets"
+
+          # Preserve the original frame-18 story scene, including the phone
+          # briefing clips, rather than jumping directly from title to gameplay.
+          python "$tools/bake_root_intro.py" "$swf" "$work/reports/symbols.json" "$work/reports/root_placements.json" "$work/bitmaps" "$work/intro"
+          python "$tools/pack_sprite_frames.py" "$work/intro" "assets/intro_frames.bin" --format-version 2 --logical-pixel-scale 1.0
 
           python "$tools/render_collision_masks.py" "$swf" "$work/reports/symbols.json" "reverse-engineering/manifests/level-instances.json" "reverse-engineering/generated/collision_masks" --level level1a
 
@@ -316,6 +321,16 @@ jobs:
           # record using the SWF's own embedded font glyphs.
           assert tutorial["missing_bitmap_ids"] == [], tutorial["missing_bitmap_ids"]
 
+          intro=json.loads(Path(".generated/intro/manifest.json").read_text())
+          assert intro["source_root_frame"] == 18
+          assert intro["frame_count"] == 180
+          assert intro["size"] == [600,400]
+          assert intro["unsupported_fills"] == [], intro["unsupported_fills"]
+          assert intro["missing_bitmap_ids"] == [], intro["missing_bitmap_ids"]
+          from PIL import ImageChops
+          with Image.open(".generated/intro/000.png") as start:
+              with Image.open(".generated/intro/080.png") as middle:
+                  assert ImageChops.difference(start.convert("RGB"),middle.convert("RGB")).getbbox(), "intro failed to animate"
           hud=json.loads(Path("assets/hud.json").read_text())
           print("HUD:",hud)
           assert hud["hud_size"] == [283,86], hud["hud_size"]
