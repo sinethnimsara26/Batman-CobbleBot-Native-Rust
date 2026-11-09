@@ -440,11 +440,10 @@ fn draw_hud_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     let legacy_y=(ROOT_Y-LEGACY_ANCHOR_Y).round() as i32;
     let s=HQ_SCALE as i32;
 
-    // The original HUD icon geometry is retained. The themed HQ candidate
-    // gets a separate dark-backed bottom status row so the batarang count and
-    // life label/value no longer sit on top of the bat silhouettes. Draw the
-    // new backing underneath the source shell so the original icons win.
-    draw_hud_counter_band_hq(fb,legacy_x*s,(legacy_y+60)*s,283*s,30*s);
+    // Preserve the source-baked translucent HUD shell without the extra
+    // opaque HQ counter ribbon. The original shell already has its backing.
+    // Counter placement is deliberately unchanged in HUD-REAL-03 to isolate
+    // this visual repair; spacing gets its own later reviewed batch.
 
     // Round 6 HUD assets already live at final presentation resolution.
     // Copy them 1:1; never enlarge the 1x HUD or digit atlases at runtime.
@@ -454,8 +453,8 @@ fn draw_hud_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
         shell.image.w as i32,shell.image.h as i32,false
     );
 
-    // The legacy 1x field centers stay untouched. The HQ-only presentation
-    // counters move to the separate bottom row; score retains its own column.
+    // The legacy 1x field centers stay untouched. For this isolated ribbon
+    // removal, retain the existing HQ count positions and score column.
     const HUD_COUNTER_ROW_Y:i32=82;
     draw_number_centered_hq_1to1(
         fb,&assets.hud_digits_small_hq,
@@ -474,25 +473,6 @@ fn draw_hud_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
         // (15 at 3x) so the label and the value read as 'LIVES X5'.
         (legacy_x+145)*s,(legacy_y+HUD_COUNTER_ROW_Y-5)*s,game.lives.max(0)
     );
-}
-
-/// Dark backing for the HQ-only lower counter row. The overlay is drawn
-/// beneath the original source HUD shell/icons and uses the native Rust
-/// compositor; the exact original 1x HUD remains untouched for A/B review.
-fn draw_hud_counter_band_hq(fb:&mut RenderSurface,x:i32,y:i32,w:i32,h:i32){
-    if w<=0 || h<=0 {return;}
-    let x0=x.max(0) as usize;
-    let y0=y.max(0) as usize;
-    let x1=((x as i64+w as i64).max(0).min(fb.w as i64)) as usize;
-    let y1=((y as i64+h as i64).max(0).min(fb.h as i64)) as usize;
-    if x0>=x1||y0>=y1{return;}
-    for py in y0..y1{
-        for px in x0..x1{
-            let edge=py==y0||py+1==y1;
-            blend(&mut fb.pixels[py*fb.w+px],
-                if edge{0xd04a291b}else{0xd0121017});
-        }
-    }
 }
 
 fn draw_number_centered_hq_1to1(fb:&mut RenderSurface,atlas:&Image,cx:i32,cy:i32,value:i32){

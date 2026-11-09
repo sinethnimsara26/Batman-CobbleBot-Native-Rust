@@ -813,12 +813,16 @@ jobs:
           }
           Path(".generated/hq-hud-asset-report.json").write_text(json.dumps(report,indent=2))
           print(json.dumps(report,indent=2))
+          # HUD-REAL-03: the dark full-width duplicate band was rejected in
+          # actual Windows UI feedback. Protect against its reintroduction,
+          # while requiring the existing source-derived translucent shell.
           assert "HUD_COUNTER_ROW_Y:i32=82" in render
-          assert "draw_hud_counter_band_hq" in render
+          assert "draw_hud_counter_band_hq" not in render, "duplicate HQ counter band returned"
+          assert "fb,&shell.image," in hud_fn, "original HUD shell no longer blitted"
           assert "xy[1]+7.0*scale" in baker
           assert "outline=max(2,round(0.74*scale))" in baker
           assert "outline=max(2,round(0.72*pixel_scale))" in baker
-          print("Round 6 HUD contract PASS: original art and fields preserved, HQ-only dark-backed counter row and black text edging.")
+          print("Round 6 HUD contract PASS: source shell and fields preserved, no duplicate HQ counter band, black text edging kept.")
 
       - name: Validate Round 7 true-3x foreground timelines
         shell: python
