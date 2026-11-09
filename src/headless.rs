@@ -270,10 +270,23 @@ pub fn benchmark_render(iterations:usize,out:&str){
     input.set(VK_ENTER,true);
     game.tick(&mut input,&ground);
     input.set(VK_ENTER,false);
-    // Benchmark only real gameplay, not the new pre-level story timeline.
-    for _ in 0..180{game.tick(&mut input,&ground);}
+    // Original root story stops at frame 179. A timeout is NOT a gameplay
+    // transition: the source SKIP button starts the 41-frame fadeout #34.
+    // Reach Playing through the same Rust state machine as the playable game.
+    for _ in 0..180 { game.tick(&mut input,&ground); }
+    assert_eq!(game.screen,AppScreen::Intro);
+    assert_eq!(game.intro_tick,179);
+    assert_eq!(game.intro_fadeout_tick,None);
+    assert!(game.skip_intro(), "benchmark must trigger the source SKIP route");
+    assert_eq!(game.intro_fadeout_tick,Some(0));
+    for _ in 0..40 { game.tick(&mut input,&ground); }
+    assert_eq!(game.screen,AppScreen::Intro);
+    assert_eq!(game.intro_fadeout_tick,Some(40));
+    game.tick(&mut input,&ground); // source fade's final gotoNext=level1a
     assert_eq!(game.screen,AppScreen::Playing);
-    while game.ticks<105{game.tick(&mut input,&ground);}
+    assert_eq!(game.intro_fadeout_tick,None);
+    assert_eq!(game.ticks,0);
+    while game.ticks<105 { game.tick(&mut input,&ground); }
 
     let mut base=RenderSurface::new(LOGICAL_W,LOGICAL_H);
     let mut hq=RenderSurface::new(render::HQ_W,render::HQ_H);
