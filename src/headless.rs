@@ -27,7 +27,7 @@ fn render_smoke_mode(out:&str,hq:bool){
     input.set(VK_ENTER,false);
     assert_eq!(game.screen,AppScreen::Intro);
     assert_eq!(game.intro_tick,0);
-    assert!(game.take_audio_events().is_empty());
+    assert_eq!(game.take_audio_events(),vec![AudioEvent::IntroStart]);
     assert_eq!(assets.intro_frames.len(),180);
     snapshot(hq,&out,"00_intro_start.png",&mut game,&assets);
     for _ in 0..80 {game.tick(&mut input,&ground);}
@@ -36,7 +36,7 @@ fn render_smoke_mode(out:&str,hq:bool){
     for _ in 0..100 {game.tick(&mut input,&ground);}
     assert_eq!(game.screen,AppScreen::Playing);
     assert_eq!(game.ticks,0);
-    assert_eq!(game.take_audio_events(),vec![AudioEvent::MusicStart]);
+    assert_eq!(game.take_audio_events(),vec![AudioEvent::IntroStop,AudioEvent::MusicStart]);
 
     // Verify the manual skip path independently: Enter from intro advances
     // the story exactly once and starts the Level 1A soundtrack once.
@@ -49,7 +49,7 @@ fn render_smoke_mode(out:&str,hq:bool){
     skip_keys.set(VK_ENTER,true);
     skipped.tick(&mut skip_keys,&ground);
     assert_eq!(skipped.screen,AppScreen::Playing);
-    assert_eq!(skipped.take_audio_events(),vec![AudioEvent::MusicStart]);
+    assert_eq!(skipped.take_audio_events(),vec![AudioEvent::IntroStart,AudioEvent::IntroStop,AudioEvent::MusicStart]);
 
     // Window button clicks call the same idempotent intro transition.
     let mut clicked=Game::new();
@@ -58,7 +58,7 @@ fn render_smoke_mode(out:&str,hq:bool){
     assert!(clicked.skip_intro());
     assert!(!clicked.skip_intro());
     assert_eq!(clicked.screen,AppScreen::Playing);
-    assert_eq!(clicked.take_audio_events(),vec![AudioEvent::MusicStart]);
+    assert_eq!(clicked.take_audio_events(),vec![AudioEvent::IntroStop,AudioEvent::MusicStart]);
 
     // Preserve the real root presentation instead of skipping straight into
     // gameplay: fade-in starts immediately, level-title continues longer.
