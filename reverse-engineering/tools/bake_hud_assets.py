@@ -117,7 +117,7 @@ def field_box(info,transform,anchor):
     ]
 
 
-def draw_field(image,info,transform,anchor,font_path):
+def draw_field(image,info,transform,anchor,font_path,style="source"):
     box=field_box(info,transform,anchor)
     sx=math.hypot(transform[0],transform[2])
     sy=math.hypot(transform[1],transform[3])
@@ -127,10 +127,20 @@ def draw_field(image,info,transform,anchor,font_path):
     text=info.get("initial_text","").replace("\r","").replace("\n","")
     draw=ImageDraw.Draw(image)
     color=info.get("color",(255,255,255,255))
-    if info.get("align")==2:
-        draw.text(((box[0]+box[2])/2.0,(box[1]+box[3])/2.0),text,font=font,fill=color,anchor="mm")
+    centered=info.get("align")==2
+    xy=((box[0]+box[2])/2.0,(box[1]+box[3])/2.0) if centered else (box[0],box[1])
+    anchor_type="mm" if centered else "lt"
+    if style=="themed":
+        # Keep original SWF bounds and the underlying recovered bitmap art.
+        # A compact high-contrast gold/white label treatment is a proposed
+        # player-facing typography option, not a claim of pixel-perfect Flash
+        # device-font matching. Legacy 1x remains an exact style oracle.
+        color=(239,205,116,255) if info["id"]!=715 else (244,233,208,255)
+        outline=max(1,round(0.22*scale))
+        draw.text(xy,text,font=font,fill=color,anchor=anchor_type,
+                  stroke_width=outline,stroke_fill=(30,16,11,255))
     else:
-        draw.text((box[0],box[1]),text,font=font,fill=color,anchor="lt")
+        draw.text(xy,text,font=font,fill=color,anchor=anchor_type)
     return box
 
 
@@ -144,7 +154,7 @@ def resize_premultiplied(image:Image.Image,size:tuple[int,int],method:str):
     return image.convert("RGBa").resize(size,Image.Resampling.LANCZOS).convert("RGBA")
 
 
-def digit_atlas(font_path:Path,base_size:int,pixel_scale:float):
+def digit_atlas(font_path:Path,base_size:int,pixel_scale:float,style="source"):
     size=max(1,round(base_size*pixel_scale))
     font=ImageFont.truetype(str(font_path),size=size)
     probe=Image.new("RGBA",(8,8),(0,0,0,0))
@@ -155,7 +165,15 @@ def digit_atlas(font_path:Path,base_size:int,pixel_scale:float):
     atlas=Image.new("RGBA",(cell_w*10,cell_h),(0,0,0,0))
     draw=ImageDraw.Draw(atlas)
     for i in range(10):
-        draw.text((i*cell_w+cell_w/2.0,cell_h/2.0),str(i),font=font,fill=(255,255,255,255),anchor="mm")
+        xy=(i*cell_w+cell_w/2.0,cell_h/2.0)
+        if style=="themed":
+            # Contrasting numbers with original 16/32px geometry retained.
+            color=(255,238,182,255) if base_size>16 else (255,255,246,255)
+            draw.text(xy,str(i),font=font,fill=color,anchor="mm",
+                      stroke_width=max(1,round(0.20*pixel_scale)),
+                      stroke_fill=(24,17,14,255))
+        else:
+            draw.text(xy,str(i),font=font,fill=(255,255,255,255),anchor="mm")
     return atlas,{"cell_w":cell_w,"cell_h":cell_h,"font_px":size}
 
 
@@ -176,6 +194,7 @@ def main():
                     help="temporary raster scale multiplier before final downsample")
     ap.add_argument("--downsample",choices=("none","lanczos"),default="none")
     ap.add_argument("--suffix",default="",help="output suffix, e.g. _hq")
+    ap.add_argument("--style",choices=("source","themed"),default="source",help="source device-font oracle or alternate Batman-style HQ labels")
     ap.add_argument("--pack-dir",type=Path,
                     help="optional one-frame pack-ready directory for the final HUD shell")
     ns=ap.parse_args()
@@ -220,13 +239,13 @@ def main():
     for cid in sorted(HUD_IDS):
         info=edit[cid]
         if cid in STATIC_IDS:
-            temp_fields[str(cid)]=draw_field(image,info,found[cid],temp_anchor,ns.font)
+            temp_fields[str(cid)]=draw_field(image,info,found[cid],temp_anchor,ns.font,ns.style)
         else:
             temp_fields[str(cid)]=field_box(info,found[cid],temp_anchor)
 
     temp_scale=ns.output_scale*ns.supersample
-    small_image,small_meta=digit_atlas(ns.font,16,temp_scale)
-    large_image,large_meta=digit_atlas(ns.font,32,temp_scale)
+    small_image,small_meta=digit_atlas(ns.font,16,temp_scale,ns.style)
+    large_image,large_meta=digit_atlas(ns.font,32,temp_scale,ns.style)
 
     factor=float(ns.supersample)
     if ns.supersample>1:
@@ -265,6 +284,7 @@ def main():
 
     meta={
         "hud_size":list(image.size),
+        "style":ns.style,
         "anchor_in_bitmap":final_anchor,
         "fields":fields,
         "small_digits":small_meta,
