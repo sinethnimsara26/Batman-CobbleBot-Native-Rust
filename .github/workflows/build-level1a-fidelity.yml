@@ -1553,8 +1553,8 @@ jobs:
 
           $legacyShots = Get-ChildItem ".generated/visual-smoke/*.png"
           $hqShots = Get-ChildItem ".generated/visual-smoke-hq/*.png"
-          if ($legacyShots.Count -ne 19) { throw "Expected 19 legacy smoke screenshots, got $($legacyShots.Count)" }
-          if ($hqShots.Count -ne 19) { throw "Expected 19 HQ smoke screenshots, got $($hqShots.Count)" }
+          if ($legacyShots.Count -ne 20) { throw "Expected 20 legacy smoke screenshots, got $($legacyShots.Count)" }
+          if ($hqShots.Count -ne 20) { throw "Expected 20 HQ smoke screenshots, got $($hqShots.Count)" }
           $legacyShots | Format-Table Name,Length
           $hqShots | Format-Table Name,Length
           Get-Content ".generated/render-benchmark.json"
@@ -1587,7 +1587,7 @@ jobs:
           actual={p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in root.glob("*.png")}
           missing=set(expected)-set(actual)
           extra=set(actual)-set(expected)
-          allowed_extra={"04_walk.png","13_world_objects.png","00_intro_start.png","00_intro_call.png"}
+          allowed_extra={"04_walk.png","13_world_objects.png","00_intro_start.png","00_intro_call.png","00_intro_last.png"}
           if missing or extra!=allowed_extra:
               raise SystemExit(f"legacy screenshot set changed unexpectedly: missing={sorted(missing)} extra={sorted(extra)}")
           bad={name:(expected[name],actual[name]) for name in expected if actual[name]!=expected[name]}
@@ -1605,7 +1605,7 @@ jobs:
           legacy=sorted(Path(".generated/visual-smoke").glob("*.png"))
           hq=sorted(Path(".generated/visual-smoke-hq").glob("*.png"))
           assert [p.name for p in legacy] == [p.name for p in hq]
-          assert len(legacy) == 19
+          assert len(legacy) == 20
           for lp,hp in zip(legacy,hq):
               with Image.open(lp) as lo, Image.open(hp) as hi:
                   assert lo.size == (600,400), (lp.name,lo.size)
@@ -1627,7 +1627,7 @@ jobs:
           assert scroll["samples_count"] >= 40, scroll
           assert scroll["p95_ms"] < 40.0, scroll
 
-          print("HQ dimensions PASS: 19/19 frames are 1800x1200, including original intro samples and Round-8 world objects.")
+          print("HQ dimensions PASS: 20/20 frames are 1800x1200, including the terminal 00_intro_last.png and Round-8 world objects.")
           print("Round 5 render benchmark:",json.dumps(bench,indent=2))
           print("Round 10 scenery-scroll benchmark:",json.dumps(scroll,indent=2))
 
