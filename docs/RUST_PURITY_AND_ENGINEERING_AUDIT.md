@@ -358,6 +358,17 @@ The first run of `b1f4b9567ea5d9c3d33c4f211a12ee5179137d89`, [#42674383272](http
 
 **Verdicts:** PURE-RUST COMPLIANCE — PASS WITH DOCUMENTED PREEXISTING WINDOWS API QUALIFICATIONS (HIGH confidence, no new non-Rust runtime). ENGINEERING QUALITY — direct import correction technically justified (HIGH confidence), new build UNVERIFIED. ORIGINAL-GAME FIDELITY — UNVERIFIED; this repair has no intended gameplay/rendering effect. **Next gated evidence:** successful Windows compile + actual screenshot report before declaring QA navigation or fonts working.
 
+
+## AUD-20261110-002 — Verification-only actual Windows mouse SKIP and QA-F7 evidence
+
+**Date:** 2026-11-10 Sri Lanka, tested native game `ef3c0fb045306ebe52e1a011c28594aa84642481` on draft PR #18. **No implementation changes — Rust code audit not applicable to this batch.** Previous Rust QA navigation and CI test-script modifications remain the scope of AUD-20261109-012 plus E0603 repair AUD-20261110-001; detailed new empirical evidence RE-20261110-002.
+
+**Actual verification:** GitHub Windows workflow [#42676704367](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42676704367), job 129359889911, SUCCESS, 60 completed steps, 11 Rust tests PASS, historical 15/15 pixel hash PASS, HQ HUD contract PASS, generated and inspected real OS desktop PNGs and parsed valid GUI artifact ZIP/report #13701910271. No errors in GUI report. Native EXE launched with QA opt-in, source-derived real OS mouse SKIP press/release led to level-title and stable gameplay screenshots; independent F7 event produced a QA shortcut screenshot with player clipped above screen. The actual glyphs in gameplay are gold outlined headings, cream outlined digits, dark backing. Only user preference and original source glyph equivalence remain pending.
+
+**Independent assessments:** PURE-RUST COMPLIANCE — unchanged from earlier, no new executable code/crates/FFI, existing platform API qualifications. ENGINEERING QUALITY — **Windows native GUI pilot and scripted mouse path verified for sampled state (HIGH)**; **F7 QA shortcut has a documented visual/initialization defect (NEEDS IMPROVEMENT, QA-only)**. ORIGINAL-FLASH FIDELITY — **PARTIALLY VERIFIED presentation/input structure, exact source timing/fonts/audio UNVERIFIED**; the sampled GUI is a reconstructed Rust app, not an original Flash runtime playback. CI-only Python remains separate from shipped game. No new Rust compiler/test run should be claimed for the documentation commit itself; use run #42676704367 as pinned GAME CODE evidence.
+
+**Relevant defect and remediation:** user-requested direct game navigation F7 bypasses `Game::begin_level1a` and sets `ticks=150` without actual progression. Next task QA-NAV-02 should initialize via existing Rust level-entry and bounded neutral simulation, add focused test/capture, and keep normal game and mouse-SKIP behavior unchanged. Rust/gameplay state tests and new real Windows screenshot required before passing this QA feature. Avoid an unverified arbitrary camera offset.
+
 ## Mandatory audit entry template — copy and complete AFTER implementation
 
 `## AUD-YYYYMMDD-NNN — [task and referenced RE entry]`

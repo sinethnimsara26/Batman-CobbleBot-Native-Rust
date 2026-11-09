@@ -244,9 +244,23 @@
 
 **Next single action:** inspect newly triggered Windows CI for current commit: if Rust compiles, download new `Batman-CobbleBot-Level1A-Windows-GUI-Pilot` JSON and OS screenshot artifacts to independently verify mouse source-button SKIP, separate F7 QA jump and gameplay HUD typography. Distinguish incomplete/missing capture and CI environment failures from gameplay bugs. User font issue HUD-REAL-01 and Flash manual acceptance #17 remain OPEN; no PR merge or main/Level1B change.
 
+## 2026-11-10 — WIN-GUI-PILOT-02-VERIFY: successful actual Windows mouse SKIP + HQ font; F7 QA defect isolated
+
+**Latest verified GAME CODE:** `ef3c0fb045306ebe52e1a011c28594aa84642481`, branch `revive/level1a-intro-hud-fidelity-2026-11-09` on draft PR #18, `main` and Level1B untouched. **Windows Actions:** [run #42676704367](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42676704367), job `129359889911` SUCCESS, 60 steps completed, 11 Rust tests passed, 15/15 historical pixel hashes matched, existing standard/HQ smoke evidence uploaded. This resolves earlier import E0603; previous failures remain historical evidence.
+
+**Actually downloaded artifact:** [`Batman-CobbleBot-Level1A-Windows-GUI-Pilot` artifact #13701910271](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42676704367/artifacts/13701910271), ZIP 1,476,345 bytes, SHA-256 `65fd658041cf731fe0b8bca9c95c9b2e9d31508f6b3a70a102a1105e6e543903`. Contains valid `pilot-report.json` (SHA-256 `2aff20aea17cde0377e67897091eb71dbe94052d1bad2338d48798a37a4e0ed2`) + SIX actual Windows desktop screenshots: `before_enter.png`, `after_enter.png`, `skip_fade_early.png`, `skip_level_title.png`, `skip_gameplay_hud.png`, `qa_f7_direct_gameplay.png`. All relevant images visually inspected; no reported Python errors. Files and exact SHA-256 values recorded in RE-20261110-002. Source Button #129 rect `[531,370,573,382]`; hitbox center `[552,376]`; Windows screen click `[900,661]`; foreground game HWND and cursor confirmed; SendInput LEFTDOWN/LEFTUP each returned 1 with error 0. `skip_fade_early.png` shows intro still playing initially, `skip_level_title.png` shows LEVEL 1, later `skip_gameplay_hud.png` shows Batman standing at street level. Thus real mouse SKIP to Level1A succeeded for sampled states; source-exact 41-frame timing remains unverified.
+
+**User font concern:** In the **actual gameplay GUI screenshot**, labels BATARANG/HEALTH/SCORE are gold/yellow outlined in black and have a translucent dark backing; digits and LIVES X5 are much lighter cream with black outlines; no obvious icon collision in sampled game state, but styling is **not yet user-approved nor proven source-exact**. Earlier phone-intro text is an independent sprite asset, not gameplay HUD. Retain HUD-REAL-01 for preference and original comparison; do not claim all text is gold or that the whole original Flash font is reproduced.
+
+**F7 bug discovered:** Separate `qa_f7_direct_gameplay.png` shows scene transition and HUD but Batman partly above screen instead of the normal starting point. `src/win32.rs::poll_qa_navigation` resets `Game::new`, sets screen Playing and game ticks=150 WITHOUT running `Game::begin_level1a` or simulating physics/camera. High confidence in source mismatch and GUI symptom, but exact root cause needs controlled fix. **NEXT SINGLE CODE TASK QA-NAV-02**: stable Rust QA-only level entry/neutral simulation and new actual Windows F7 screenshot. Do not use F7 result as proof of SKIP.
+
+**Six-record compliance:** AGENTS.md and two mandatory protocols reviewed; no permanent-rule changes; AI_TASKS, AI_HANDOFF, AI_WORKLOG updated; research RE-20261110-002 and audit AUD-20261110-002 added (verification only, no game implementation changes). The docs-only commit containing this entry is a separate SHA from last verified game code; new docs-only CI may run, but gameplay verification remains at `ef3c0fb`.
+
+**Do not:** merge draft PR, edit `main`, advance Level1B, claim audio or source-exact Flash fidelity, or silently mark the user's typography complaint resolved.
+
 ## Exact next ONE bounded batch
 
-**Task ID: QA-NAV-01-COMPILE-REPAIR-VERIFY, then WIN-GUI-PILOT-02/HUD-REAL-01 evidence review.** Check the new CI after correcting E0603 import. If compiler passes, inspect real mouse SKIP, post-intro HUD and separate F7 screenshot; if failure, fix only verified blocker. Keep PR #18 draft; issue #17 manual Flash acceptance open; main and Level1B unchanged.
+**Task ID: QA-NAV-02 — fix opt-in F7 direct level-entry player/camera initialization using the existing Rust game progression, then verify via new real Windows screenshot.** Mouse SKIP has already been verified in CI #42676704367; do NOT repeat it or treat F7 as source-original gameplay. Keep HUD-REAL-01 user aesthetics and source-exact acceptance open, PR #18 draft, main and Level1B untouched.
 
 
 ## Reproduction / first commands and links
