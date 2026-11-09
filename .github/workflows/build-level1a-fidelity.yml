@@ -344,6 +344,10 @@ jobs:
           assert (rect[2]-rect[0]) <= 150 and (rect[3]-rect[1]) <= 100, rect
           assert Path("assets/intro_button_bounds.rs").read_text().startswith("const INTRO_SKIP_RECT:"), "missing source-generated Rust hitbox"
           assert intro["deferred_script_controlled_transition_ids"] == [34]
+          assert intro["held_stopped_sprites"] == [{
+              "symbol":122, "source_frame_count":165,
+              "stop_frame_zero_based":164, "baked_frame_count":180,
+          }]
           assert Path(".generated/intro/intro-contact-sheet.png").is_file()
           diagnostic=json.loads(Path(".generated/intro/intro-frame-diagnostics.json").read_text())
           assert diagnostic["frame_count"]==180
@@ -353,6 +357,9 @@ jobs:
                      for blocks in behavior["original_timeline_actions"].values() for b in blocks)
           assert any(any(a["op"]=="Stop" for a in b["actions"])
                      for b in behavior["original_timeline_actions"]["root"])
+          assert any(b["frame"]==164 and any(a["op"]=="Stop" for a in b["actions"])
+                     for b in behavior["original_timeline_actions"]["sprite:122"])
+          assert behavior["intro_symbol_ids"] == [122,123,126,35]
           assert intro["unsupported_fills"] == [], intro["unsupported_fills"]
           assert intro["missing_bitmap_ids"] == [], intro["missing_bitmap_ids"]
           from PIL import ImageChops

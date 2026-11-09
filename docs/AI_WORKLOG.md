@@ -47,3 +47,10 @@ This is the **short index of meaningful, verified progress and mistakes**. Detai
 - Original root frame18 explicitly `Stop`s; sprite122 frame164 `Stop`s; sprite123 frame179 `Stop`s and `StopSounds`. Native `src/game.rs` transitions on tick179 without checking original Flash event logic. This is the first concrete discrepancy; final original transition rules remain unknown.
 - Added source ActionScript tag/action byte offsets and 180-frame grayscale brightness/change data to Windows diagnostic artifacts. Purpose is to determine whether rapid blinking arises between the ten previously sampled contact-sheet frames. **No intro behavior patched yet**; new diagnostic CI pending.
 - Next batch: inspect uploaded reports, identify the single source-backed cause, implement and test INTRO-02 without touching Level1B or main.
+
+## 2026-11-09 — INTRO-02: prevent stopped source movie clip 122 from wrapping
+
+- Prior Run #42582404902 is green (57 steps); analyzed the 180-frame report and exact AVM1 offsets. Frames 15,30,45,...,165 are repeatedly near-black, every 0.6 seconds. This suggests a repeated 15-frame transition, which still requires original-source interpretation.
+- **Verified bug:** sprite122 is 165 source frames with terminal `Stop` on zero-based frame164 at nested byte offset47244; the generic renderer loops it at tick165 because of `frame % frames`. Intro baker now verifies original source action and extends only its visual parent duration to 180, holding its final placement state without changing independent children or native timing.
+- Auditor now also inspects root child sprite35 (15 source frames) to determine whether its own Stop action should prevent repeated dark transitions. No speculative fade removal.
+- **Status:** new code, workflow guard and handoff are committed on draft PR #18; new Windows CI / human playtest pending. Next inspect action report and CI before further correction.

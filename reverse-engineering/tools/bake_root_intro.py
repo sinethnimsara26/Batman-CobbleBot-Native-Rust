@@ -16,7 +16,8 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageChops, ImageStat
 import struct
 
-from bake_sprite_frames import load_shapes, load_text_defs, render_symbol, symbol_bounds
+from bake_sprite_frames import load_shapes, load_text_defs, render_symbol, symbol_bounds, display_list
+from inspect_intro_behavior import collect_movie_sprites, scan_timeline
 from render_collision_masks import affine
 from swf_re import read_rect, read_matrix, read_cxform_with_alpha, tags
 
@@ -105,6 +106,29 @@ def main():
         raise ValueError(f"Missing source scene characters: {sorted(expected-found)}")
     if int(symbols["123"]["frames"]) != INTRO_FRAMES or int(symbols["126"]["frames"]) != INTRO_FRAMES:
         raise ValueError("Intro child timeline duration changed; inspect source before changing the port")
+
+    # Sprite 122 has 165 frames and executes AVM1 Stop at the final
+    # zero-based frame (164). Generic frame % length erroneously restarts
+    # this stopped clip at global intro tick 165.
+    source_122 = collect_movie_sprites(ns.swf.read_bytes()).get(122)
+    if source_122 is None or int(symbols["122"]["frames"]) != 165:
+        raise ValueError("Intro sprite122 source duration changed; re-audit original SWF")
+    actions_122 = scan_timeline(source_122, 4, "sprite:122")["scripts"]
+    if not any(
+        b["frame"] == 164 and any(a["op"] == "Stop" for a in b["actions"])
+        for b in actions_122
+    ):
+        raise ValueError("Original sprite122 terminal Stop no longer verified")
+    # Extend *only* this clip's virtual visual duration, retaining all
+    # original placements and independent child timelines. Its display
+    # list therefore stays at the stopped final state through tick179.
+    symbols["122"]["frames"] = INTRO_FRAMES
+    if display_list(symbols["122"], 164) != display_list(symbols["122"], 165):
+        raise AssertionError("Stopped sprite122 visual parent list must hold after frame164")
+    held_stopped_sprites = [{
+        "symbol": 122, "source_frame_count": 165,
+        "stop_frame_zero_based": 164, "baked_frame_count": INTRO_FRAMES,
+    }]
 
     # Use the same source parser and composed transforms as all existing
     # original-Flash bake jobs. This synthetic 180-frame parent holds the
@@ -207,6 +231,7 @@ def main():
         "recovered_button_up_state": button_report,
         "skip_button_stage_bounds": click_rect,
         "deferred_script_controlled_transition_ids": sorted(script_controlled_transitions),
+        "held_stopped_sprites": held_stopped_sprites,
         "frames": manifest_frames,
         "timing_note": "180 timeline samples, 25 fps; ActionScript-directed pauses/sound are not reproduced by visual baking",
     }

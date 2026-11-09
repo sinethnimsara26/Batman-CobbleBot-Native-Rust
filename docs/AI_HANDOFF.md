@@ -49,9 +49,17 @@
 - **No native gameplay timing or renderer changes in INTRO-01.** Fresh diagnostic CI must pass and report reviewed before fixing one event/timing/render-frame discrepancy.
 - **Exact next task:** confirm this commit's Windows Actions outcome, download `Intro-Frame-Diagnostics` and `Intro-Behavior-Report`; locate anomalous one-frame brightness reversals and source action offsets, then implement and test **INTRO-02**. Keep PR #18 draft, `main` unchanged.
 
+## November 9 — INTRO-02 source-stop correction (CI pending)
+
+- The preceding diagnostic [Windows Run #42582404902](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42582404902) **passed 57 steps** at `47d8db0d5c5d6224e5fe4b0240e0f44082e95248`. Full 180-frame metrics show near-black panels at frame multiples of 15 (0.6 seconds at 25FPS). Dark cycles are real in the current baked output; not all are necessarily source mistakes.
+- Source actions: root frame18 Stop at FWS byte 282288; sprite122 frame164 Stop at nested offset47244; sprite123 frame179 Stop/StopSounds at offsets673/674; fade34 frame0 Stop at offset16.
+- **Selected verified bug:** source sprite122 has 165 frames, stops at index164, but generic rasterization uses frame modulo and restarts that parent at tick165. In the intro baker only, source Stop is checked and that parent visual list is held through tick179; all other sprites and game logic remain unchanged. CI asserts the manifest.
+- **Diagnostic follow-up:** root sprite35 is a 15-frame clip; new `inspect_intro_behavior.py` also includes sprite35 for exact source actions. The 15-frame black pattern makes it a suspect, not an established fault. No unsupported scene/fade removal.
+- **Next batch:** inspect this new commit's Actions outcome and sprite35 Stop actions. If source supports it, correct its looping fade in another isolated batch. User still must approve timing and on-screen appearance. Preserve unmerged PR #18 and untouched `main`.
+
 ## Exact next ONE bounded batch
 
-**Task ID: INTRO-01 diagnostic verification, then INTRO-02.** Inspect the new all-frame flicker metrics and exact source DoAction byte offsets in CI artifacts. Use the evidence to select *one* corrective change and a focused regression. No claim of intro fix until code and Windows playtest prove it.
+**Task ID: Verify INTRO-02 CI and investigate root sprite35.** Inspect the new action report for source sprite35 and the 15-tick recurring dark frames; fix its playback only when original ActionScript establishes a source-supported stop. Current sprite122 change fixes one confirmed wrap, not the complete short/flickering intro.
 
 
 ## Reproduction / first commands and links

@@ -15,7 +15,7 @@ from pathlib import Path
 from swf_re import read_rect, tags
 
 ROOT_INTRO_FRAME = 18
-INTRO_SYMBOLS = (122, 123, 126)
+INTRO_SYMBOLS = (122, 123, 126, 35)  # Also inspect the root's 15-frame transition sprite.
 
 
 def collect_movie_sprites(data: bytes) -> dict[int, bytes]:
