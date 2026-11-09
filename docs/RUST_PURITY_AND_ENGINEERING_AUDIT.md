@@ -343,6 +343,10 @@ Actual [Run #42613807273](https://github.com/sinethnimsara26/Batman-CobbleBot-Na
 
 **Next gate:** Run current commit in GitHub Windows workflow, inspect failures/screenshots; if there is a compile or test bug, fix in next bounded batch before taking on unrelated scene/tooling improvements. Do not merge PR #18 or advance Level1B.
 
+### Addendum to AUD-20261109-012 — new workflow did NOT execute code
+
+The first run of `b1f4b9567ea5d9c3d33c4f211a12ee5179137d89`, [#42674383272](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42674383272), failed with **zero jobs** and no compiler/test logs. GitHub rejected an attempted rerun (403). No Rust, Python or Win32 runtime validation is inferred. Previous docs-only run #42668782687 had an existing HQ performance-threshold failure (p95 91.5072 ms >40 ms) with unchanged implementation. Both findings need separate verification and no perf threshold has been weakened. Verdict remains **implemented, unverified**.
+
 ## Mandatory audit entry template — copy and complete AFTER implementation
 
 `## AUD-YYYYMMDD-NNN — [task and referenced RE entry]`

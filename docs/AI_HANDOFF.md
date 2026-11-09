@@ -226,6 +226,12 @@
 
 **CI STATUS:** New scene navigator, OS mouse SKIP, post-SKIP gameplay/HUD, and QA-F7 are all **UNVERIFIED** pending new GitHub Windows workflow and artifact. Existing prior green GUI run #42666398737 tested only Enter title→intro. Inspect actual new evidence rather than relying on static text. AGENTS.md updated with permanent usage and explicit test separation. Docs RE-20261109-014 and AUD-20261109-012 are linked in the same code checkpoint. User's plain/white-font concern remains OPEN HUD-REAL-01.
 
+## 2026-11-09 — QA-NAV-01 CI scheduling blocker (zero-job run)
+
+- **Observed:** [workflow run #42674383272](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42674383272) for commit `b1f4b9567ea5d9c3d33c4f211a12ee5179137d89` reached `completed/failure` with **zero created jobs, zero check runs and no Windows/job/compiler logs**. Attempt to re-run failed jobs returned GitHub **403 "This workflow run cannot be retried"**. This does NOT establish a Rust or GUI test failure. **Status remains IMPLEMENTED / WINDOWS UNVERIFIED**. Do not claim the F5/F6/F7 or mouse SKIP automation has executed.
+- **Separate earlier failure to investigate:** docs-only [#42668782687](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42668782687) ran a Windows job but failed existing Round-5 scenery-scroll `p95_ms<40.0` threshold: observed `p95_ms=91.5072`, `p50_ms=14.5596` while source/rendering code was unchanged; possible hosted-runner timing fluctuation is a **hypothesis only**, not proven. Preserve performance gate and record reproducible comparison against other runs before changing thresholds.
+- **Next action:** inspect next actual triggered Windows run/job and evidence. If there are again no jobs, investigate GitHub workflow-start/platform/account status rather than rewriting working Rust code; if job starts but compiler fails, fix exact compiler error. Do not merge draft PR #18.
+
 ## Exact next ONE bounded batch
 
 **Task ID: WIN-GUI-PILOT-02-VERIFY / HUD-REAL-01-EVIDENCE — inspect the new Windows CI's actual OS mouse SKIP and gameplay screenshots (including font, outlines, black backing and HUD collisions).** Do not infer success from the earlier Enter-only test. Preserve PR draft and issue #17 original fidelity acceptance; main and Level1B untouched.

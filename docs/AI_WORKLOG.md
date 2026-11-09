@@ -192,3 +192,10 @@ This is the **short index of meaningful, verified progress and mistakes**. Detai
 - **Six files:** AGENTS.md updated with permanent QA navigation contract; AI_TASKS and AI_HANDOFF updated including user's font issue; worklog this entry; RE-20261109-014 and AUD-20261109-012 below. Both linked protocols read and respected. Existing branch/pr/manual source acceptance preserved.
 - **Next one batch:** inspect completed new Windows Actions, especially `pilot-report.json`, original mouse path captures and separated F7 capture. If build/compile fails, fix ONLY evidence-backed issue. PR #18 still draft, main/Level1B untouched.
 
+
+## 2026-11-09 — QA-NAV-01 CI scheduling blocker (zero-job run)
+
+- **Observed:** [workflow run #42674383272](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42674383272) for commit `b1f4b9567ea5d9c3d33c4f211a12ee5179137d89` reached `completed/failure` with **zero created jobs, zero check runs and no Windows/job/compiler logs**. Attempt to re-run failed jobs returned GitHub **403 "This workflow run cannot be retried"**. This does NOT establish a Rust or GUI test failure. **Status remains IMPLEMENTED / WINDOWS UNVERIFIED**. Do not claim the F5/F6/F7 or mouse SKIP automation has executed.
+- **Separate earlier failure to investigate:** docs-only [#42668782687](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42668782687) ran a Windows job but failed existing Round-5 scenery-scroll `p95_ms<40.0` threshold: observed `p95_ms=91.5072`, `p50_ms=14.5596` while source/rendering code was unchanged; possible hosted-runner timing fluctuation is a **hypothesis only**, not proven. Preserve performance gate and record reproducible comparison against other runs before changing thresholds.
+- **Next action:** inspect next actual triggered Windows run/job and evidence. If there are again no jobs, investigate GitHub workflow-start/platform/account status rather than rewriting working Rust code; if job starts but compiler fails, fix exact compiler error. Do not merge draft PR #18.
+

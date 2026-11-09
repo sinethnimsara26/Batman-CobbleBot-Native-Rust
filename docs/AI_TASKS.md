@@ -1,5 +1,11 @@
 # Persistent development tasks — Batman Rust port
 
+## 2026-11-09 — QA-NAV-01 CI scheduling blocker (zero-job run)
+
+- **Observed:** [workflow run #42674383272](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42674383272) for commit `b1f4b9567ea5d9c3d33c4f211a12ee5179137d89` reached `completed/failure` with **zero created jobs, zero check runs and no Windows/job/compiler logs**. Attempt to re-run failed jobs returned GitHub **403 "This workflow run cannot be retried"**. This does NOT establish a Rust or GUI test failure. **Status remains IMPLEMENTED / WINDOWS UNVERIFIED**. Do not claim the F5/F6/F7 or mouse SKIP automation has executed.
+- **Separate earlier failure to investigate:** docs-only [#42668782687](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42668782687) ran a Windows job but failed existing Round-5 scenery-scroll `p95_ms<40.0` threshold: observed `p95_ms=91.5072`, `p50_ms=14.5596` while source/rendering code was unchanged; possible hosted-runner timing fluctuation is a **hypothesis only**, not proven. Preserve performance gate and record reproducible comparison against other runs before changing thresholds.
+- **Next action:** inspect next actual triggered Windows run/job and evidence. If there are again no jobs, investigate GitHub workflow-start/platform/account status rather than rewriting working Rust code; if job starts but compiler fails, fix exact compiler error. Do not merge draft PR #18.
+
 ## 2026-11-09 QA-NAV-01 — opt-in native Rust in-window development shortcuts
 
 - **Status: IMPLEMENTED / WINDOWS CI PENDING**. User explicitly wants autonomous agent navigation in the actual game GUI. `--qa-navigation` opt-in CLI flag starts the ordinary Rust EXE with QA-only rising-edge **F5=Title**, **F6=Intro**, **F7=Level 1A active gameplay/HUD**. Default launches are unchanged. This is a developer inspection tool, not original Flash gameplay.
