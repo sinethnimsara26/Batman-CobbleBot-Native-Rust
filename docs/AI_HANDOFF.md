@@ -159,9 +159,31 @@
 
 **Next exact small step:** inspect the GitHub Actions run for this commit; if failing, correct only the reproducible blocker and keep PR #18 draft. If green, retrieve the transition-metrics artifact, inspect values and compare available original evidence, then proceed to scoped Windows GUI/source-original acceptance. Read `AGENTS.md`, `docs/DEVELOPMENT_WORKFLOW_PROTOCOL.md` and `docs/AUTOMATED_WINDOWS_TESTING_PROTOCOL.md`. Research RE-20261109-010; post-implementation audit AUD-20261109-008.
 
+## 2026-11-09 — INTRO-QA-01-CI-REVIEW: latest Windows result and downloaded evidence
+
+**Audit date:** 2026-11-09. **Last verified code/test SHA:** [`6be6c4262bf48ffc53b99333000af990e5d165d0`](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/commit/6be6c4262bf48ffc53b99333000af990e5d165d0). **Completed Windows run:** [#42661016299](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42661016299), windows-x64 job `129312276370` SUCCESS, 57 completed workflow steps and no failures; Rust tests **11 passed, 0 failed**. Existing legacy regression: **15/15** historical pixel hashes identical; 20 legacy+20 HQ screenshot PNGs checked by smoke step. Preserve physical input/Flash fidelity as unverified.
+
+**Actual artifacts downloaded and inspected:** [`Batman-CobbleBot-Level1A-Intro-Transition-Metrics` ID 13695171815](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42661016299/artifacts/13695171815), exact ZIP SHA-256 `a815d67a0619886838a10e1ac45e7894cd031269a83e06f80d6e36fb13caf42b`. Extracted both valid JSON files, each with seven ordered samples: 0-based original intro 175–179, game ticks 0 and 50. Legacy file SHA-256 `de7f3df96d2f80d00f9d8210d686e7c599026dbab6732844d23c1c335f1f4202`, HQ file SHA-256 `60ea57a10f878d4e290cb8554612bf6d963a92775eee6f28e56570d519fe9c35`.
+
+| Exact frame | Legacy 1x near-black fraction | HQ3x near-black fraction | Evidence interpretation |
+| --- | ---: | ---: | --- |
+| Intro source175 | 0.617071 | 0.615128 | Darkening near source end |
+| Intro source176 | 0.712071 | 0.710128 | Darkening |
+| Intro source177 | 0.809571 | 0.807628 | Darkening |
+| Intro source178 | 0.904571 | 0.902628 | Darkening |
+| Intro source179 | 0.992071 | 0.991794 | Known near-black source final composite; not a failure |
+| Playing tick0 | 1.000000 | 1.000000 | Fully black native start of gameplay fade; alone NOT proof of a stuck window |
+| Playing tick50 | 0.082571 | 0.082132 | Visible scene and very different fingerprint from terminal source frame |
+
+**Additional visual inspection:** Downloaded and opened the same run's original-resolution and HQ3x visual-smoke ZIPs (IDs 13694363565 and 13695312493), inspected `00_intro_start.png`, `00_intro_call.png`, `00_intro_last.png`, `00_fade_start.png`, `01_fade_mid.png` and `02_level_title.png` in both modes; also inspected source-SWF-derived `intro-contact-sheet.png` from archived artifact 13689877160. Native screenshots show black `00_fade_start`, then a visible Level 1 title/game scene in `01_fade_mid` and `02_level_title`; this is consistent with the reported metrics and does not by itself prove exact original Flash behavior.
+
+**Six-file checkpoint:** AGENTS.md and both protocol documents reviewed; no new permanent rules. AI_TASKS, AI_HANDOFF and AI_WORKLOG synchronized; RE-20261109-011 describes actual evidence; AUD-20261109-009 records documentation/review-only scope. **No Rust game code, test harness, dependencies, CI workflow or assets changed in this verification batch.** GitHub CI may be triggered by a docs-only checkpoint; that rerun is not required to establish the prior code run result and its new status must be read live.
+
+**Next single task:** [WIN-GUI-PILOT-01](AI_TASKS.md) — one limited GitHub-hosted Windows **real-window** capture/input feasibility test, not another broad feature batch. Preserve WIN-01 manual source-original/audio/input acceptance gate, draft PR #18, main and Level1B restrictions.
+
 ## Exact next ONE bounded batch
 
-**Task ID: INTRO-QA-01-CI-REVIEW — first verify the new automated intro-transition metrics on a fresh Windows CI run.** Check actual branch HEAD, workflow conclusion, evidence artifact and both 1x/HQ3x JSON reports (or any failure logs). The previous run #42650216758 predates this change. Then return to WIN-01 / FIDELITY-GATE-01 real Windows/source comparison. Physical fidelity still pending; PR #18 draft, main untouched, Level1B blocked.
+**Task ID: WIN-GUI-PILOT-01 — investigate the smallest REAL Windows OS window/capture/input automation proof in the free GitHub-hosted Windows runner.** The new intro-transition smoke metric task has now passed verified CI #42661016299; do not repeat it. Implement one bounded runner feasibility proof, distinguish infrastructure limits from game defects, and preserve source-original human acceptance as an open gate. Physical fidelity pending; PR #18 draft, main untouched, Level1B blocked.
 
 
 ## Reproduction / first commands and links

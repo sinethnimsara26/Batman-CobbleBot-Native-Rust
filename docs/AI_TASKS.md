@@ -1,11 +1,19 @@
 # Persistent development tasks — Batman Rust port
 
+## 2026-11-09 WIN-GUI-PILOT-01 — next scoped automated Windows window/input feasibility check
+
+- **Status:** TODO / UNVERIFIED. **Priority:** P0 evidence-gathering subtask supporting WIN-01 source-original acceptance, not a replacement for human approval.
+- **Goal:** On the existing free Windows GitHub Actions runner, prove whether the actual native EXE can be launched in normal GUI mode, its OS window screenshot captured with nonempty observable pixels, and ONE native keyboard or click input delivered. Start with a small feasibility probe; prefer existing Win32 tooling or minimal CI-only script. Do not add a non-Rust gameplay runtime, paid remote desktop, or unreviewed secrets.
+- **Acceptance:** record exact runner desktop/session availability, process/window identity, capture method and two screenshots plus input events with artifact links; distinguish headless simulated game state from genuine Win32 window/OS input. If runner lacks interactive desktop, classify infrastructure unavailable and retain Level A deterministic smoke QA. Do not declare source/gameplay fidelity verified.
+- **Constraints:** stay on draft PR #18, no merge or Level1B; one bounded batch with all six records; avoid breaking proven CI or downloading/playing on user's computer.
+
 ## 2026-11-09 INTRO-QA-01 — bounded automated black-screen regression guard
 
 - **Purpose:** add actual native-Rust renderer pixel diagnostics for source-derived intro frames 175–179 and gameplay ticks 0 and 50 in both 1x and HQ3x smoke runs. Preserve the original 20 PNGs per mode, sprite/input timing assertions, and old pixel-hash oracle.
-- **Status:** **IMPLEMENTED / PENDING NEW WINDOWS CI** at the time the change was authored. Distinguish this from run [#42650216758](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42650216758), which was green **before** INTRO-QA-01.
+- **Status:** **VERIFIED — WINDOWS CI AND RETRIEVED ARTIFACT (NOT PHYSICAL WIN32)**. Latest completed [#42661016299](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42661016299) at `6be6c4262bf48ffc53b99333000af990e5d165d0`: Windows job SUCCESS, 57 steps, Rust tests 11/11; both actual JSON reports downloaded, parsed and visually cross-checked against generated intro/game screenshots. Earlier pre-change run [#42650216758](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42650216758), which was green **before** INTRO-QA-01.
 - **Acceptance:** compiled Windows Rust EXE's `--render-smoke` and `--render-smoke-hq` generate deterministic `intro-transition-qa.json` with 7 frame records each; exit with failure if gameplay tick 50 remains pixel-identical to the source terminal frame or at least 95% RGB-near-black; upload diagnostic JSON on failure where available. No new GUI automation is claimed.
-- **Next:** inspect resulting new workflow run, exact output artifacts and thresholds; if green, perform actual GUI/input/source-original verification as a separately bounded task. See RE-20261109-010 and AUD-20261109-008.
+- **Verified metrics:** original-scale intro frame179 99.2071% near-black, game tick0 100%, tick50 8.2571%; HQ3x 99.1794%, 100%, 8.2132%, respectively. Both final hashes differ at tick50. 15/15 historical legacy screenshot hashes remained equal and 20 PNGs per mode uploaded. Artifact ID 13695171815. This is Rust renderer-level evidence only; first Win32 window/input and source-original playback remain open. See RE-20261109-011 and AUD-20261109-009.
+- **Next:** WIN-GUI-PILOT-01 — small free Windows real-window feasibility check, preserving WIN-01 original-source human acceptance. Do not treat screenshot metrics as GUI proof.
 
 **Scope:** Original-source fidelity for Level 1A first. Every item below is a bounded batch (or marked as needing to be split). Status vocabulary: **TODO / IN PROGRESS / BLOCKED / IMPLEMENTED/UNVERIFIED / VERIFIED**. "VERIFIED" states *what* was verified; it does not imply user-approved fidelity.
 

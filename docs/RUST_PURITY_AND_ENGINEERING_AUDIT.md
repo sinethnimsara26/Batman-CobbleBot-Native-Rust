@@ -287,6 +287,17 @@ Actual [Run #42613807273](https://github.com/sinethnimsara26/Batman-CobbleBot-Na
 
 **PURE-RUST COMPLIANCE:** PASS WITH DOCUMENTED PREEXISTING PLATFORM/BUILD QUALIFICATIONS (HIGH for changed safe Rust and unchanged dependency set). **ENGINEERING QUALITY:** IMPLEMENTED, COMPILATION AND THRESHOLD ACCEPTANCE UNVERIFIED (MEDIUM pending CI). **ORIGINAL-GAME FIDELITY:** UNVERIFIED; this instrumentation does not alter original gameplay logic and is not original-Flash equivalence evidence. **Primary blocking check:** fresh Windows CI and the two `intro-transition-qa.json` reports. Then first real Win32/source mismatch, if any, should be fixed before unrelated feature work.
 
+
+## AUD-20261109-009 — INTRO-QA-01-CI-REVIEW evidence closeout, documentation only
+
+**Date:** 2026-11-09; tested code revision `6be6c4262bf48ffc53b99333000af990e5d165d0`; draft PR #18. **No implementation changes — Rust code audit not applicable to this verification-only batch.** No new Cargo crates, Rust modules, FFI, platform APIs, safety assumptions, rendering paths, binaries or CI steps were introduced during this batch. Earlier actual post-code assessment remains in [AUD-20261109-008](RUST_PURITY_AND_ENGINEERING_AUDIT.md#aud-20261109-008--intro-qa-01-post-implementation-rust-diagnostics-audit), linked research [RE-20261109-011](REVERSE_ENGINEERING_RESEARCH_LEDGER.md#re-20261109-011--intro-qa-01-ci-review-measured-original-derived-fade-tail-native-renderer-transition-and-evidence-provenance).
+
+**Verification actually performed:** inspected completed GitHub Actions run #42661016299, real Windows job logs, Rust 11/11 tests, 15/15 historical source-Rust baseline image hashes, 20 1x + 20 HQ screenshot outputs, and the native EXE smoke jobs. Downloaded/parsed `intro-transition-qa.json` for both actual Windows modes and visually opened selected PNG screenshots and an SWF-derived contact sheet. Both modes satisfy the new fail conditions: gameplay tick50 is neither ≥95% near-black (8.2571% 1x; 8.2132% HQ) nor pixel-identical to intro frame179. The intro terminal frame179 is about 99.2% near-black and game tick0 is fully black, consistent with the collected fading images; source parity beyond this sample set is not established.
+
+**Independent verdicts:** PURE-RUST COMPLIANCE — **unchanged from prior code audit**, no new Rust implementation to assess; existing qualified verdict retained. ENGINEERING QUALITY — **TARGETED CI CHECK PASS**, HIGH confidence in the tested deterministic smoke scope, not a comprehensive new code audit. ORIGINAL-GAME FIDELITY — **PARTIALLY VERIFIED SOURCE-DERIVED RENDER CONTENT / REAL FLASH AND PHYSICAL WIN32 UNVERIFIED**. No actual GUI session, Windows OS mouse interaction, human audio/speaker test, or side-by-side live original Adobe Flash comparison was performed. The GitHub-hosted Windows runner executes the EXE in CLI headless mode, not normal windowed mode. No engineering improvement claims unrelated to the exact benchmark/test evidence.
+
+**Recommendation:** no speculative code change; next bounded `WIN-GUI-PILOT-01` checks whether a GitHub Windows runner can launch the true Win32 game window, perform one input, and save a trustworthy screenshot. Preserve draft PR #18, main, and source-original acceptance issue #17. Full documentation closeout is Git-tracked by the new docs-only commit.
+
 ## Mandatory audit entry template — copy and complete AFTER implementation
 
 `## AUD-YYYYMMDD-NNN — [task and referenced RE entry]`

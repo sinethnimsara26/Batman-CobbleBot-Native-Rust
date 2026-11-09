@@ -348,6 +348,42 @@ Alternatives considered:
 
 **Scope of verification and unknowns:** The actual changed Rust text, old test sequence and CI YAML were inspected and edited on GitHub. The connector does not execute the Windows EXE in this authoring step; **new CI has not yet run at record time**. No original game video was inspected and no source pixel correspondence is claimed. Pixel fraction may detect a stuck black image at game tick50, but a real Win32 window can still fail to present frames/audio/mouse input; human or independent real-GUI tests remain needed. Confidence HIGH in existing source of terminal black and intended test structure; **UNVERIFIED** that the new threshold passes and detects all relevant black screen variants. No external Rust forums or web references were consulted: this narrow change relies on the project's own native rendering/test code and standard library, with no new dependencies.
 
+
+## RE-20261109-011 — INTRO-QA-01-CI-REVIEW: measured original-derived fade tail, native renderer transition and evidence provenance
+
+**Scope/date:** 2026-11-09, verification-only batch following code commit `6be6c4262bf48ffc53b99333000af990e5d165d0`, branch `revive/level1a-intro-hud-fidelity-2026-11-09`, draft [PR #18](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/18). **No gameplay/code/CI changes in this batch.** Source analysis, implementation rationale and restrictions in [RE-20261109-010](REVERSE_ENGINEERING_RESEARCH_LEDGER.md#re-20261109-010--intro-qa-01-source-terminal-frame-vs-native-gameplay-visual-observability). Reviewed Rust code `src/headless.rs::intro_frame_metrics`, `::render_smoke_mode`; original source extraction script `reverse-engineering/tools/bake_root_intro.py` and existing SWF-derived contact sheet evidence.
+
+### Exact CI and artifact provenance
+
+- [Windows Actions #42661016299](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42661016299), commit `6be6c42`, Windows job ID `129312276370` COMPLETED/SUCCESS with 57 steps, no failed steps. Downloaded the actual job logs; output `test result: ok. 11 passed; 0 failed`, `Legacy pixel identity PASS: 15/15 historical screenshots` and `Round 6 HUD contract PASS`. CLI smoke test required 20 standard and 20 HQ PNGs; both artifact ZIPs actually contain 20 files.
+- [Actions artifact ID 13695171815](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42661016299/artifacts/13695171815) name `Batman-CobbleBot-Level1A-Intro-Transition-Metrics`, size **967 bytes**, ZIP SHA-256 **`a815d67a0619886838a10e1ac45e7894cd031269a83e06f80d6e36fb13caf42b`** (measured after actual connector download). Two members were opened, parsed as JSON, and each had exactly 7 sample objects:
+  - `visual-smoke/intro-transition-qa.json`, SHA-256 `de7f3df96d2f80d00f9d8210d686e7c599026dbab6732844d23c1c335f1f4202`; `mode=legacy1x`.
+  - `visual-smoke-hq/intro-transition-qa.json`, SHA-256 `60ea57a10f878d4e290cb8554612bf6d963a92775eee6f28e56570d519fe9c35`; `mode=hq3x`.
+- Other actually downloaded artifacts from run #42661016299: standard 1x images `Batman-CobbleBot-Level1A-Visual-Smoke` (ID **13694363565**), HQ3x images `Batman-CobbleBot-Level1A-HQ3x-Visual-Smoke` (ID **13695312493**), plus source-derived intro contact sheet from a separately completed earlier run (artifact **13689877160**). Contact sheet is *offline reconstruction from the original SWF*, not observed original Adobe Flash real-time runtime.
+- The six image checkpoints `00_intro_start.png`, `00_intro_call.png`, `00_intro_last.png`, `00_fade_start.png`, `01_fade_mid.png`, `02_level_title.png` were visually opened from BOTH 1x and HQ3x; the first scenes are correctly distinguishable and the level scene visible after the black fade-start. The original SWF contact sheet shows the expected Batman phone sequence and nearly black final sample with SKIP button. A comparative montage was examined locally, not committed as a new Git source artifact.
+
+### Exact numeric observations
+
+The near-black metric counts pixels where **all RGB channels <20**, divided by all native renderer framebuffer pixels. The identifier fingerprint is FNV-1a of each packed Rust pixel (`u32`). These metrics are reproducible by running the pinned EXE smoke flags in the documented Windows CI environment.
+
+| Phase | 0-based source frame or gameplay tick | 1x near-black fraction | HQ3x near-black fraction |
+| --- | ---: | ---: | ---: |
+| Intro | 175 | 0.617071 | 0.615128 |
+| Intro | 176 | 0.712071 | 0.710128 |
+| Intro | 177 | 0.809571 | 0.807628 |
+| Intro | 178 | 0.904571 | 0.902628 |
+| Intro | 179 | 0.992071 | 0.991794 |
+| Playing | 0 | 1.000000 | 1.000000 |
+| Playing | 50 | 0.082571 | 0.082132 |
+
+Terminal fingerprints vs game tick50: legacy `b918d9ea978bfd25` → `e50887c098ab5dc7`; HQ `4f31fb63e7259325` → `2dd1a17c6a30b103`. Therefore the native framebuffer is **not** stuck on the terminal intro frame by game tick50 in this deterministic simulation, for either rendering mode. The 0 gameplay screenshot is fully black **at that one sampled tick**; this is in the context of a later visible fade/title frame, not evidence of an indefinite hung screen. Samples do not establish how many consecutive black frames actually occur during gameplay ticks 1–24 or whether the physical OS window presents them.
+
+### Interpretation and next test, with limits
+
+**High confidence**: Windows cargo build/test/EXE smoke completed for this commit; exact output metric and visual artifacts were successfully retrieved; source-derived last intro picture is almost black; framebuffer gameplay tick50 is visibly nonblack and changed. **Medium confidence**: current fade progression is likely usable in the built renderer as observed in selected native screenshots. **Unverified**: actual input routing from Windows OS mouse/keyboard, native display window update/audio, original Flash runtime exact intended natural transition, and user's subjective HUD acceptance. Existing source references remain in RE-20261109-010; **no new internet websites or forum sources were consulted** in this evidence-only batch, so no false community source is claimed.
+
+**Alternatives evaluated:** (i) treating any full-black initial gameplay tick as failure — rejected because source-derived fade can legitimately be black at its initial tick; (ii) treating green screenshot count as original fidelity — rejected because all images are Rust-side and the SWF contact sheet is an offline extraction; (iii) making another gameplay tweak without a reproducible failure — rejected; (iv) pursuing a small Windows real-window capture/input feasibility test — chosen next, to distinguish headless framebuffer correctness from actual OS presentation and input. Preserve issue #17 as the source/manual acceptance gate.
+
 ## Provenance record for this bootstrap
 
 **Repository sources actually read (2026-11-09):** GitHub native connector at the pinned `c2b872e` tree; `Cargo.toml`, `AGENTS.md`, `src/main.rs`, `src/game.rs`, `src/assets.rs`, `src/render.rs`, `src/audio.rs`, `src/collision.rs`, `src/win32.rs`, `src/headless.rs`, `AI_HANDOFF.md`, `AI_TASKS.md`, `AI_WORKLOG.md`, manifests and CI run/job logs identified above. Earlier measurements that were NOT personally regenerated are identified as historical evidence.
