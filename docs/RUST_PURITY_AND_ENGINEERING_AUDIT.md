@@ -268,6 +268,25 @@ Actual [Run #42613807273](https://github.com/sinethnimsara26/Batman-CobbleBot-Na
 
 ---
 
+
+
+## AUD-20261109-008 — INTRO-QA-01 post-implementation Rust diagnostics audit
+
+**Date:** 2026-11-09. **Parent SHA:** `637ad7141c661a21af9c3ed781decade277be0c4`. **Implementing commit:** the commit containing this record (resolve from GitHub history after push). **Linked source investigation:** [RE-20261109-010](REVERSE_ENGINEERING_RESEARCH_LEDGER.md#re-20261109-010--intro-qa-01-source-terminal-frame-vs-native-gameplay-visual-observability). **Inspected implementation:** `src/headless.rs::render_smoke_mode`, new `intro_frame_metrics`, and the Actions upload-artifact step in `.github/workflows/build-level1a-fidelity.yml`.
+
+### Rust compliance and implementation assessment
+
+- The changed runtime/test harness code is **safe Rust** using `std::fs::write`, `String::format!`, `Vec`, `RenderSurface` and the existing project's Rust renderer; **no new Cargo crate, feature, native engine, FFI, dependency, DLL or Flash execution** was introduced. Win32 OS APIs and existing off-line Python source baking remain preexisting platform/build qualifications. Cargo.toml was unchanged. No full transitive Cargo dependency audit was newly performed.
+- The new helper samples both `render::render` at logical 600×400 and `render::render_high_quality` at HQ resolution; it measures packed `u32` pixels and returns a normalized near-black proportion plus deterministic wrapping 64-bit fingerprint. The allocations and extra renderer calls are limited to the CLI smoke mode, **not** the normal Windows game loop. Reuse of existing private renderer and no new dependencies is preferable to installing a general-purpose screenshot framework for this bounded task.
+- Changed intro tick loop counts preserve the original smoke assertions: 80 + 95 = 175, inclusive 175–179 measurements with four advances = 179; original soundtrack stop event remains checked after frame179; natural Playing transition and later gameplay tick0/25/50 snapshots remain at same game ticks. Explicit early skip/mouse state test and all existing 20 screenshot filenames remain. No change to original audio/input or release-game state logic.
+- Relevant negative cases: near-black original frame179 must not fail simply for being dark; first gameplay frame0 may be dark due to a legitimate fade, so the **actual black-screen gate is at gameplay tick50**. A 95% threshold is intentionally a heuristic and may need a source-grounded revision if disproven by CI. Hash inequality is a complementary coarse check; it cannot prove true semantic correctness or screen presentation. The diagnostic JSON is emitted before these assertions, enabling artifact retrieval on an assertion failure.
+
+### Executed / unexecuted verification
+
+**Executed now:** code and diff inspection against the remote branch; existing test contracts/counter and changed JSON/YAML paths checked statically. **Previously executed by other code:** GitHub Actions [#42650216758](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42650216758), Windows 57 steps green (pre-change) — **NOT evidence for these modifications**. **Not yet run on the new changes:** Rust compiler, cargo fmt/check/test/clippy, Windows CI, actual test EXE, artifact inspection, physical Win32 GUI, audio or source-original Flash video comparison. All require subsequent GitHub CI evidence or human/GUI pilot. Never report this batch as green unless a new actual run passes.
+
+**PURE-RUST COMPLIANCE:** PASS WITH DOCUMENTED PREEXISTING PLATFORM/BUILD QUALIFICATIONS (HIGH for changed safe Rust and unchanged dependency set). **ENGINEERING QUALITY:** IMPLEMENTED, COMPILATION AND THRESHOLD ACCEPTANCE UNVERIFIED (MEDIUM pending CI). **ORIGINAL-GAME FIDELITY:** UNVERIFIED; this instrumentation does not alter original gameplay logic and is not original-Flash equivalence evidence. **Primary blocking check:** fresh Windows CI and the two `intro-transition-qa.json` reports. Then first real Win32/source mismatch, if any, should be fixed before unrelated feature work.
+
 ## Mandatory audit entry template — copy and complete AFTER implementation
 
 `## AUD-YYYYMMDD-NNN — [task and referenced RE entry]`

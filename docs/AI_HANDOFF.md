@@ -149,9 +149,19 @@
 - **Documentation checkpoint in this continuation:** six-file protocol reviewed; AGENTS.md policies and linked two protocols still current and are unchanged; `AI_TASKS`, `AI_WORKLOG`, `AI_HANDOFF`, detailed [RE-20261109-009](REVERSE_ENGINEERING_RESEARCH_LEDGER.md), [AUD-20261109-007](RUST_PURITY_AND_ENGINEERING_AUDIT.md) updated with source, diff and CI evidence. **No additional game source changed now.** Main untouched, draft PR and issue #17 remain open, Level1B blocked.
 - **Next exactly one chunk:** user tests latest green native Rust Windows build using the GitHub CLI latest-successful PowerShell installer in AGENTS.md; compare natural no-SKIP end and HUD icon/text alignment to original and personal expected look. If any concrete difference persists, fix/retest that defect before unrelated features.
 
+## 2026-11-09 — INTRO-QA-01 automated intro-transition evidence checkpoint
+
+**Current change (CI NOT YET VERIFIED when written):** on top of previously successful Windows run [#42650216758](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42650216758) (commit `637ad7141c661a21af9c3ed781decade277be0c4`, 57 successful workflow steps), add renderer pixel metrics around 175–179 (original-baked intro source samples) and first gameplay ticks 0 and 50 in **both** existing EXE smoke modes. Exact candidate commit = commit containing this new entry; inspect current remote PR #18 HEAD. The earlier run remains evidence for the old code, not this change.
+
+**Files:** `src/headless.rs` and `.github/workflows/build-level1a-fidelity.yml` plus synchronized documentation. No gameplay state machine, input handling, font layout, Cargo dependencies, or old screenshot count/hash contract changed. `intro-transition-qa.json` is output into each smoke directory; separate Actions artifact `Batman-CobbleBot-Level1A-Intro-Transition-Metrics` is uploaded even if subsequent smoke assertions fail, where files exist.
+
+**Automated claims and limits:** checks first gameplay tick50 is not pixel-identical to held source terminal screenshot and is below 95% RGB-near-black. Source frame179 itself is intentionally nearly black; do NOT treat that as a failure. This is a software renderer pixel check, **not** a physical Win32 GUI, browser, keyboard/mouse, audio, or original Flash screen recording. CI outcome for new code must be read live and recorded later; no fresh successful CI is claimed in this entry.
+
+**Next exact small step:** inspect the GitHub Actions run for this commit; if failing, correct only the reproducible blocker and keep PR #18 draft. If green, retrieve the transition-metrics artifact, inspect values and compare available original evidence, then proceed to scoped Windows GUI/source-original acceptance. Read `AGENTS.md`, `docs/DEVELOPMENT_WORKFLOW_PROTOCOL.md` and `docs/AUTOMATED_WINDOWS_TESTING_PROTOCOL.md`. Research RE-20261109-010; post-implementation audit AUD-20261109-008.
+
 ## Exact next ONE bounded batch
 
-**Task ID: WIN-01 / FIDELITY-GATE-01 — test the now-green INTRO-HUD-07/08 corrections on physical Windows against original Flash.** Use AGENTS.md latest-successful GitHub CLI install/launch; verify natural intro exits black after one tick, explicit SKIP uses 41-frame fade, and top HUD text/numbers no longer collide. Record first concrete mismatch and repair/retest before unrelated scope. Physical fidelity still pending; PR #18 draft, main untouched, Level1B blocked.
+**Task ID: INTRO-QA-01-CI-REVIEW — first verify the new automated intro-transition metrics on a fresh Windows CI run.** Check actual branch HEAD, workflow conclusion, evidence artifact and both 1x/HQ3x JSON reports (or any failure logs). The previous run #42650216758 predates this change. Then return to WIN-01 / FIDELITY-GATE-01 real Windows/source comparison. Physical fidelity still pending; PR #18 draft, main untouched, Level1B blocked.
 
 
 ## Reproduction / first commands and links

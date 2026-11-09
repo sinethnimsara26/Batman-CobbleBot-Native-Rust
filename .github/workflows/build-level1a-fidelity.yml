@@ -1894,6 +1894,17 @@ jobs:
           path: .generated/visual-smoke-hq/*.png
           if-no-files-found: error
 
+      # INTRO-QA-01: independent frame-by-frame natural intro diagnostics.
+      # Upload even if smoke tests fail after writing these reports.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Batman-CobbleBot-Level1A-Intro-Transition-Metrics
+          path: |
+            .generated/visual-smoke/intro-transition-qa.json
+            .generated/visual-smoke-hq/intro-transition-qa.json
+          if-no-files-found: warn
+
       - uses: actions/upload-artifact@v4
         with:
           name: Batman-CobbleBot-Level1A-HQ3x-Benchmark

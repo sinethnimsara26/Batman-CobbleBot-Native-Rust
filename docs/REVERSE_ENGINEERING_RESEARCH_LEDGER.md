@@ -321,6 +321,33 @@ These are primary vendor technical manuals, not invented community consensus. Th
 
 ---
 
+
+
+## RE-20261109-010 — INTRO-QA-01: source terminal-frame vs native gameplay visual observability
+
+**Date:** 2026-11-09. **Starting code reference:** `637ad7141c661a21af9c3ed781decade277be0c4`; development branch `revive/level1a-intro-hud-fidelity-2026-11-09`, draft PR #18. **Scope:** native visual diagnostics in the existing Windows CLI smoke harness, not modifying SWF, game narrative, scene timing, fonts, runtime gameplay or main binary build target. Implementation commit is the Git commit containing this entry (discover from remote; no Markdown document can embed its own yet-uncreated commit SHA). Related [AUD-20261109-008](RUST_PURITY_AND_ENGINEERING_AUDIT.md#aud-20261109-008--intro-qa-01-post-implementation-rust-diagnostics-audit).
+
+### Actual source locations and initial evidence
+
+- Exact original input evidence in the repository: `reverse-engineering/tools/bake_root_intro.py` constructs source root-frame-18 intro samples; `reverse-engineering/tools/inspect_intro_behavior.py` and `docs/revival/LEVEL1A_PRESENTATION_FIDELITY_LOG_2026-11-09.md` describe button #129 and Flash original stop and soundtrack events. The extracted source terminal sample (0-based index **179** out of 180) was previously measured about **99.2071% near-black** in prior reports. We did **not independently re-extract or rehash** the SWF in this step.
+- Rust state evidence at pinned parent: `src/game.rs` contains `AppScreen::Intro`, `intro_tick`, `IntroStop` and user-requested natural fallthrough, while explicit SKIP still exercises the 41-frame original fade. `src/headless.rs` preexisting smoke checked state transitions and rendered single PNGs `00_intro_last.png` and `00_fade_start.png`, then `02_level_title.png` at tick50. It had no per-frame transition renderer measurements. 
+- CI source: `.github/workflows/build-level1a-fidelity.yml` already ran the actual compiled Windows EXE with `--render-smoke` and `--render-smoke-hq` and checked 20 PNGs each, but those screenshot *counts* and old Rust-on-Rust hashes do not prove frame continuity or source equivalence. [Previous workflow #42650216758](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42650216758) was successful for the predecessor code, not for the modified tests.
+
+### Competing approaches, technical decision and reproducibility
+
+**Hypothesis A:** the intro state reaches Playing yet remains visibly almost black because the renderer still shows a held/opaque terminal frame. State-machine assertions alone would miss that. **Hypothesis B:** the screenshot evidence shows intended original fade behavior, and asserting that *every* terminal/initial playback frame be bright would create a false failure. Both are plausible without a physical original recording.
+
+Alternatives considered:
+1. Require every intro frame to be non-black — **rejected**, because the original sample 179 is deliberately nearly black and other fades may also be legitimately dark.
+2. Introduce Win32 screen automation immediately — **deferred**, because hosted Windows runner interactive desktop availability is unproven and the project already has deterministic native Rust rendering.
+3. Add several new screenshot PNGs — **deferred**, as it unnecessarily changes the historical 20-frame counts and image-hash workflow for a narrow diagnostic.
+4. **Chosen:** collect deterministic actual native-renderer RGB near-black fraction and FNV-1a 64-bit pixel fingerprint for 0-based source frames 175–179, game ticks 0 and 50, in both 1x and HQ3x; save JSON into each existing smoke-output directory. On tick50, **after the established game title/fade interval**, assert the framebuffer is not at least 95% near-black and is not identical to terminal intro. Preserve natural transition, late dark frames and SKIP state/audio checks. The threshold is a conservative **test heuristic**, not a Flash spec claim; its exact behavior needs Windows CI validation.
+5. Upload JSON from both modes with Actions `always()` and warn-only missing-files behavior so a later failing smoke step can still expose evidence. Keep 20 existing PNGs per mode, their legacy pixel hashes, assets and level tests unchanged.
+
+**Exact implementation locations:** `src/headless.rs::render_smoke_mode` replaces previous coarse loop advancing intro 80→179 with loop 80→175 then samples 175..179; checks IntroStop once and Game Playing state, takes metrics at tick0, records tick50 after `02_level_title.png`, writes `intro-transition-qa.json` then asserts. Added private `intro_frame_metrics` uses the same `RenderSurface` and `render::render` / `render::render_high_quality` functions as the smoke screenshots. Black means **all three RGB channels <20**, denominator all presentation pixels; FNV-1a over every `u32` packed pixel with wrapping 64-bit operations. JSON field names `phase,frame|tick,near_black_fraction,pixel_fingerprint`. `.github/workflows/build-level1a-fidelity.yml` adds artifact `Batman-CobbleBot-Level1A-Intro-Transition-Metrics` sourcing both 1x/HQ report paths.
+
+**Scope of verification and unknowns:** The actual changed Rust text, old test sequence and CI YAML were inspected and edited on GitHub. The connector does not execute the Windows EXE in this authoring step; **new CI has not yet run at record time**. No original game video was inspected and no source pixel correspondence is claimed. Pixel fraction may detect a stuck black image at game tick50, but a real Win32 window can still fail to present frames/audio/mouse input; human or independent real-GUI tests remain needed. Confidence HIGH in existing source of terminal black and intended test structure; **UNVERIFIED** that the new threshold passes and detects all relevant black screen variants. No external Rust forums or web references were consulted: this narrow change relies on the project's own native rendering/test code and standard library, with no new dependencies.
+
 ## Provenance record for this bootstrap
 
 **Repository sources actually read (2026-11-09):** GitHub native connector at the pinned `c2b872e` tree; `Cargo.toml`, `AGENTS.md`, `src/main.rs`, `src/game.rs`, `src/assets.rs`, `src/render.rs`, `src/audio.rs`, `src/collision.rs`, `src/win32.rs`, `src/headless.rs`, `AI_HANDOFF.md`, `AI_TASKS.md`, `AI_WORKLOG.md`, manifests and CI run/job logs identified above. Earlier measurements that were NOT personally regenerated are identified as historical evidence.

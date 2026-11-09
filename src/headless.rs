@@ -33,18 +33,35 @@ fn render_smoke_mode(out:&str,hq:bool){
     for _ in 0..80 {game.tick(&mut input,&ground);}
     assert_eq!(game.screen,AppScreen::Intro);
     snapshot(hq,&out,"00_intro_call.png",&mut game,&assets);
-    // The source final sample is near-black: show it for precisely one
-    // native tick, not as an indefinitely held waiting screen.
-    for _ in 0..99 {game.tick(&mut input,&ground);}
-    assert_eq!(game.screen,AppScreen::Intro);
-    assert_eq!(game.intro_tick,179);
+    // INTRO-QA-01: capture EVERY final intro sample 175..=179 (not just a
+    // screenshot at 179), then the first playing frame. This deterministic
+    // renderer evidence detects a stuck visual even if the game state changes.
+    // A near-black source frame is NOT automatically a regression.
+    for _ in 0..95 {game.tick(&mut input,&ground);}
+    let mut transition_records=Vec::new();
+    for source_frame in 175_u16..=179 {
+        assert_eq!(game.screen,AppScreen::Intro);
+        assert_eq!(game.intro_tick,source_frame);
+        let (near_black,fingerprint)=intro_frame_metrics(hq,&mut game,&assets);
+        transition_records.push(format!(
+            "    {{\"phase\":\"intro\",\"frame\":{},\"near_black_fraction\":{:.6},\"pixel_fingerprint\":\"{:016x}\"}}",
+            source_frame,near_black,fingerprint
+        ));
+        if source_frame<179 {game.tick(&mut input,&ground);}
+    }
     assert_eq!(game.take_audio_events(),vec![AudioEvent::IntroStop]);
     snapshot(hq,&out,"00_intro_last.png",&mut game,&assets);
+    let terminal_fingerprint=intro_frame_metrics(hq,&mut game,&assets).1;
     game.tick(&mut input,&ground);
     assert_eq!(game.screen,AppScreen::Playing);
     assert_eq!(game.ticks,0);
     assert_eq!(game.intro_fadeout_tick,None);
     assert_eq!(game.take_audio_events(),vec![AudioEvent::MusicStart]);
+    let (playing_start_dark,playing_start_hash)=intro_frame_metrics(hq,&mut game,&assets);
+    transition_records.push(format!(
+        "    {{\"phase\":\"playing\",\"tick\":0,\"near_black_fraction\":{:.6},\"pixel_fingerprint\":\"{:016x}\"}}",
+        playing_start_dark,playing_start_hash
+    ));
 
     // Verify early keyboard skip remains source-correct: sprite34 has all 41
     // frames and StopSounds precedes gameplay entry/music.
@@ -96,6 +113,24 @@ fn render_smoke_mode(out:&str,hq:bool){
     snapshot(hq,&out,"01_fade_mid.png",&mut game,&assets);
     for _ in 0..25 { game.tick(&mut input,&ground); }
     snapshot(hq,&out,"02_level_title.png",&mut game,&assets);
+    let (playing_50_dark,playing_50_hash)=intro_frame_metrics(hq,&mut game,&assets);
+    transition_records.push(format!(
+        "    {{\"phase\":\"playing\",\"tick\":50,\"near_black_fraction\":{:.6},\"pixel_fingerprint\":\"{:016x}\"}}",
+        playing_50_dark,playing_50_hash
+    ));
+    // Save evidence BEFORE the assertions so a failing Windows CI uploads it.
+    let report=format!(
+        "{{\n  \"scenario\": \"natural-intro-to-playing\",\n  \"mode\": \"{}\",\n  \"near_black_rgb_threshold\": 20,\n  \"samples\": [\n{}\n  ]\n}}\n",
+        if hq {"hq3x"} else {"legacy1x"},
+        transition_records.join(",\n")
+    );
+    fs::write(out.join("intro-transition-qa.json"),report)
+        .expect("write natural intro transition diagnostics");
+    assert_ne!(terminal_fingerprint,playing_50_hash,
+        "intro terminal image must not remain visually identical to gameplay tick 50");
+    assert!(playing_50_dark<0.95,
+        "gameplay tick 50 is unexpectedly near-black ({:.3}); inspect intro-transition-qa.json",
+        playing_50_dark);
 
     // Let the 100-frame title timeline clear, then capture clean gameplay.
     while game.ticks < 105 { game.tick(&mut input,&ground); }
@@ -247,6 +282,29 @@ fn snapshot(hq:bool,out:&Path,name:&str,game:&mut Game,assets:&Assets){
         render::render(&mut fb,game,assets);
         write_png(&out.join(name),&fb);
     }
+}
+
+// Returns a deterministic visual fingerprint and fraction of pixels whose
+// RGB channels are ALL below 20. Platform screen capture is not involved:
+// these are actual native Rust renderer pixels, not a Win32 window test.
+fn intro_frame_metrics(hq:bool,game:&mut Game,assets:&Assets)->(f64,u64){
+    let fb=if hq {
+        let mut logical=RenderSurface::new(LOGICAL_W,LOGICAL_H);
+        let mut output=RenderSurface::new(render::HQ_W,render::HQ_H);
+        render::render_high_quality(&mut logical,&mut output,game,assets);
+        output
+    } else {
+        let mut output=RenderSurface::new(LOGICAL_W,LOGICAL_H);
+        render::render(&mut output,game,assets);
+        output
+    };
+    let dark=fb.pixels.iter().filter(|&&px|{
+        ((px>>16)&255)<20 && ((px>>8)&255)<20 && (px&255)<20
+    }).count();
+    let fingerprint=fb.pixels.iter().fold(0xcbf29ce484222325_u64,|hash,&px|{
+        (hash ^ u64::from(px)).wrapping_mul(0x100000001b3)
+    });
+    (dark as f64/fb.pixels.len() as f64,fingerprint)
 }
 
 pub fn benchmark_render(iterations:usize,out:&str){

@@ -1,5 +1,12 @@
 # Persistent development tasks — Batman Rust port
 
+## 2026-11-09 INTRO-QA-01 — bounded automated black-screen regression guard
+
+- **Purpose:** add actual native-Rust renderer pixel diagnostics for source-derived intro frames 175–179 and gameplay ticks 0 and 50 in both 1x and HQ3x smoke runs. Preserve the original 20 PNGs per mode, sprite/input timing assertions, and old pixel-hash oracle.
+- **Status:** **IMPLEMENTED / PENDING NEW WINDOWS CI** at the time the change was authored. Distinguish this from run [#42650216758](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42650216758), which was green **before** INTRO-QA-01.
+- **Acceptance:** compiled Windows Rust EXE's `--render-smoke` and `--render-smoke-hq` generate deterministic `intro-transition-qa.json` with 7 frame records each; exit with failure if gameplay tick 50 remains pixel-identical to the source terminal frame or at least 95% RGB-near-black; upload diagnostic JSON on failure where available. No new GUI automation is claimed.
+- **Next:** inspect resulting new workflow run, exact output artifacts and thresholds; if green, perform actual GUI/input/source-original verification as a separately bounded task. See RE-20261109-010 and AUD-20261109-008.
+
 **Scope:** Original-source fidelity for Level 1A first. Every item below is a bounded batch (or marked as needing to be split). Status vocabulary: **TODO / IN PROGRESS / BLOCKED / IMPLEMENTED/UNVERIFIED / VERIFIED**. "VERIFIED" states *what* was verified; it does not imply user-approved fidelity.
 
 **Evidence checkpoint (historic; superseded by the 2026-11-09 bootstrap status below):** INTRO-05 [Run #42589238951](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42589238951) at `da30511915a86fbd076de735307fde428a07b02c` **FAILED** in the render benchmark (Windows exit `-1073740791` / `0xC0000409`) despite successful Rust compilation and nine passing unit tests. Last fully green: [Run #42587338561](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42587338561). INTRO-06 fade implementation and that benchmark regression both require new CI. Manual Windows approval remains outstanding. Keep [issue #17](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/issues/17) as the manual acceptance gate.
