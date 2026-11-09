@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """CI-only, bounded REAL Win32 GUI feasibility probe. Not part of Rust game runtime."""
 from __future__ import annotations
-import argparse, ctypes, hashlib, json, os, platform, subprocess, sys, time
+import argparse, ctypes, hashlib, json, os, platform, re, subprocess, sys, time
 from ctypes import wintypes
 from pathlib import Path
 from PIL import ImageGrab, ImageChops
@@ -9,6 +9,9 @@ from PIL import ImageGrab, ImageChops
 TITLE = "The Batman - CobbleBot Caper - Level 1A Fidelity Slice"
 class RECT(ctypes.Structure):
     _fields_ = [("left", wintypes.LONG),("top", wintypes.LONG),("right", wintypes.LONG),("bottom", wintypes.LONG)]
+class POINT(ctypes.Structure):
+    _fields_ = [("x", wintypes.LONG), ("y", wintypes.LONG)]
+
 class KEYBDINPUT(ctypes.Structure):
     _fields_ = [("wVk", wintypes.WORD),("wScan", wintypes.WORD),("dwFlags", wintypes.DWORD),("time", wintypes.DWORD),("dwExtraInfo", ctypes.c_void_p)]
 class MOUSEINPUT(ctypes.Structure):
@@ -33,14 +36,64 @@ def find_window(user32, pid):
     user32.EnumWindows(callback,0)
     return matches[0] if matches else None
 
-def send_enter(user32,up):
+def send_key(user32, key, up):
     event=INPUT()
     event.type=1 # INPUT_KEYBOARD
-    event.data.ki.wVk=0x0d
+    event.data.ki.wVk=key
     event.data.ki.dwFlags=2 if up else 0
     ctypes.set_last_error(0)
     sent=user32.SendInput(1,ctypes.byref(event),ctypes.sizeof(INPUT))
     return {"sent":int(sent),"last_error":ctypes.get_last_error()}
+
+def send_enter(user32,up):
+    return send_key(user32,0x0d,up)
+
+def send_mouse_button(user32, release):
+    event = INPUT()
+    event.type = 0  # INPUT_MOUSE
+    event.data.mi.dwFlags = 0x0004 if release else 0x0002  # LEFTUP / LEFTDOWN
+    ctypes.set_last_error(0)
+    count = user32.SendInput(1, ctypes.byref(event), ctypes.sizeof(INPUT))
+    return {"sent": int(count), "last_error": ctypes.get_last_error()}
+
+
+def source_skip_click_point(user32, hwnd):
+    # The same original-SWF Button #129 rectangle generated for Rust.
+    source_path = Path("assets/intro_button_bounds.rs")
+    original = source_path.read_text(encoding="utf-8")
+    matched = re.search(r"INTRO_SKIP_RECT\s*:\s*\(i32,\s*i32,\s*i32,\s*i32\)\s*=\s*\(([^)]+)\)", original)
+    if not matched:
+        raise ValueError("Missing source-generated SKIP bounds: " + str(source_path))
+    left, top, right, bottom = [int(x.strip()) for x in matched.group(1).split(",")]
+    if not (0 <= left < right <= 600 and 0 <= top < bottom <= 400):
+        raise ValueError("Invalid source-derived SKIP rectangle")
+    center_x, center_y = (left + right) // 2, (top + bottom) // 2
+    client = RECT()
+    if not user32.GetClientRect(hwnd, ctypes.byref(client)):
+        raise RuntimeError("GetClientRect failed")
+    cw, ch = client.right - client.left, client.bottom - client.top
+    if cw <= 0 or ch <= 0:
+        raise RuntimeError("Win32 game client area is empty")
+    if cw * 400 <= ch * 600:
+        vw, vh = cw, cw * 400 // 600
+    else:
+        vw, vh = ch * 600 // 400, ch
+    vx, vy = (cw - vw) // 2, (ch - vh) // 2
+    point = POINT(vx + center_x * vw // 600, vy + center_y * vh // 400)
+    client_coords = [point.x, point.y]
+    if not user32.ClientToScreen(hwnd, ctypes.byref(point)):
+        raise RuntimeError("ClientToScreen failed")
+    return {
+        "source_generated_file": str(source_path),
+        "source_stage_bounds": [left, top, right, bottom],
+        "logical_stage": [600, 400],
+        "logical_click_center": [center_x, center_y],
+        "win32_client_size": [cw, ch],
+        "letterboxed_viewport": [vx, vy, vw, vh],
+        "client_click_position": client_coords,
+        "screen_click_position": [point.x, point.y],
+    }
+
 
 def screenshot(user32,hwnd,path,report):
     rect=RECT()
@@ -57,7 +110,7 @@ def screenshot(user32,hwnd,path,report):
     im.save(path)
     # Sample 10K pixels only; stable, cheap, explicit near-black heuristic.
     small=im.resize((100,100))
-    dark=sum(1 for r,g,b in small.getdata() if r<20 and g<20 and b<20)/10000
+    dark=sum(1 for r,g,b in (small.get_flattened_data() if hasattr(small, 'get_flattened_data') else small.getdata()) if r<20 and g<20 and b<20)/10000
     report["captures"].append({"file":path.name,"box":box,"size":list(im.size),
        "sha256":hashlib.sha256(path.read_bytes()).hexdigest(),
        "dark_fraction_sampled":dark,"type":"OS desktop ImageGrab, NOT Rust framebuffer"})
@@ -84,6 +137,10 @@ def probe(exe,out):
         user32.IsWindowVisible.argtypes=[wintypes.HWND]
         user32.GetWindowTextW.argtypes=[wintypes.HWND,wintypes.LPWSTR,ctypes.c_int]
         user32.GetWindowThreadProcessId.argtypes=[wintypes.HWND,ctypes.POINTER(wintypes.DWORD)]
+        user32.GetClientRect.argtypes=[wintypes.HWND,ctypes.POINTER(RECT)]
+        user32.ClientToScreen.argtypes=[wintypes.HWND,ctypes.POINTER(POINT)]
+        user32.SetCursorPos.argtypes=[ctypes.c_int,ctypes.c_int]
+        user32.GetCursorPos.argtypes=[ctypes.POINTER(POINT)]
         user32.SendInput.argtypes=[wintypes.UINT,ctypes.POINTER(INPUT),ctypes.c_int]
         user32.SendInput.restype=wintypes.UINT
         user32.GetWindowThreadProcessId.argtypes=[wintypes.HWND,ctypes.POINTER(wintypes.DWORD)]
@@ -95,7 +152,7 @@ def probe(exe,out):
         result["session"]["screen"]=[user32.GetSystemMetrics(0),user32.GetSystemMetrics(1)]
         if not exe.is_file():
             result["classification"]="EXECUTABLE_MISSING"; return result
-        proc=subprocess.Popen([str(exe.resolve())],cwd=str(Path.cwd()),
+        proc=subprocess.Popen([str(exe.resolve()),"--qa-navigation"],cwd=str(Path.cwd()),
             stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
         result["process"]["pid"]=proc.pid
         found=None
@@ -137,6 +194,72 @@ def probe(exe,out):
             result["classification"]="WINDOW_CAPTURED_INPUT_API_ACCEPTED_VISUAL_CHANGE_NEEDS_REVIEW"
         else:
             result["classification"]="WINDOW_CAPTURED_INPUT_API_ACCEPTED_NO_VISIBLE_CHANGE"
+        # WIN-GUI-PILOT-02: genuine left-button press and release inside the
+        # source-derived SKIP button, followed by actual desktop HUD captures.
+        # Do not confuse this OS input with a simulated Rust game-state call.
+        mouse = {"scenario": "real-win32-release-inside-source-skip",
+                 "attempted": False, "classification": "NOT_ATTEMPTED"}
+        result["mouse_skip"] = mouse
+        try:
+            if not result["input"]["keydown"]["sent"] or not result["input"]["keyup"]["sent"]:
+                mouse["classification"] = "KEYBOARD_PHASE_NOT_PROVEN"
+            elif user32.GetForegroundWindow() != hwnd:
+                mouse["classification"] = "GAME_NOT_FOREGROUND"
+            else:
+                geometry = source_skip_click_point(user32, hwnd)
+                mouse["geometry"] = geometry
+                sx, sy = geometry["screen_click_position"]
+                mouse["set_cursor_pos"] = bool(user32.SetCursorPos(sx, sy))
+                cursor = POINT()
+                mouse["cursor_verified"] = bool(user32.GetCursorPos(ctypes.byref(cursor))) and [cursor.x, cursor.y] == [sx, sy]
+                if not mouse["set_cursor_pos"] or not mouse["cursor_verified"]:
+                    mouse["classification"] = "CURSOR_POSITION_NOT_VERIFIED"
+                else:
+                    time.sleep(0.10)
+                    mouse["attempted"] = True
+                    mouse["press"] = send_mouse_button(user32, False)
+                    time.sleep(0.12)
+                    mouse["release"] = send_mouse_button(user32, True)
+                    mouse["classification"] = ("MOUSE_API_ACCEPTED_VISUAL_REVIEW_REQUIRED"
+                        if mouse["press"]["sent"] == 1 and mouse["release"]["sent"] == 1
+                        else "MOUSE_API_INJECTION_FAILED")
+                    # Native SKIP's 41 frames last about 1.64 seconds at 25 Hz.
+                    # Capture early fade, later level title and clean gameplay
+                    # HUD after 100-tick title timeline; timings are approximate.
+                    time.sleep(0.22)
+                    screenshot(user32,hwnd,out/"skip_fade_early.png",result)
+                    time.sleep(2.45)
+                    screenshot(user32,hwnd,out/"skip_level_title.png",result)
+                    time.sleep(3.85)
+                    screenshot(user32,hwnd,out/"skip_gameplay_hud.png",result)
+                    # Separately prove the opt-in native Rust developer jump,
+                    # NEVER count this as proof the mouse skip itself worked.
+                    qa={"mode":"--qa-navigation","shortcut":"F7 direct gameplay",
+                        "classification":"NOT_TESTED"}
+                    result["qa_navigation"]=qa
+                    if user32.GetForegroundWindow()==hwnd:
+                        qa["keydown"]=send_key(user32,0x76,False)
+                        time.sleep(0.16)
+                        qa["keyup"]=send_key(user32,0x76,True)
+                        time.sleep(0.28)
+                        screenshot(user32,hwnd,out/"qa_f7_direct_gameplay.png",result)
+                        qa["classification"]="CAPTURED_NEEDS_VISUAL_INSPECTION"
+                    else:
+                        qa["classification"]="GAME_NOT_FOREGROUND"
+                    mouse["recorded_images"] = [
+                        "after_enter.png", "skip_fade_early.png",
+                        "skip_level_title.png", "skip_gameplay_hud.png",
+                        "qa_f7_direct_gameplay.png"
+                    ]
+                    mouse["qualification"] = (
+                        "Screenshot differences alone do not prove the source 41-frame fade. "
+                        "Inspect actual game scene and HQ gameplay HUD typography; "
+                        "original Flash comparison and human acceptance remain open."
+                    )
+        except Exception as mouse_error:
+            mouse["classification"] = "MOUSE_PILOT_EXCEPTION_NOT_GAME_PROOF"
+            mouse["error"] = type(mouse_error).__name__ + ": " + str(mouse_error)
+            result["errors"].append("mouse_skip_phase: " + mouse["error"])
         return result
     except Exception as exc:
         result["errors"].append(type(exc).__name__+": "+str(exc))

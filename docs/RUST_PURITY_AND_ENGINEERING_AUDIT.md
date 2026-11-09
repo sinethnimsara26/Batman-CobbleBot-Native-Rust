@@ -322,6 +322,27 @@ Actual [Run #42613807273](https://github.com/sinethnimsara26/Batman-CobbleBot-Na
 
 **Nonblocking concerns:** test-only PIL getdata future deprecation, fragility across other runner desktop sessions, no automated semantic OCR/game-state introspection; report none of these as a present Rust game failure. Next small batch WIN-GUI-PILOT-02 actual mouse SKIP and later scene captures, preserve draft PR #18 and issue #17 manual source-fidelity gate.
 
+
+## AUD-20261109-012 — WIN-GUI-PILOT-02 and QA-NAV-01 post-change engineering audit (Windows CI pending)
+
+**Date:** 2026-11-09, parent `9c749f52e4be5394ccf497136bf9ca61c2e58e9b`; implementing commit = one containing this entry. Linked detailed research RE-20261109-014. Code changed: `src/main.rs`, `src/win32.rs` native game opt-in QA navigation; `reverse-engineering/tools/windows_gui_pilot.py` CI-only screenshot/input probe. AGENTS.md policy and the other five documentation records updated. **This is a real Rust code-changing batch; independent focused audit required.**
+
+### Rust purity and architecture
+- `src/main.rs` only changes normal Win32 runner invocation to `win32::run(qa_navigation)`; the flag is true only when exact `--qa-navigation` CLI argument exists. Existing `--render-smoke`, `--render-smoke-hq`, rendering benchmarks and normal game path are unchanged; QA mode must not be considered original-game behavior.
+- `src/win32.rs` adds Win32 virtual key constants and new safe Game/reset logic inside the existing Win32 unsafe access to `GetAsyncKeyState`. Scene-jump keys are read only when QA flag is enabled and game active; shortcuts depend on keydown rising edges so holding F7 cannot repeatedly reset game; input and intro-skip arm state cleared on jump. Reset Game::new() avoids state leakage from another scene. F5 normal Title; F6 Intro and original event audio; F7 Playing at tick150 for immediate source-inspired but non-source-required HUD inspection.
+- Audio remains owned by pre-existing `Audio` WinMM MCI manager; stopped via `AudioEvent::IntroStop/MusicStop` before switching, avoiding repeated `Audio::new` and alias reinitialization. No new crates/features, FFI library, C/C++ gameplay code, JS, Flash emulator, binary asset format or Cargo changes; game remains Rust-based. The QA Python/Pillow/ctypes code is STRICTLY offline CI, not packaged as game runtime.
+- Win32 UI input path still routes real mouse through `WM_LBUTTONDOWN/UP` and source-derived hitbox; the new CI-only script computes its click position using original source constant, foreground HWND verification and OS mouse buttons, not direct calls into Rust Game::skip_intro().
+- **Risks:** F7 tick150 shortcut may not have identical game player/camera/overlay state to actual 150 ticks of gameplay: acceptable as QA navigation, NOT original fidelity test. Win32 F5/F6/F7 shortcut state reset uses existing timer; compilation, actual screenshots, sound switching, and mouse behavior must be verified on Windows. Source/Pillow report can fail if generated asset missing, API privileges differ or timing drift occurs. The UI script's F7 screenshot cannot be used to claim SKIP successful.
+
+### Actual verification performed vs pending
+**Performed:** remote source inspection of `src/game.rs::Game::new`, original `src/win32.rs` message loop and polling, `src/audio.rs` MCI alias life cycle, `src/render.rs` Playing HUD and intro presentation, `bake_root_intro.py` original Button129 generated hitbox, `bake_hud_assets.py` fonts, existing workflow artifact uploader and full previous successful GUI CI run #42666398737 (pre-change). Code/patch anchors statically validated; no unrelated gameplay code/CI YAML modified.
+**NOT performed yet on changed code:** cargo fmt/check/test/clippy/build, actual `--qa-navigation` Windows EXE, real Win32 mouse click or F7 input, screenshot artifact analysis or original Flash runtime comparison. Previous green CI does NOT validate these changes. Claims remain IMPLEMENTED/UNVERIFIED until new Actions run finishes and artifacts are actually inspected.
+
+### Independent verdicts
+**PURE-RUST RUNTIME COMPLIANCE:** PASS WITH PREEXISTING WINDOWS PLATFORM QUALIFICATIONS (HIGH confidence: touched game code Rust only, CI-only Python excluded). **ENGINEERING QUALITY:** REVIEWED STATICALLY / NOT COMPILE-VERIFIED (MEDIUM; dependent on Windows CI). **ORIGINAL GAME FIDELITY:** UNVERIFIED; opt-in QA mode is purposely not original Flash behavior, actual mouse and game HUD still pending. **User font satisfaction:** OPEN HUD-REAL-01, not fixed merely by adding screenshots.
+
+**Next gate:** Run current commit in GitHub Windows workflow, inspect failures/screenshots; if there is a compile or test bug, fix in next bounded batch before taking on unrelated scene/tooling improvements. Do not merge PR #18 or advance Level1B.
+
 ## Mandatory audit entry template — copy and complete AFTER implementation
 
 `## AUD-YYYYMMDD-NNN — [task and referenced RE entry]`

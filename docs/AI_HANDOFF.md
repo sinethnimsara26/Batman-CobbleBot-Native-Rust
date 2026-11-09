@@ -210,9 +210,25 @@
 
 **Next exact ONE batch:** WIN-GUI-PILOT-02 — implement one true OS mouse click of intro SKIP and bounded real-window capture of subsequent progression on free GitHub Windows runner; keep PR #18 draft and manual fidelity issue #17 open, `main` untouched, Level1B blocked.
 
+## 2026-11-09 — WIN-GUI-PILOT-02 + HUD-REAL-01: staged OS mouse experiment; CI pending
+
+**Start state:** draft PR #18 at parent `9c749f52e4be5394ccf497136bf9ca61c2e58e9b`; prior real-Win32 Enter success [Actions #42666398737](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42666398737). New code commit is the commit containing this record and must be verified via remote HEAD. Existing Windows action artifact uploader already includes all files from `.generated/windows-gui-pilot/`, so no workflow modifications required.
+
+**New test-only behavior:** `reverse-engineering/tools/windows_gui_pilot.py` reads the **actual SWF-derived source button #129 rectangle** from generated `assets/intro_button_bounds.rs` (not guessed coordinates), reproduces the game's 3:2 letterbox mapping using Win32 `GetClientRect`, translates client→screen with `ClientToScreen`, moves cursor and checks its exact screen coordinate, injects OS LEFTDOWN/LEFTUP with `SendInput`, and captures real desktop PNGs shortly after click, around the level title, and after the level-title interval to make the HUD visible. `pilot-report.json` records original bounds, screen point, results and errors. No Rust game code, Cargo, original SWF or packaging changed. New CI result and new screenshots are **UNVERIFIED** while writing this checkpoint.
+
+**Crucial user complaint:** Text in the latest Windows screenshot looks too plain/white. That screenshot is from the baked story INTRO, not necessarily `src/render.rs::draw_hud_hq`; the source 1x HUD remains deliberately Arial white while themed HQ uses Impact/gold/strokes. Treat user concern as **OPEN HUD-REAL-01**, not proven fixed or disproved. Inspect actual OS `skip_gameplay_hud.png` next batch; if wrong, investigate actual pipeline and follow the user's desired aesthetic without losing source-fidelity reference. Do not make a guess-based gameplay-font change in this mouse-testing batch.
+
+**Records / next action:** AGENTS.md and linked two protocols reviewed, unchanged. Tasks updated, Worklog entry, research RE-20261109-014 and engineering audit AUD-20261109-012 added. Next bounded task: inspect new Windows CI and pilot report/images, confirm real mouse SKIP and inspect typography; correct demonstrated problems only. PR draft, `main` and Level1B restrictions maintained.
+
+## 2026-11-09 — QA-NAV-01: opt-in native Rust GUI scene navigation (CI pending)
+
+**User's new requirement:** let AI agents reach actual Rust game scenes through the free Windows GUI runner, without waiting through the title and full cutscenes for each screenshot. This batch adds `--qa-navigation` CLI flag and opt-in in-window hotkeys F5 Title, F6 first intro frame, F7 instantly visible Level 1A/HQ HUD. No mode/hotkeys are enabled on ordinary player launches. Implemented entirely in `src/main.rs`/`src/win32.rs` with existing Win32 polling, Rust Game reset and scene audio control; no Cargo/asset/external runtime changes. The CI-only pilot now separately captures `qa_f7_direct_gameplay.png` AFTER mouse SKIP captures. DO NOT use QA jump screenshot to assert mouse SKIP worked.
+
+**CI STATUS:** New scene navigator, OS mouse SKIP, post-SKIP gameplay/HUD, and QA-F7 are all **UNVERIFIED** pending new GitHub Windows workflow and artifact. Existing prior green GUI run #42666398737 tested only Enter title→intro. Inspect actual new evidence rather than relying on static text. AGENTS.md updated with permanent usage and explicit test separation. Docs RE-20261109-014 and AUD-20261109-012 are linked in the same code checkpoint. User's plain/white-font concern remains OPEN HUD-REAL-01.
+
 ## Exact next ONE bounded batch
 
-**Task ID: WIN-GUI-PILOT-02 — extend the successfully demonstrated real Win32 desktop automation by one bounded OS mouse-SKIP interaction and subsequent captured transition.** Verify press and release inside source hitbox, actual screen output after fade, evidence and complete six-file checkpoint. Do not repeat already-proven Enter/title test, merge PR #18 or start Level1B. Issue #17 source-original manual acceptance stays open.
+**Task ID: WIN-GUI-PILOT-02-VERIFY / HUD-REAL-01-EVIDENCE — inspect the new Windows CI's actual OS mouse SKIP and gameplay screenshots (including font, outlines, black backing and HUD collisions).** Do not infer success from the earlier Enter-only test. Preserve PR draft and issue #17 original fidelity acceptance; main and Level1B untouched.
 
 
 ## Reproduction / first commands and links

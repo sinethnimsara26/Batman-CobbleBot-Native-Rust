@@ -1,6 +1,6 @@
 #![allow(non_snake_case)]
 use crate::assets::Assets;
-use crate::audio::Audio;
+use crate::audio::{Audio,AudioEvent};
 use crate::collision::CollisionMask;
 use crate::game::{AppScreen,Game,InputState,FIXED_STEP,LOGICAL_H,LOGICAL_W,VK_A,VK_D,VK_DOWN,VK_ENTER,VK_ESCAPE,VK_I,VK_LEFT,VK_RIGHT,VK_S,VK_SPACE,VK_UP};
 use crate::render;
@@ -34,10 +34,14 @@ type HWND=*mut c_void; type HINSTANCE=*mut c_void; type HICON=*mut c_void; type 
 
 const KEYS:[usize;10]=[VK_LEFT,VK_RIGHT,VK_UP,VK_DOWN,VK_SPACE,VK_ENTER,VK_ESCAPE,VK_I,VK_A,VK_D];
 const EXTRA_KEYS:[usize;1]=[VK_S];
+// Developer navigation keys only exist with --qa-navigation.
+// F5 = Title, F6 = first Intro frame, F7 = active Level 1A HUD.
+// Their rising edges are polled independently of normal game controls.
+const QA_SCENE_KEYS:[i32;3]=[0x74,0x75,0x76];
 
-struct App{base_fb:RenderSurface,fb:RenderSurface,assets:Assets,audio:Audio,ground:CollisionMask,game:Game,input:InputState,last:Instant,acc:f32,active:bool,intro_skip_armed:bool}
+struct App{base_fb:RenderSurface,fb:RenderSurface,assets:Assets,audio:Audio,ground:CollisionMask,game:Game,input:InputState,last:Instant,acc:f32,active:bool,intro_skip_armed:bool,qa_navigation:bool,qa_keys_were_down:[bool;3]}
 impl App{
- fn new()->Self{Self{base_fb:RenderSurface::new(LOGICAL_W,LOGICAL_H),fb:RenderSurface::new(render::HQ_W,render::HQ_H),assets:Assets::load(),audio:Audio::new(),ground:CollisionMask::level1a(),game:Game::new(),input:InputState::default(),last:Instant::now(),acc:0.0,active:true,intro_skip_armed:false}}
+ fn new(qa_navigation:bool)->Self{Self{base_fb:RenderSurface::new(LOGICAL_W,LOGICAL_H),fb:RenderSurface::new(render::HQ_W,render::HQ_H),assets:Assets::load(),audio:Audio::new(),ground:CollisionMask::level1a(),game:Game::new(),input:InputState::default(),last:Instant::now(),acc:0.0,active:true,intro_skip_armed:false,qa_navigation,qa_keys_were_down:[false;3]}}
  unsafe fn poll_keyboard(&mut self,hwnd:HWND){
   // WM_ACTIVATE / WM_SETFOCUS are authoritative. GetForegroundWindow is
   // allowed to promote us to active, but a transient mismatch must not undo
@@ -48,7 +52,63 @@ impl App{
    self.input.set(k,(GetAsyncKeyState(k as i32) as u16&0x8000)!=0);
   }
  }
- fn timer(&mut self,hwnd:HWND)->bool{unsafe{self.poll_keyboard(hwnd);}let now=Instant::now();let dt=(now-self.last).as_secs_f32().min(0.2);self.last=now;if !self.active{return false;}self.acc+=dt;let mut stepped=false;while self.acc>=FIXED_STEP{self.game.tick(&mut self.input,&self.ground);for event in self.game.take_audio_events(){self.audio.handle(event);}self.acc-=FIXED_STEP;stepped=true;}stepped}
+ /// Opt-in QA-only jumps: never mutate normal gameplay unless the developer
+ /// explicitly launched the EXE with --qa-navigation. Return true if jumped.
+ unsafe fn poll_qa_navigation(&mut self)->bool{
+   if !self.qa_navigation || !self.active {
+     self.qa_keys_were_down=[false;3];
+     return false;
+   }
+   let mut jump=None;
+   for (i,&key) in QA_SCENE_KEYS.iter().enumerate(){
+     let down=(GetAsyncKeyState(key) as u16&0x8000)!=0;
+     if down && !self.qa_keys_were_down[i] { jump=Some(i); }
+     self.qa_keys_were_down[i]=down;
+   }
+   if let Some(scene)=jump{
+     self.game=Game::new();
+     self.input.release_all();
+     self.intro_skip_armed=false;
+     self.acc=0.0;
+     self.last=Instant::now();
+     // Stop previous scene audio without repeatedly closing/reopening MCI
+     // aliases: Audio owns the MCI devices for the whole application lifetime.
+     self.audio.handle(AudioEvent::IntroStop);
+     self.audio.handle(AudioEvent::MusicStop);
+     match scene {
+       0=>{}, // F5: reset to title
+       1=>{  // F6: intro at its original first frame
+         self.game.screen=AppScreen::Intro;
+         self.audio.handle(AudioEvent::IntroStart);
+       },
+       2=>{  // F7: go directly to visible gameplay/HQ HUD.
+         self.game.screen=AppScreen::Playing;
+         // Skip only the intro/title/fade visual display clock, not gameplay.
+         // QA-only start; no assertion of original Flash level-entry parity.
+         self.game.ticks=150;
+         self.audio.handle(AudioEvent::MusicStart);
+       },
+       _=>unreachable!(),
+     }
+     return true;
+   }
+   false
+ }
+ fn timer(&mut self,hwnd:HWND)->bool{
+   unsafe{self.poll_keyboard(hwnd);}
+   if unsafe{self.poll_qa_navigation()} {return true;}
+   let now=Instant::now();let dt=(now-self.last).as_secs_f32().min(0.2);self.last=now;
+   if !self.active{return false;}
+   self.acc+=dt;
+   let mut stepped=false;
+   while self.acc>=FIXED_STEP{
+     self.game.tick(&mut self.input,&self.ground);
+     for event in self.game.take_audio_events(){self.audio.handle(event);}
+     self.acc-=FIXED_STEP;
+     stepped=true;
+   }
+   stepped
+ }
  fn render(&mut self){render::render_high_quality(&mut self.base_fb,&mut self.fb,&self.game,&self.assets);}
 }
 static mut APP:*mut App=null_mut();
@@ -136,7 +196,7 @@ unsafe extern "system" fn wndproc(hwnd:HWND,msg:u32,w:WPARAM,l:LPARAM)->LRESULT{
   WM_DPICHANGED=>{if l!=0{let r=&*(l as *const RECT);let width=(r.right-r.left).max(1);let height=(r.bottom-r.top).max(1);SetWindowPos(hwnd,null_mut(),r.left,r.top,width,height,SWP_NOZORDER|SWP_NOACTIVATE);}InvalidateRect(hwnd,null(),0);0},
  WM_CLOSE=>{DestroyWindow(hwnd);0}, WM_DESTROY=>{KillTimer(hwnd,1);PostQuitMessage(0);0}, _=>DefWindowProcW(hwnd,msg,w,l)}}
 
-pub fn run(){unsafe{let _dpi_aware=enable_best_dpi_awareness();APP=Box::into_raw(Box::new(App::new()));let inst=GetModuleHandleW(null());let cls=wide("BatmanCobbleBotLevel1AFidelity");let title=wide("The Batman - CobbleBot Caper - Level 1A Fidelity Slice");let wc=WNDCLASSW{style:CS_HREDRAW|CS_VREDRAW,lpfnWndProc:Some(wndproc),cbClsExtra:0,cbWndExtra:0,hInstance:inst,hIcon:null_mut(),hCursor:LoadCursorW(null_mut(),IDC_ARROW),hbrBackground:null_mut(),lpszMenuName:null(),lpszClassName:cls.as_ptr()};if RegisterClassW(&wc)==0{return;}let hwnd=CreateWindowExW(0,cls.as_ptr(),title.as_ptr(),WS_OVERLAPPEDWINDOW|WS_VISIBLE,CW_USEDEFAULT,CW_USEDEFAULT,930,660,null_mut(),null_mut(),inst,null_mut());if hwnd.is_null(){return;}ShowWindow(hwnd,SW_SHOW);SetActiveWindow(hwnd);SetForegroundWindow(hwnd);SetFocus(hwnd);UpdateWindow(hwnd);SetTimer(hwnd,1,8,null());let mut msg:MSG=zeroed();while GetMessageW(&mut msg,null_mut(),0,0)>0{TranslateMessage(&msg);DispatchMessageW(&msg);}let _=Box::from_raw(APP);APP=null_mut();}}
+pub fn run(qa_navigation:bool){unsafe{let _dpi_aware=enable_best_dpi_awareness();APP=Box::into_raw(Box::new(App::new(qa_navigation)));let inst=GetModuleHandleW(null());let cls=wide("BatmanCobbleBotLevel1AFidelity");let title=wide("The Batman - CobbleBot Caper - Level 1A Fidelity Slice");let wc=WNDCLASSW{style:CS_HREDRAW|CS_VREDRAW,lpfnWndProc:Some(wndproc),cbClsExtra:0,cbWndExtra:0,hInstance:inst,hIcon:null_mut(),hCursor:LoadCursorW(null_mut(),IDC_ARROW),hbrBackground:null_mut(),lpszMenuName:null(),lpszClassName:cls.as_ptr()};if RegisterClassW(&wc)==0{return;}let hwnd=CreateWindowExW(0,cls.as_ptr(),title.as_ptr(),WS_OVERLAPPEDWINDOW|WS_VISIBLE,CW_USEDEFAULT,CW_USEDEFAULT,930,660,null_mut(),null_mut(),inst,null_mut());if hwnd.is_null(){return;}ShowWindow(hwnd,SW_SHOW);SetActiveWindow(hwnd);SetForegroundWindow(hwnd);SetFocus(hwnd);UpdateWindow(hwnd);SetTimer(hwnd,1,8,null());let mut msg:MSG=zeroed();while GetMessageW(&mut msg,null_mut(),0,0)>0{TranslateMessage(&msg);DispatchMessageW(&msg);}let _=Box::from_raw(APP);APP=null_mut();}}
 
 #[cfg(test)]
 mod tests{

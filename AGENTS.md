@@ -2,6 +2,18 @@
 
 This file is the provider-neutral entry point for **ChatGPT, Codex, Claude, Gemini, or any other contributor**. Do not depend on any previous chat, account memory, scratchpad, or ephemeral local file.
 
+## Opt-in native Windows QA navigation (GUI development tool)
+
+**Ordinary game builds launch unchanged.** For developer/testing sessions ONLY, run the same native Rust Windows EXE with `--qa-navigation`. This enables in-window scene shortcuts, preserving the original default experience when the flag is absent:
+
+- **F5:** restart at title.
+- **F6:** restart at the first story-intro frame.
+- **F7:** restart Level 1A in visible gameplay (advance only the title/fade display clock to tick 150 so HUD is immediately inspectable).
+
+Use the opt-in mode in desktop GUI automation when moving between original Flash scenes; it is NOT a source-accurate gameplay shortcut and must not be part of original-game acceptance. The CI-only script `reverse-engineering/tools/windows_gui_pilot.py` launches the EXE with this flag, uses real mouse LEFTDOWN/LEFTUP inside the source-derived SKIP button #129, captures OS desktop PNGs after the fade and in gameplay, then captures a **separate** F7 shortcut frame. **Never treat F7 navigation as evidence that SKIP itself succeeded.** Review `pilot-report.json` and images independently. Normal game F5/F6/F7 inputs should have NO effect without the flag.
+
+Source: `src/main.rs` opt-in CLI flag, `src/win32.rs` gated `poll_qa_navigation` using real Win32 `GetAsyncKeyState` rising edges; existing `Game::new` is used to reset state without shipping any non-Rust gameplay code. New QA behavior must pass real Windows CI before being reported as verified.
+
 ## PERMANENT MANDATORY PROTOCOLS — READ BEFORE EVERY BATCH (2026-11-09)
 
 **USER-DIRECTED, BINDING PROJECT RULES.** This repository's six-document workflow and free Windows executable testing policy must not depend on any ChatGPT conversation. ALL current and future coding agents must read these two self-contained documents, then follow them on EVERY bounded development batch:

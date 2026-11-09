@@ -32,5 +32,7 @@ fn main() {
         headless::benchmark_scenery_scroll(out);
         return;
     }
-    win32::run();
+    // Opt-in test/developer navigation, disabled for ordinary players.
+    let qa_navigation = args.iter().any(|arg| arg == "--qa-navigation");
+    win32::run(qa_navigation);
 }
