@@ -132,6 +132,7 @@ def main():
         raise ValueError(f"Recovered SKIP button bounds invalid: {click_rect}")
     # Source-generated Rust constant; never hardcode a guessed hotspot in the
     # native window. The CI-generated file is embedded only at build time.
+    ns.out.mkdir(parents=True,exist_ok=True)
     (ns.out/"intro_button_bounds.rs").write_text(
         "const INTRO_SKIP_RECT:(i32,i32,i32,i32)=("+",".join(map(str,click_rect))+");\n",
         encoding="utf-8"
