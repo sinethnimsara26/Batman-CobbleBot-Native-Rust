@@ -1,6 +1,7 @@
 #![allow(non_snake_case)]
 use crate::assets::Assets;
-use crate::audio::{Audio,AudioEvent};
+use crate::audio::Audio;
+use crate::game::AudioEvent;
 use crate::collision::CollisionMask;
 use crate::game::{AppScreen,Game,InputState,FIXED_STEP,LOGICAL_H,LOGICAL_W,VK_A,VK_D,VK_DOWN,VK_ENTER,VK_ESCAPE,VK_I,VK_LEFT,VK_RIGHT,VK_S,VK_SPACE,VK_UP};
 use crate::render;

@@ -347,6 +347,17 @@ Actual [Run #42613807273](https://github.com/sinethnimsara26/Batman-CobbleBot-Na
 
 The first run of `b1f4b9567ea5d9c3d33c4f211a12ee5179137d89`, [#42674383272](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42674383272), failed with **zero jobs** and no compiler/test logs. GitHub rejected an attempted rerun (403). No Rust, Python or Win32 runtime validation is inferred. Previous docs-only run #42668782687 had an existing HQ performance-threshold failure (p95 91.5072 ms >40 ms) with unchanged implementation. Both findings need separate verification and no perf threshold has been weakened. Verdict remains **implemented, unverified**.
 
+
+## AUD-20261110-001 — Post-implementation E0603 import repair in Rust Win32 QA navigator
+
+**Scope/date:** 2026-11-10 Sri Lanka. Code edit solely `src/win32.rs` module imports, linked research RE-20261110-001, parent SHA `5f955af3d6f2d8c207d24a3c74060efd786b5c33`. Actual Windows compiler from #42674956405 documented E0603 private enum import; correction directly references its public definition `crate::game::AudioEvent` without any public API expansion. Existing UI game state and audio manager are unchanged.
+
+**Independent Rust code review:** `Audio` is declared public in `src/audio.rs`, `AudioEvent` is a public enum defined in `src/game.rs`; `src/audio.rs`'s `use` is private. Correct direct import is idiomatic Rust and avoids needless re-exports/renaming. The change adds zero allocations, unsafe operations, threads, native DLLs, crates/features, FFI calls or CI-only Python changes. Pure-Rust runtime boundary preserved with existing Windows platform API qualifications. No benchmark or performance consequence is inferred from an import change.
+
+**Executed evidence:** original Windows CI run #42674956405 FAILED compile with exact error; downloaded full job logs and checked module definitions remotely. **Not executed on corrected code at audit-write time:** cargo fmt/check/test/clippy/build, new Windows CI/executable, real mouse SKIP, F7 QA window screenshot and actual HUD font visual assessment. A compiler diagnosis is not a passed test. User's original Flash parity and manual acceptance remain open.
+
+**Verdicts:** PURE-RUST COMPLIANCE — PASS WITH DOCUMENTED PREEXISTING WINDOWS API QUALIFICATIONS (HIGH confidence, no new non-Rust runtime). ENGINEERING QUALITY — direct import correction technically justified (HIGH confidence), new build UNVERIFIED. ORIGINAL-GAME FIDELITY — UNVERIFIED; this repair has no intended gameplay/rendering effect. **Next gated evidence:** successful Windows compile + actual screenshot report before declaring QA navigation or fonts working.
+
 ## Mandatory audit entry template — copy and complete AFTER implementation
 
 `## AUD-YYYYMMDD-NNN — [task and referenced RE entry]`

@@ -1,5 +1,12 @@
 # Persistent development tasks — Batman Rust port
 
+## 2026-11-10 QA-NAV-01-COMPILE-REPAIR — exact E0603 module import correction
+
+- **Status:** IMPLEMENTED / FRESH WINDOWS COMPILATION PENDING. Windows run [#42674956405](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42674956405), against docs SHA `5f955af3d6f2d8c207d24a3c74060efd786b5c33`, created a real Windows job `129353749561` but failed at **Run sprite-pack compatibility tests** on Rust `error[E0603]`: imported `AudioEvent` from private `crate::audio` use instead of its public definition `crate::game::AudioEvent`. Asset rebuild passed far enough to compile test binary; no actual new GUI screenshot evidence.
+- **Fix:** one-source-file import in `src/win32.rs`: `use crate::audio::Audio;` and `use crate::game::AudioEvent;`. `src/game.rs:77` defines the `pub enum AudioEvent`; `src/audio.rs:1` imports it privately. No gameplay logic, CI scripts, controls, animation, asset baking, crates, Cargo, or performance thresholds changed.
+- **Acceptance:** a NEW Windows CI run of the corrected commit reaches/passes Rust compiler and smoke/GUI steps. If it fails later, inspect the exact run/job logs and correct one evidence-backed blocker. Maintain separate `WIN-GUI-PILOT-02`, `QA-NAV-01`, and `HUD-REAL-01` verification; the user's white/plain font complaint is NOT closed by this import fix.
+- **References:** RE-20261110-001 and AUD-20261110-001; PR #18 draft, issue #17, main and Level1B unchanged.
+
 ## 2026-11-09 — QA-NAV-01 CI scheduling blocker (zero-job run)
 
 - **Observed:** [workflow run #42674383272](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42674383272) for commit `b1f4b9567ea5d9c3d33c4f211a12ee5179137d89` reached `completed/failure` with **zero created jobs, zero check runs and no Windows/job/compiler logs**. Attempt to re-run failed jobs returned GitHub **403 "This workflow run cannot be retried"**. This does NOT establish a Rust or GUI test failure. **Status remains IMPLEMENTED / WINDOWS UNVERIFIED**. Do not claim the F5/F6/F7 or mouse SKIP automation has executed.

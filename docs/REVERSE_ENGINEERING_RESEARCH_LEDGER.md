@@ -459,6 +459,17 @@ Terminal fingerprints vs game tick50: legacy `b918d9ea978bfd25` → `e50887c098a
 
 **Conclusion:** No new native QA code test result yet; maintain UNVERIFIED, preserve all source and safety checks. The next bounded step is evidence-based run/retry diagnosis and then inspect actual Win32 screenshots if/when a job executes. No source-Flash equivalence claim.
 
+
+## RE-20261110-001 — E0603 in opt-in QA navigation: Rust enum visibility and module ownership
+
+**Observed date:** 2026-11-09 18:41:46 UTC / 2026-11-10 Sri Lanka. **Branch:** `revive/level1a-intro-hud-fidelity-2026-11-09`, draft [PR #18](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/18), parent docs SHA `5f955af3d6f2d8c207d24a3c74060efd786b5c33`. **Evidence source:** GitHub Actions [run #42674956405](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42674956405), Windows job 129353749561, exact compiler stderr from source build test in stage `Run sprite-pack compatibility tests`. This is actual compiler feedback, not speculation. New code and file references are linked via this commit's Git history.
+
+**Technical question:** Why did the new QA navigation code fail before launching the actual Win32 test? Error `E0603` at `src/win32.rs:3:26`: `use crate::audio::{Audio,AudioEvent};`. The `AudioEvent` symbol is defined by `pub enum AudioEvent` in `src/game.rs:77`, while `src/audio.rs:1` merely has a **private** `use crate::game::AudioEvent;` for its own Audio::handle. Thus `crate::audio::AudioEvent` is not a publicly re-exported symbol and cannot be imported from sibling `win32` module. The failure occurs at Rust name-resolution/visibility, before native GUI execution; original SWF parsing, actual mouse/hotkeys and HUD rendering remain untested for this commit.
+
+**Alternatives:** (a) `pub use crate::game::AudioEvent` from `audio.rs`: possible but adds an unnecessary public re-export and obscures the enum's ownership; (b) move the enum to `audio.rs`: unnecessary structural refactor with wider impact; (c) **chosen** correct direct import `use crate::game::AudioEvent;` alongside `use crate::audio::Audio;`, matching the existing module architecture and avoiding a new abstraction. Since no runtime behavior changes, no external Rust crate/FFI or community survey is relevant to this one-line compiler fix. The compiler's authoritative diagnostic plus code definition provide stronger and more specific evidence than general Rust community commentary.
+
+**Implementation path:** `src/win32.rs` imports only; exact build/test run to repeat is existing `.github/workflows/build-level1a-fidelity.yml`. There is no change to scene jumps, source-generated Button #129 rectangle, camera/HUD, intro timing, or audio manager. **Confidence HIGH** in diagnosed cause and repair because the error and definitions are directly observed; **compiler/pass runtime remains UNVERIFIED** until a new successful Windows run. Physical gameplay font issue HUD-REAL-01 and original Flash fidelity #17 still open.
+
 ## Provenance record for this bootstrap
 
 **Repository sources actually read (2026-11-09):** GitHub native connector at the pinned `c2b872e` tree; `Cargo.toml`, `AGENTS.md`, `src/main.rs`, `src/game.rs`, `src/assets.rs`, `src/render.rs`, `src/audio.rs`, `src/collision.rs`, `src/win32.rs`, `src/headless.rs`, `AI_HANDOFF.md`, `AI_TASKS.md`, `AI_WORKLOG.md`, manifests and CI run/job logs identified above. Earlier measurements that were NOT personally regenerated are identified as historical evidence.

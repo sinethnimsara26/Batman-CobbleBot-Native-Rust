@@ -199,3 +199,12 @@ This is the **short index of meaningful, verified progress and mistakes**. Detai
 - **Separate earlier failure to investigate:** docs-only [#42668782687](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42668782687) ran a Windows job but failed existing Round-5 scenery-scroll `p95_ms<40.0` threshold: observed `p95_ms=91.5072`, `p50_ms=14.5596` while source/rendering code was unchanged; possible hosted-runner timing fluctuation is a **hypothesis only**, not proven. Preserve performance gate and record reproducible comparison against other runs before changing thresholds.
 - **Next action:** inspect next actual triggered Windows run/job and evidence. If there are again no jobs, investigate GitHub workflow-start/platform/account status rather than rewriting working Rust code; if job starts but compiler fails, fix exact compiler error. Do not merge draft PR #18.
 
+
+
+## 2026-11-10 — QA-NAV-01-COMPILE-REPAIR: fix precise Rust E0603 surfaced by Windows CI
+
+- **Prior source and evidence:** code `b1f4b9567ea5d9c3d33c4f211a12ee5179137d89`, docs `5f955af3d6f2d8c207d24a3c74060efd786b5c33`, run [#42674956405](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42674956405), Windows job `129353749561`, failed on Rust enum visibility at `Run sprite-pack compatibility tests` (not at mouse screenshot runtime).
+- **Exact compiler error:** `src/win32.rs:3:26 error[E0603]: enum import AudioEvent is private`; imported via `crate::audio` although it is declared `pub enum AudioEvent` in `src/game.rs:77` and only privately imported in `src/audio.rs`.
+- **Change:** replace `use crate::audio::{Audio,AudioEvent};` with `use crate::audio::Audio; use crate::game::AudioEvent;` in `src/win32.rs`. No other code or any Cargo/CI/golden/performance changes.
+- **Verification:** retrieved real Windows CI compilation log and confirmed the enum declaration from remote source. Fix is logically source-correct; fresh Windows build/test remains **UNVERIFIED** in this record. No GUI screenshot or original Flash parity claim.
+- **Compliance:** AGENTS.md/protocols read; AI_TASKS/HANDOFF/WORKLOG/RE/AUD synchronized. Research RE-20261110-001, engineering audit AUD-20261110-001. Next one step inspect corrected code CI; user HUD-REAL-01 still open.

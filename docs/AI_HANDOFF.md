@@ -232,9 +232,21 @@
 - **Separate earlier failure to investigate:** docs-only [#42668782687](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42668782687) ran a Windows job but failed existing Round-5 scenery-scroll `p95_ms<40.0` threshold: observed `p95_ms=91.5072`, `p50_ms=14.5596` while source/rendering code was unchanged; possible hosted-runner timing fluctuation is a **hypothesis only**, not proven. Preserve performance gate and record reproducible comparison against other runs before changing thresholds.
 - **Next action:** inspect next actual triggered Windows run/job and evidence. If there are again no jobs, investigate GitHub workflow-start/platform/account status rather than rewriting working Rust code; if job starts but compiler fails, fix exact compiler error. Do not merge draft PR #18.
 
+## 2026-11-10 — QA-NAV-01 compiler E0603 recovery checkpoint (fresh CI pending)
+
+**Previous last code SHA:** `b1f4b9567ea5d9c3d33c4f211a12ee5179137d89` (QA-navigation and OS mouse test implementation), subsequently docs checkpoint `5f955af3d6f2d8c207d24a3c74060efd786b5c33` on draft PR #18. **New compiler repair commit:** the branch commit containing this entry (resolve remote HEAD; cannot self-embed final Git SHA into committed document).
+
+**Observed failed run:** [GitHub Actions #42674956405](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42674956405), job `129353749561` `windows-x64`, final FAILURE at `Run sprite-pack compatibility tests`. Actual job log (2026-11-09 18:41:46 UTC) says `error[E0603]: enum import AudioEvent is private`, pointing at `src/win32.rs:3:26 use crate::audio::{Audio,AudioEvent};`. Rust notes `src/audio.rs:1:5 use crate::game::AudioEvent;` is a private import, while the actual enum definition at `src/game.rs:77` is public. The job did not reach the new GUI testing stage or produce mouse/HUD artifacts, so do not claim any result for those features.
+
+**One-line-class fix:** `src/win32.rs` now imports `Audio` from `crate::audio` and `AudioEvent` from `crate::game`. This is source-language visibility correction only, no gameplay behavioral change or new external dependencies. This was derived from actual compiler diagnostic and source definitions; **a fresh Windows compiler/test run remains required**. Existing earlier true GUI Enter success #42666398737 predates mouse/F7 feature and is not sufficient.
+
+**All six docs:** AGENTS.md reviewed, durable QA keys unchanged; AI_TASKS, AI_HANDOFF, AI_WORKLOG updated; RE-20261110-001 exact module-resolution finding and AUD-20261110-001 post-change audit added. Existing two protocols reviewed, no modifications. No originals/SWF/Cargo/assets/CI/performance gate edited.
+
+**Next single action:** inspect newly triggered Windows CI for current commit: if Rust compiles, download new `Batman-CobbleBot-Level1A-Windows-GUI-Pilot` JSON and OS screenshot artifacts to independently verify mouse source-button SKIP, separate F7 QA jump and gameplay HUD typography. Distinguish incomplete/missing capture and CI environment failures from gameplay bugs. User font issue HUD-REAL-01 and Flash manual acceptance #17 remain OPEN; no PR merge or main/Level1B change.
+
 ## Exact next ONE bounded batch
 
-**Task ID: WIN-GUI-PILOT-02-VERIFY / HUD-REAL-01-EVIDENCE — inspect the new Windows CI's actual OS mouse SKIP and gameplay screenshots (including font, outlines, black backing and HUD collisions).** Do not infer success from the earlier Enter-only test. Preserve PR draft and issue #17 original fidelity acceptance; main and Level1B untouched.
+**Task ID: QA-NAV-01-COMPILE-REPAIR-VERIFY, then WIN-GUI-PILOT-02/HUD-REAL-01 evidence review.** Check the new CI after correcting E0603 import. If compiler passes, inspect real mouse SKIP, post-intro HUD and separate F7 screenshot; if failure, fix only verified blocker. Keep PR #18 draft; issue #17 manual Flash acceptance open; main and Level1B unchanged.
 
 
 ## Reproduction / first commands and links
