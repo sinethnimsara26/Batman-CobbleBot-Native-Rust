@@ -62,3 +62,12 @@ This is the **short index of meaningful, verified progress and mistakes**. Detai
 - Patched *only* intro asset baker to check source stop evidence and extend the fade sprite's stopped display list to 180 samples. Maintains initial fade, sprite122 stop, original audio/assets, and all native gameplay behavior.
 - CI now requires source sprite35 Stop, full manifest stop metadata, no periodic near-total-black pulses or huge change spikes at 15/30/45/60, and all historical regression tests. **Verification pending new Windows Actions run**; no physical Windows playtest/final fidelity assertion yet.
 - Next batch: verify new CI, review intro contact sheet/diagnostics, then investigate premature auto-ending against Flash event handlers; do not merge draft or implement more levels.
+
+## 2026-11-09 — INTRO-04, explicit SKIP button handlers and premature end
+
+- **Why:** original root frame18 is stopped, sprite123 stops sound at local frame179, while Rust automatically enters gameplay at intro tick179. This is not enough evidence to know whether original game transitions automatically or waits for a click; source button handlers had not been decoded.
+- **Implemented:** read the original SWF DefineButton2 #129 conditional action records using source ActionOffset and CondActionSize; emit condition event names, key codes, AVM1 opcodes and push strings at absolute file offsets in the already-uploaded intro behavior report.
+- **CI contract:** validate that original button129 exists and the handler data structure/offsets are well formed; preserve previous HUD, Level1A hashes, audio tests and full 180-frame diagnostics.
+- **No gameplay changes:** still awaiting direct evidence of original scene exit; no guessed duration or artificial extra time. Last sprite35 Run #42586294097 was still running at initial inspection; a subsequent branch push can cancel it under concurrency.
+- **Next:** inspect button handler report and confirm source exit mechanism; then plan a single tested Rust state-machine change. All docs committed on draft PR #18, \`main\` unchanged.
+

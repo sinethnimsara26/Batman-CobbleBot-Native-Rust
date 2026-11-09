@@ -373,6 +373,12 @@ jobs:
           assert any(b["frame"]==164 and any(a["op"]=="Stop" for a in b["actions"])
                      for b in behavior["original_timeline_actions"]["sprite:122"])
           assert behavior["intro_symbol_ids"] == [122,123,126,35]
+          button=behavior["skip_button_actions"]
+          assert button["button_id"]==129 and isinstance(button["handlers"],list)
+          assert isinstance(button["action_offset"],int)
+          assert all(isinstance(h["condition_offset"],int) and isinstance(h["actions"],list)
+                     for h in button["handlers"])
+
           assert any(b["frame"]==14 and any(a["op"]=="Stop" for a in b["actions"])
                      for b in behavior["original_timeline_actions"]["sprite:35"])
 

@@ -65,9 +65,16 @@
 - **Focused CI checks:** build manifest includes held sprite35, behavior audit asserts its final Stop, and per-frame luminance/change checks require no near-total-black pulse at frames **15,30,45,60**. These checks and preserved historical hashes must pass before marking this batch CI verified.
 - **Open issues:** actual Windows playback and original Flash comparison have not yet confirmed the flicker or story timing; the native 180-tick automatic transition may still end the story prematurely. **Next batch:** inspect new CI artifact and compare actual intro, then audit original frame179 transition/skip event handlers before changing timing. Do not merge PRs or begin Level1B.
 
+## 2026-11-09 — INTRO-04: source button transition audit (fresh CI pending)
+
+- **Preserve prior evidence:** sprite35 hold is committed at \`0787e55e1180a822b01093a409923b85e1856d7b\`; [Windows Run #42586294097](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42586294097) was still rebuilding assets when this batch began. A new push may supersede/cancel the run due to GitHub's \`cancel-in-progress\` concurrency. Do **not** mark sprite35's prior CI green unless the run is actually completed successfully.
+- **Intro ending issue:** Rust \`src/game.rs\` automatically calls \`skip_intro()\` on tick179. Original SWF root frame18 executes \`Stop\`; sprite123 frame179 executes \`Stop\` and \`StopSounds\`; neither alone establishes that a 180-tick automatic root transition occurs. Source dispatcher supports intro and level1a routes, but the actual trigger is still unresolved.
+- **This bounded batch:** source evidence script \`inspect_intro_behavior.py\` now decodes original DefineButton2 #129 event conditions and AVM1 action records at exact source byte offsets, including push strings/function calls. It uses the documented SWF ActionOffset/CondActionSize coordinate system and writes the data into the existing \`Intro-Behavior-Report\` artifact. New CI checks that the button was found and its handler schema is valid. It does **not** invent a timed pause or change any Rust gameplay, audio, or scene transition behavior.
+- **Next batch:** verify the full Windows run, inspect recovered button action handlers and source-triggered \`gotoNext\`/fade routes. Only then decide whether to remove auto-transition at tick179 and replace it with explicit source-backed interaction/transition behavior. Manual Windows user acceptance remains separate. Keep PR #18 draft and \`main\` unchanged.
+
 ## Exact next ONE bounded batch
 
-**Task ID: Verify INTRO-03 CI and compare corrected intro frames.** Confirm that the source-stopped sprite35 patch eliminates repeated blackout pulses without replacing the initial Flash fade. Only after that, investigate the original 180-tick scene transition/skip controls as the next isolated batch. The Windows user must still visually approve the intro.
+**Task ID: Verify INTRO-03/04 CI and inspect source DefineButton2 #129 action handlers.** Review the no-blackout frame metrics and new SKIP button AVM1 route. Fix only the actual original event-driven terminal scene behavior in a subsequent bounded change, with tests. Do not extend the story timer arbitrarily.
 
 
 ## Reproduction / first commands and links

@@ -81,6 +81,77 @@ def scan_timeline(payload: bytes, start: int, context: str, root_frame: int | No
     return {"sounds": sounds, "scripts": scripts, "placements": placements}
 
 
+
+def inspect_skip_button(data: bytes, root_tag_start: int, button_id: int = 129) -> dict:
+    """Read original DefineButton2 BUTTONCONDACTION handlers, not just UP art.
+
+    SWF v19: ActionOffset is measured from its UI16 field at payload byte 3.
+    Each nonfinal CondActionSize measures from its own UI16 field to the next.
+    This only DISASSEMBLES source events; it never simulates a click/branch.
+    """
+    from swf_re import disasm_actions, collect_strings_actions
+
+    events = (
+        (15, "idle_to_over_down"),
+        (14, "out_down_to_idle"),
+        (13, "out_down_to_over_down"),
+        (12, "over_down_to_out_down"),
+        (11, "over_down_to_over_up"),
+        (10, "over_up_to_over_down"),
+        (9, "over_up_to_idle"),
+        (8, "idle_to_over_up"),
+        (0, "over_down_to_idle"),
+    )
+    for code, blob, tag_offset, payload_offset in tags(data, root_tag_start, len(data)):
+        if code != 34 or len(blob) < 5:
+            continue
+        if struct.unpack_from("<H", blob, 0)[0] != button_id:
+            continue
+        source_offset = struct.unpack_from("<H", blob, 3)[0]
+        report = {
+            "button_id": button_id,
+            "tag_offset": tag_offset,
+            "action_offset": source_offset,
+            "track_as_menu": bool(blob[2] & 1),
+            "handlers": [],
+            "note": "Byte offsets are absolute FWS offsets; event names are SWF BUTTONCONDACTION bits.",
+        }
+        if source_offset == 0:
+            return report
+        pos = 3 + source_offset
+        if not (5 <= pos and pos + 4 <= len(blob)):
+            raise ValueError(f"DefineButton2 {button_id} ActionOffset outside source tag")
+        for _ in range(64):
+            cond_size, flags = struct.unpack_from("<HH", blob, pos)
+            end = pos + cond_size if cond_size else len(blob)
+            if end < pos + 5 or end > len(blob):
+                raise ValueError(f"DefineButton2 {button_id} invalid CondActionSize {cond_size}")
+            raw_actions = blob[pos + 4:end]
+            if raw_actions[-1] != 0:
+                raise ValueError("BUTTONCONDACTION does not terminate with ActionEndFlag")
+            actions = disasm_actions(raw_actions, base=payload_offset + pos + 4)
+            report["handlers"].append({
+                "condition_offset": payload_offset + pos,
+                "condition_size": cond_size,
+                "conditions_hex": f"0x{flags:04x}",
+                "events": [name for bit, name in events if flags & (1 << bit)],
+                "key_code": (flags >> 1) & 127,
+                "actions": [
+                    {k: a[k] for k in ("op", "offset", "frame", "string", "values", "branch", "function")
+                     if k in a}
+                    for a in actions
+                ],
+                "strings": collect_strings_actions(actions),
+            })
+            if cond_size == 0:
+                break
+            pos = end
+        else:
+            raise ValueError(f"DefineButton2 {button_id} contains too many event handlers")
+        return report
+    raise ValueError(f"DefineButton2 {button_id} not found in source SWF")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("swf", type=Path)
@@ -135,6 +206,7 @@ def main():
 
     result = {
         "source_intro_frame": ROOT_INTRO_FRAME,
+        "skip_button_actions": inspect_skip_button(data, start),
         "offset_coordinates": "Root tag/action offsets are absolute FWS bytes; sprite tag/action offsets are relative to DefineSprite payload.",
         "direct_root_sound_cues": source["root"]["sounds"],
         "intro_symbol_ids": list(INTRO_SYMBOLS),
@@ -155,6 +227,7 @@ def main():
         "sound_events":len(events),
         "clip_actions":sum(len(v) for v in result["original_timeline_actions"].values()),
         "cues":events[:35],
+        "skip_button_handlers":len(result["skip_button_actions"]["handlers"]),
     },indent=2))
 
 
