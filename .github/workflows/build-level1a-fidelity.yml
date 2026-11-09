@@ -113,6 +113,7 @@ jobs:
 
           python "$tools/extract_sounds.py" "$swf" "$work/sounds"
           python "$tools/inspect_intro_behavior.py" "$swf" "$work/sounds/manifest.json" "$work/intro-behavior-report.json"
+          Copy-Item "$work/sounds/0130_sound_0130.mp3" "assets/intro_sound.mp3"
           Copy-Item "$work/sounds/0751_sound_0751.mp3" "assets/level1a_music.mp3"
           Copy-Item "$work/sounds/0248_sound_0248.mp3" "assets/jump.mp3"
           Copy-Item "$work/sounds/0004_item.mp3" "assets/item.mp3"
@@ -324,6 +325,12 @@ jobs:
           assert tutorial["missing_bitmap_ids"] == [], tutorial["missing_bitmap_ids"]
 
           intro=json.loads(Path(".generated/intro/manifest.json").read_text())
+          behavior=json.loads(Path(".generated/intro-behavior-report.json").read_text())
+          assert any(cue["sound_id"]==130 and cue["frame"]==18 and cue["context"]=="root"
+                     for cue in behavior["direct_root_sound_cues"]), behavior["direct_root_sound_cues"]
+          assert any(any(action["op"]=="StopSounds" for action in block["actions"])
+                     for block in behavior["original_timeline_actions"].get("sprite:123",[])), "intro StopSounds missing"
+          assert Path("assets/intro_sound.mp3").stat().st_size > 10000, "original intro MP3 not extracted"
           assert intro["source_root_frame"] == 18
           assert intro["frame_count"] == 180
           assert intro["size"] == [600,400]
