@@ -6,8 +6,39 @@ This file is the provider-neutral entry point for **ChatGPT, Codex, Claude, Gemi
 
 1. Read **[docs/AI_HANDOFF.md](docs/AI_HANDOFF.md)** for the most recent evidence-based checkpoint.
 2. Read **[docs/AI_TASKS.md](docs/AI_TASKS.md)** for the small prioritized work items and their acceptance tests.
-3. Consult **[docs/AI_WORKLOG.md](docs/AI_WORKLOG.md)** and the existing detailed [Level 1A presentation engineering log](docs/revival/LEVEL1A_PRESENTATION_FIDELITY_LOG_2026-11-09.md) for earlier work, mistakes, and rationale.
+3. Read the relevant entries in **[docs/REVERSE_ENGINEERING_RESEARCH_LEDGER.md](docs/REVERSE_ENGINEERING_RESEARCH_LEDGER.md)** and **[docs/RUST_PURITY_AND_ENGINEERING_AUDIT.md](docs/RUST_PURITY_AND_ENGINEERING_AUDIT.md)**, then [AI_WORKLOG](docs/AI_WORKLOG.md) and the [detailed Level 1A presentation log](docs/revival/LEVEL1A_PRESENTATION_FIDELITY_LOG_2026-11-09.md).
 4. Verify the **actual remote branch head, PR state, CI runs, and artifacts** against those notes before making changes. Correct stale documentation rather than trusting it.
+
+## Mandatory research ledger and post-implementation Rust audit (permanent protocol)
+
+**Effective 2026-11-09. This EXTENDS, not replaces or weakens, all rules below.**
+
+Every batch must use the two authoritative, durable Markdown files:
+- **[docs/REVERSE_ENGINEERING_RESEARCH_LEDGER.md](docs/REVERSE_ENGINEERING_RESEARCH_LEDGER.md)** — detailed, independently reproducible original-game evidence, exact SWF symbol/tag/frame/action-offset and code locations, hypotheses and alternatives, negative results, test outputs, external-source provenance and confidence-rated decisions.
+- **[docs/RUST_PURITY_AND_ENGINEERING_AUDIT.md](docs/RUST_PURITY_AND_ENGINEERING_AUDIT.md)** — independent **post-implementation** inspection of actual Rust changes, architecture, dependencies/features/transitives, FFI/native components, idiomaticity, safety, correctness, efficiency, engineering suitability and separately assessed fidelity.
+
+Existing `AI_HANDOFF.md`, `AI_TASKS.md`, `AI_WORKLOG.md`, detailed revival and rendering logs remain mandatory and must cross-reference these files. Do not flatten older research into short summaries. Never invent external citations, measurements, crash explanations or exact sources; never present private thought transcripts as evidence. Instead record reproducible observations, candidate explanations, supportive and contradictory evidence, decisions and testable trade-offs. Record direct vs historical evidence and confidence (**HIGH/MEDIUM/LOW/UNKNOWN**) with justification. On contradiction preserve a dated correction and link to the superseded claim.
+
+**Strict playable-game implementation:** All game-specific runtime mechanics (state, input, animation, renderer orchestration, collision, audio-event dispatch, menus, progress, UI, cutscenes) are Rust. No Flash VM, Ruffle as engine, ActionScript execution, JS/TS/Electron gameplay, Python runtime, C/C++ gameplay engine hidden behind FFI, or external gameplay executable. Native OS APIs, drivers and system media facilities are permissible **with documented qualification**, not falsely called pure Rust decoding/driver implementations. Evaluate what each crate actually implements rather than trusting its Rust API surface. Legacy Python SWF parsing/Pillow baking is OFFLINE BUILD/CI ONLY; source data is embedded into Rust. Do not replace offline tools or add a new runtime engine without a separate authorized batch.
+
+**Every code-changing batch — expanded exact lifecycle (one small item per user instruction):**
+1. **RECOVER:** read this guide, current `AI_HANDOFF`, `AI_TASKS`, relevant RE and AUD entries, `AI_WORKLOG`; independently verify actual remote SHA/PR/CI/artifacts.
+2. **SELECT:** one bounded task with fidelity and engineering acceptance criteria, and any previous source-based findings.
+3. **INVESTIGATE:** compare original SWF evidence, current code, exact source paths and CI; consult official Rust/crate docs and qualified community sources *only as material to the decision*, recording titles, URLs, access dates, relevant sections, caveats.
+4. **IMPLEMENT:** smallest appropriate Rust/source-backed change; do not rewrite unrelated code or depend on non-Rust game functionality.
+5. **TEST:** execute relevant build, unit, smoke, performance, source and/or visual checks; classify actual pass/fail/NOT RUN. Compilation ≠ fidelity.
+6. **RESEARCH:** append full `RE-YYYYMMDD-NNN` technical evidence and decision record with confidence and exact source locations, or explicitly mark research-only applicability.
+7. **INDEPENDENT AUDIT:** inspect the **finished changed code**, diff, relevant dependency graph and FFI; evaluate correctness, ownership, safety, performance, alternatives and exact crate version/features. Run applicable Cargo checks (`fmt --check`, `check`, `test`, `clippy`, `build`, `tree`, `metadata`) when feasible; explain unrun checks.
+8. **RECORD AUDIT:** append cross-linked `AUD-YYYYMMDD-NNN` with documented evidence and explicit verdicts: **PURE-RUST COMPLIANCE** (PASS / PASS WITH DOCUMENTED PLATFORM/BUILD QUALIFICATIONS / FAIL / UNVERIFIED), **ENGINEERING QUALITY** (PASS / PASS WITH NON-BLOCKING CONCERNS / NEEDS IMPROVEMENT / UNVERIFIED), **ORIGINAL-GAME FIDELITY** (VERIFIED FOR THE TESTED SCOPE / PARTIALLY VERIFIED / KNOWN MISMATCH / UNVERIFIED). Include confidence, severity, file, remediation and blockers. If a blocker cannot safely be fixed in this batch, track it; do not claim completed verification.
+9. **EXISTING MEMORY:** update task status, chronological worklog and concise handoff with links to both new records; preserve important older history.
+10. **CHECKPOINT:** commit actual code/docs to the authorized development branch, verify remote SHA and CI as appropriate, never merge/force-push/unlock unrelated work. Where a later doc checkpoint audits an earlier code commit, link the earlier SHA. A commit cannot include its own SHA in its contents; record final hash in final report/Git history.
+11. **REPORT & STOP:** deliver verified result, evidence, three verdicts, RE/AUD IDs, exact commit/PR/run, open risks and one next bounded task; never autonomously proceed.
+
+**Research-only / documentation-only batch:** Add relevant RE entry and explicitly write **"No implementation changes — Rust code audit not applicable"** in the audit, without inventing a post-code audit. Existing baseline architecture review is permitted if labeled retrospective and incomplete.
+
+**Provenance requirement:** For materially used external sources record page title, exact URL/permalink, author/maintainer, publication/update date if known, access date, source type, relevant section, technical claim, exact application to this game, agreement/disagreement, reliability/limits, tested status, relevant crate/API versions. Prefer original data, Rust/Cargo/reference/API docs, docs.rs and maintainers' source; community/Reddit posts are contextual evidence, not universal rules. No exhaustive ecosystem survey for a trivial patch. For exact source findings, record original file, SWF IDs and frame indices, byte offsets/coordinate systems, generated artifact/SHA when available, Rust file/function/line at pinned commit, actual tests and uncertainty.
+
+**Interruption protection:** Keep the previous one-batch limit. An entire batch may be research/audit; checkpoint before starting an unrelated fix. Never let a long audit crowd out saving documentation. Do not report artifact/job health without checking current run. No unauthorized merges/branch rewrites, secrets or proprietary binaries in Git.
 
 ## Purpose and technical design
 
@@ -26,7 +57,7 @@ This file is the provider-neutral entry point for **ChatGPT, Codex, Claude, Gemi
 - `main` and earlier rendering branches remain untouched until explicitly approved. Current draft work is chained through [PR #16](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/16) and [PR #18](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/18).
 - Never force-push, reset destructively, delete/merge branches, rewrite other contributors' work, change deployment, or add proprietary assets/secrets without explicit authorization.
 
-## One-message / one-batch lifecycle — mandatory
+## Original one-message / one-batch lifecycle (still binding; expanded above)
 
 Each user message saying **"continue" authorizes exactly ONE bounded, independently verifiable task**. Avoid unrelated fixes and sprawling investigations. Prefer approximately 6–8 substantive tool operations; ~10 is a conservative checkpointing target, not a strict platform ceiling.
 
