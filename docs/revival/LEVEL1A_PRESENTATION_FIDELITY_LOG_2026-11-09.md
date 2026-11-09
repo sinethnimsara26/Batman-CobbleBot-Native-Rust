@@ -95,10 +95,26 @@ The user requested a presentation that better fits Batman's art style. The actua
 | Intro source behavior | Timeline frames known, but ActionScript stops/sounds not translated | Mark as incomplete and preserve source analysis for next correction | Manual original-vs-native cutscene timing/audio gate pending |
 | First complete integration run (Run #42568860291) | Original CI smoke expected 17 screenshots; two new intro snapshots correctly produced 19 | Update both screenshot-count gates to 19, preserve all 15 historical gameplay SHA-256 pixel checks, and allow *only* the two named intro additions | Re-run Windows CI; Rust compile/test succeeded before this integration-only failure |
 
+### 7. Make the recovered SKIP button actually clickable
+
+Visual review of the [successful button recovery run #42571136795](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42571136795) confirmed the original `SKIP` lettering, original bank-alert text, Batman's reply, and multiple camera/panel scenes in the generated ten-frame contact sheet. The full Windows pipeline passed **55 steps**.
+
+However, `WM_LBUTTONDOWN` previously only set focus: the restored SKIP graphic could not respond to mouse input. The subsequent change:
+- derives a visible UP-state rectangle from original sprite 129's original root placement matrix via `symbol_bounds`;
+- emits `assets/intro_button_bounds.rs` **during CI only**, with no guessed native hotspot;
+- maps mouse pixels through the existing DPI-aware, letterboxed 600×400 stage viewport;
+- allows only clicks inside that source-derived rectangle, while `AppScreen::Intro` is active, to call `Game::skip_intro`;
+- tests stage mapping, click bounds, and a single `MusicStart` even if the transition is triggered more than once.
+
+**Implementation correction caught before CI:** the first button-bounds edit wrote the generated file before the output directory was created. The source was immediately updated to create the directory first. The Windows build is the definitive validation; no local Windows playtest has been claimed.
+
+The source-up-state hitbox approximates the Flash button's clickable `HitTest` shape; it is grounded in original visible geometry, but a true `HitTest`-state polygon match is still a manual-fidelity follow-up.
+
 ## Acceptance gate before merge or Level 1B
 
 - [x] First full intro build **Run #42569523565** passed all 54 Windows steps, including original gameplay screenshot hashes and 19 visual-smoke screenshots. The next button-art revision needs its own full green run.
-- [ ] Latest source-button/ten-frame-gallery Windows CI passes all existing tests and new intro checks.
+- [x] Source-button gallery build Run #42571136795 passed all 55 Windows steps; the original SKIP lettering is present in downloaded HQ screenshots.
+- [ ] Latest source-derived clickable SKIP button Windows CI passes all previous tests and the new mouse-input checks.
 - [ ] CI intro screenshots show meaningful original call/briefing art with no giant blank/missing portions.
 - [ ] Original Flash's actual story text, button visuals, timing/stops, and sound effects are checked against native playback.
 - [ ] Title → intro → gameplay works with keyboard alone, including skip and music timing.
