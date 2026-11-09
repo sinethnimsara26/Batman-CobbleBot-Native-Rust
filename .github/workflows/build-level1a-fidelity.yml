@@ -121,6 +121,7 @@ jobs:
           # briefing clips, rather than jumping directly from title to gameplay.
           python "$tools/bake_root_intro.py" "$swf" "$work/reports/symbols.json" "$work/reports/root_placements.json" "$work/bitmaps" "$work/intro"
           python "$tools/pack_sprite_frames.py" "$work/intro" "assets/intro_frames.bin" --format-version 2 --logical-pixel-scale 1.0
+          Copy-Item "$work/intro/intro_button_bounds.rs" "assets/intro_button_bounds.rs"
 
           python "$tools/render_collision_masks.py" "$swf" "$work/reports/symbols.json" "reverse-engineering/manifests/level-instances.json" "reverse-engineering/generated/collision_masks" --level level1a
 
@@ -327,6 +328,10 @@ jobs:
           assert intro["size"] == [600,400]
           assert intro["recovered_button_up_state"]["symbol"] == 129
           assert intro["recovered_button_up_state"]["up_state_record_count"] >= 1
+          rect=intro["skip_button_stage_bounds"]
+          assert len(rect)==4 and 0 <= rect[0] < rect[2] <= 600 and 0 <= rect[1] < rect[3] <= 400, rect
+          assert (rect[2]-rect[0]) <= 150 and (rect[3]-rect[1]) <= 100, rect
+          assert Path("assets/intro_button_bounds.rs").read_text().startswith("const INTRO_SKIP_RECT:"), "missing source-generated Rust hitbox"
           assert intro["deferred_script_controlled_transition_ids"] == [34]
           assert Path(".generated/intro/intro-contact-sheet.png").is_file()
           assert intro["unsupported_fills"] == [], intro["unsupported_fills"]
