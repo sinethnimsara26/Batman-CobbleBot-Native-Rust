@@ -227,6 +227,40 @@ No Reddit post, third-party benchmark comparison, crate migration or community s
 
 ---
 
+
+## RE-20261109-007 — WIN-01: provenance-verified native Windows acceptance ZIP
+
+**Batch:** 2026-11-09; documentation/QA packaging only, **no gameplay code changes**. **Branch:** `revive/level1a-intro-hud-fidelity-2026-11-09`, latest starting doc SHA `d4da009697ca600ea9b58140f4a6b51494430f2f`; open draft PR #18. **Related independent audit:** [AUD-20261109-005](RUST_PURITY_AND_ENGINEERING_AUDIT.md#aud-20261109-005--win-01-provenance-and-playtest-package-documentation-only). **New permanent manifest:** [WINDOWS_QA_PACKAGE_2026-11-09.md](WINDOWS_QA_PACKAGE_2026-11-09.md).
+
+### Objective and original-source context
+
+The mandatory next task `WIN-01` still requires a physical Windows original-vs-native playtest. GitHub issue #17's current acceptance candidate references a large downloadable artifact on an Actions page; the user had not supplied actual new-build playthrough results. The bounded objective was to retrieve that **exact successful binary**, ensure the package's identity, and make a ready-to-run QA ZIP that avoids mistaken builds and gives structured defect-reporting. No gameplay runtime claim is inferred from CI.
+
+The actual original Flash is the source of truth. Prior source recovery (not re-run this batch) documented root frame18 story Stop, nested story sprite #123 Stop/StopSounds at zero-based frame179, source button #129 `DefineButton2` mouse release-inside at FWS byte 376676 / conditional action byte 376745, and fade sprite #34 StopSounds at local frame39 followed by Level1A transition at frame40. Existing Rust `Game::tick`, Win32 input and fixed 25Hz visual packs implement the source-justified hold and 41-frame fade. The original `source-fingerprints.json` records FWS SHA `3d9e1992404313bc2e2652d46a5838160ef721e2ad559fdd7455f3c54f8ac1ed`; the original SWF was NOT loaded or independently hashed in this QA bundle task. Original-game *behavioral truth* still requires physical comparison, not just decoded actions.
+
+### Artifact retrieval and independent byte inspection actually performed
+
+- From [GitHub CI #42613807273](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42613807273), code SHA `acccd0b70327e2ea1911885f97e21f5e5a5398b3`, obtained canonical Windows artifact ID **13672241525**, named `Batman-CobbleBot-Level1A-Fidelity-Windows-x64` (29,375,232-byte ZIP). ZIP SHA-256 `e02c091de15f36624ae1e35246ad64ec6ebe29d55f1001f1e8882b8165175eb6`. Extracted unmodified `batman_cobblebot_native.exe`, 34,697,216 bytes, SHA-256 **`348098af93ce0eb28924835245f29532d49390cace301880caf1d57f92fef1ed`**.
+- Native contact sheet from artifact **13672106844** and native 1800×1200 HQ screenshot `04_running.png` from artifact **13671807314**, all from the same run. Images are visibly labelled as generated **NATIVE** references and explicitly NOT original Flash.
+- `file` inspected EXE as `PE32+ executable for MS Windows 6.00 (GUI), x86-64, 6 sections`. `objdump -p` listed `GDI32.dll`, `KERNEL32.dll`, `USER32.dll`, `WINMM.dll`, `api-ms-win-core-synch-l1-2-0.dll`, `bcryptprimitives.dll`, `ntdll.dll`. **Limited evidence:** no Flash/Python/browser engine seen in static PE import table. Windows OS DLLs are a documented platform qualification; this is not a dynamic execution trace or full resolved Rust crate dependency graph.
+- Assembled `Batman_Cobblebot_Native_Rust_Windows_QA_2026-11-09.zip`, 30,074,539 bytes, SHA-256 `2b2d6276e0b7ca72d24f7f583ff3e962375bce2099d86306778919439ecc4938`. Members: exact executable, `START_HERE.md`, `REPORT_TEMPLATE.md`, `SHA256SUMS.txt`, `references/intro-contact-sheet.png` and `references/hq-running-reference.png`. Verified ZIP integrity (`ZipFile.testzip() == None`), member list and checksum manifest. This conversation artifact is **not** committed as a Git repository binary; the canonical Actions artifact remains the durable reference while retained.
+- SHA-256 of native intro contact sheet: `479b001a89248fc078e8495216e753c46f49026922b7e1cbbec12ae89a4ea415`; native HQ running reference: `4bfbe8e7f5641d20af2e0ce38e0321f87601437d32eb4130e1971960e329cc39`.
+- The current separate documentation-only Windows build [#42618062937](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42618062937) was in progress when checked. It does not change the last successful code SHA; no success claim is made for that new documentation CI.
+
+### Hypotheses, alternatives and decision
+
+The biggest immediate evidence gap was not a known new game code defect but that the user's **physical Windows behavior was untested**, and jumping into other Rust functionality would violate the user blocker-first and one-task rules. Alternatives considered: (A) start HUD/Level1B work without actual mismatch evidence, rejected as violating scope; (B) rerun more GitHub Actions visual CI and claim manual fidelity, rejected because headless rendering does not exercise actual input/audio/display; (C) supply canonical EXE and tailored test instructions, compare expected original behavior with native and collect reproducible evidence; **selected C**. The reference images are useful to recognize native art corruption but cannot serve as independent original game oracles.
+
+The user may legitimately see Windows trust prompts for an unsigned app. The QA notes instruct verifying checksum and original GitHub CI provenance instead of disabling Windows protections. This is an independently repackaged ZIP and should not be mistaken for a first-party installer, signed release or source-original binaries.
+
+### Tested vs untested and follow-up
+
+**Actually verified:** GitHub artifact IDs/run and status, exact ZIP extraction, EXE architecture and static DLL imports, file hashes, package integrity, copy of current CI visual reference, and authored reporting template. **Not run:** Windows executable on user's hardware, original Flash runtime, keyboard/mouse, audio speakers, frame pacing, on-device error trace, local Cargo checks, new Rust build/test, executable signing/security scan. No external Rust crate/community claim was needed; evidence came from GitHub repo, Windows artifact, the standard `file`/`objdump` tools and locally computed hashes.
+
+**Confidence:** HIGH in artifact identity/packaging integrity (measured SHA-256), HIGH in previous CI outcome for that exact SHA (run metadata), MEDIUM in static pure-Rust runtime composition from source + imports (platform native libraries and dynamic behavior not exhaustively audited), LOW/UNKNOWN in original-game user-experience fidelity. **Required next bounded task:** user runs the included native EXE, sends the first reproducible difference with original/reference and Windows version/DPI and optional video; repair/retest that same problem before unrelated work, then append another RE/AUD for code changes. Issue #17 stays open, PR #18 draft, `main` untouched, Level1B blocked.
+
+---
+
 ## Provenance record for this bootstrap
 
 **Repository sources actually read (2026-11-09):** GitHub native connector at the pinned `c2b872e` tree; `Cargo.toml`, `AGENTS.md`, `src/main.rs`, `src/game.rs`, `src/assets.rs`, `src/render.rs`, `src/audio.rs`, `src/collision.rs`, `src/win32.rs`, `src/headless.rs`, `AI_HANDOFF.md`, `AI_TASKS.md`, `AI_WORKLOG.md`, manifests and CI run/job logs identified above. Earlier measurements that were NOT personally regenerated are identified as historical evidence.

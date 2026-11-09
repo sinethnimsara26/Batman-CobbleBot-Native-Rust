@@ -192,6 +192,29 @@ Actual [Run #42613807273](https://github.com/sinethnimsara26/Batman-CobbleBot-Na
 
 ---
 
+
+## AUD-20261109-005 — WIN-01 provenance and playtest package (documentation only)
+
+**Date:** 2026-11-09. **Scope:** create/review a directly usable Windows game QA ZIP from the already-green native executable and prepare reliable manual acceptance instructions. Parent documentation code head `d4da009697ca600ea9b58140f4a6b51494430f2f`; executable code SHA `acccd0b70327e2ea1911885f97e21f5e5a5398b3`; PR #18 draft. **Related research:** [RE-20261109-007](REVERSE_ENGINEERING_RESEARCH_LEDGER.md#re-20261109-007--win-01-provenance-verified-native-windows-acceptance-zip); persistent QA manifest [WINDOWS_QA_PACKAGE_2026-11-09.md](WINDOWS_QA_PACKAGE_2026-11-09.md).
+
+**No implementation changes — Rust code audit not applicable.** No Rust game source, original SWF asset, crates, Cargo manifest/lockfile, FFI, Win32 state machine, renderer, tests or CI threshold modified or rebuilt as part of this QA-packaging step. No new user-confirmed gameplay defect was identified, so changing unrelated game functionality would conflict with the mandatory blocker-first protocol.
+
+**Independent artifact inspection, not code certification:**
+- Fetched exact Windows x64 artifact 13672241525 from successful 57-step [CI #42613807273](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42613807273), containing `batman_cobblebot_native.exe` (34,697,216 bytes; SHA-256 `348098af93ce0eb28924835245f29532d49390cace301880caf1d57f92fef1ed`).
+- Independently inspected PE header using `file`: native PE32+ x86-64 GUI binary. `objdump -p` imported only Windows OS/system libraries `GDI32`, `KERNEL32`, `USER32`, `WINMM`, `api-ms-win-core-synch-l1-2-0`, `bcryptprimitives`, `ntdll`. This is supportive evidence that a separate Flash/JavaScript/Python engine is not linked through the static import table, **not** a proof of no delayed dynamic DLL loads or a fully Rust transitive graph.
+- Downloaded original CI visual samples and bundled them as **native reference outputs**, clearly not authentic original Flash captures. Created `START_HERE.md`, `REPORT_TEMPLATE.md` and `SHA256SUMS.txt`. Verified six-member ZIP content and no ZIP CRC errors. ZIP SHA-256 `2b2d6276e0b7ca72d24f7f583ff3e962375bce2099d86306778919439ecc4938`, 30,074,539 bytes. The ZIP is an ephemeral conversation-delivered artifact; the official GitHub Actions artifact remains canonical.
+- **Actual execution:** no Windows process was launched here, no keyboard/mouse/speaker tests were done and original Flash was not compared. CI remains a code/build oracle, **not** a human acceptance oracle. Windows signing/security reputation was not measured. No Cargo commands run; source code was unchanged and repo source assets require Windows CI to rebuild.
+
+**Pure-Rust compliance:** **UNCHANGED — PASS WITH DOCUMENTED PLATFORM/BUILD QUALIFICATIONS** based on preceding inspected Rust runtime and static PE imports (HIGH confidence for asset identity, MEDIUM for full dependency purity). Windows graphics/audio OS calls and offline Python SWF baking remain documented exceptions outside gameplay source.
+
+**Engineering quality:** **UNCHANGED — PASS WITH NON-BLOCKING CONCERNS** for prior successful 11-test Rust code SHA, strict 40ms CI gate passed. The package improves reproducibility by pinning SHA and providing a complete report template, but does not establish that unsolved Win32 unsafe/FFI, dependency lockfile and real-device performance issues are absent.
+
+**Original-game fidelity:** **PARTIALLY VERIFIED / PHYSICAL ACCEPTANCE UNVERIFIED**. Source actions and native outputs covered in earlier audits and CI, but actual intro flicker, HUD, SKIP release, audio, controls and frame feel require a user physical Windows test.
+
+**Disposition:** WIN-01 playtest material is prepared and independently package-verified; the **remaining blocker is the absence of actual user original-vs-native results**. Do not invent a mismatch, call issue #17 accepted, change unrelated gameplay or begin Level1B. Once user supplies an observed discrepancy, fix and retest it *before moving on*, and author a fresh detailed RE and post-code AUD for that Rust change.
+
+---
+
 ## Mandatory audit entry template — copy and complete AFTER implementation
 
 `## AUD-YYYYMMDD-NNN — [task and referenced RE entry]`
