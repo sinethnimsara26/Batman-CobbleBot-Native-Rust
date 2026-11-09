@@ -51,6 +51,15 @@ fn render_smoke_mode(out:&str,hq:bool){
     assert_eq!(skipped.screen,AppScreen::Playing);
     assert_eq!(skipped.take_audio_events(),vec![AudioEvent::MusicStart]);
 
+    // Window button clicks call the same idempotent intro transition.
+    let mut clicked=Game::new();
+    assert!(!clicked.skip_intro());
+    clicked.screen=AppScreen::Intro;
+    assert!(clicked.skip_intro());
+    assert!(!clicked.skip_intro());
+    assert_eq!(clicked.screen,AppScreen::Playing);
+    assert_eq!(clicked.take_audio_events(),vec![AudioEvent::MusicStart]);
+
     // Preserve the real root presentation instead of skipping straight into
     // gameplay: fade-in starts immediately, level-title continues longer.
     snapshot(hq,&out,"00_fade_start.png",&mut game,&assets);
