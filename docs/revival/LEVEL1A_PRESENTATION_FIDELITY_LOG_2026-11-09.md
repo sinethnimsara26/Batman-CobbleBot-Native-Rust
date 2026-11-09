@@ -49,6 +49,7 @@ Added `reverse-engineering/tools/bake_root_intro.py` to composite source root-fr
 Known source limitation:
 - **Symbol 129** is an interactive Flash button definition not handled by the sprite/shape rasterizer. The first CI run failed safely with `missing_bitmap_ids: [129]`. The correction deliberately excludes only that unsupported button from the visual bake, records it as `omitted_interactive_button_ids`, and keeps a native keyboard skip path. This is an **unresolved visual/interaction gap**, not a claim of complete 1:1 intro playback.
 - Original `DoAction`-driven stops/pauses and intro-specific `StartSound` events have **not yet been translated**. The current code plays 180 frame samples in order and starts Level 1A music only on entry to gameplay.
+- **Symbol 34** is the root scripted fade-out clip. It must not auto-play and repeatedly black out the story; the intro visual baker now defers this clip entirely. Its exact original transition remains an acceptance item.
 
 ### 4. Restore the pre-level runtime route
 
