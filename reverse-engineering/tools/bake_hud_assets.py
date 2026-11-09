@@ -145,7 +145,7 @@ def draw_field(image,info,transform,anchor,font_path,style="source"):
         # onto the native counter ribbon rather than covering the icon.
         if info["id"]==715:
             text="LIVES X"
-            xy=(xy[0]-4.0*scale,xy[1]+10.0*scale)
+            xy=(xy[0]-4.0*scale,xy[1]+7.0*scale)
         size=max(1,round(info.get("font_height",12.0)*scale*
                          (0.73 if info["id"]==715 else 0.94)))
         while size>1:

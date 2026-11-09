@@ -815,7 +815,7 @@ jobs:
           print(json.dumps(report,indent=2))
           assert "HUD_COUNTER_ROW_Y:i32=82" in render
           assert "draw_hud_counter_band_hq" in render
-          assert "xy[1]+10.0*scale" in baker
+          assert "xy[1]+7.0*scale" in baker
           assert "outline=max(2,round(0.74*scale))" in baker
           assert "outline=max(2,round(0.72*pixel_scale))" in baker
           print("Round 6 HUD contract PASS: original art and fields preserved, HQ-only dark-backed counter row and black text edging.")
