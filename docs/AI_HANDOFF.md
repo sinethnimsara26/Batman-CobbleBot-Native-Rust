@@ -57,9 +57,17 @@
 - **Diagnostic follow-up:** root sprite35 is a 15-frame clip; new `inspect_intro_behavior.py` also includes sprite35 for exact source actions. The 15-frame black pattern makes it a suspect, not an established fault. No unsupported scene/fade removal.
 - **Next batch:** inspect this new commit's Actions outcome and sprite35 Stop actions. If source supports it, correct its looping fade in another isolated batch. User still must approve timing and on-screen appearance. Preserve unmerged PR #18 and untouched `main`.
 
+## November 9 — INTRO-03: source-stopped fade clip #35 (CI pending)
+
+- **Recovery verified:** previous [Run #42583921359](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42583921359) completed SUCCESS at commit `5215b2239b53ce7e75606674637f31fbfffebffc`; it confirmed sprite122 stop handling, 180-frame diagnostic report, and base gameplay regressions. [PR #18](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/18) still open/draft, `main` untouched.
+- **Original source evidence:** downloaded `Batman-CobbleBot-Level1A-Intro-Behavior-Report` (artifact **13658473742**) shows `sprite:35`, 0-based frame **14**, `Stop` at nested DefineSprite payload byte **207** (DoAction tag offset **201**). Native baker previously wraps its 15 frames via generic `frame % frames`, replaying the opening black transition every 15 ticks. Earlier diagnostics (artifact **13658682539**) show near-black fractions of 1.0 at ticks **15, 30, 45, 60** and later multiples, with abrupt frame deltas ~0.39.
+- **Targeted implementation:** `bake_root_intro.py` validates sprite35's frame count and terminal Stop against verified SWF; holds its final source display list through the 180-sample intro pack (the initial source fade remains intact). It extends only this intro bake's virtual sprite duration. Generic renderer, audio, Rust gameplay, camera, controls and intro cutoff remain unchanged. Source sprite122's previous stop still holds.
+- **Focused CI checks:** build manifest includes held sprite35, behavior audit asserts its final Stop, and per-frame luminance/change checks require no near-total-black pulse at frames **15,30,45,60**. These checks and preserved historical hashes must pass before marking this batch CI verified.
+- **Open issues:** actual Windows playback and original Flash comparison have not yet confirmed the flicker or story timing; the native 180-tick automatic transition may still end the story prematurely. **Next batch:** inspect new CI artifact and compare actual intro, then audit original frame179 transition/skip event handlers before changing timing. Do not merge PRs or begin Level1B.
+
 ## Exact next ONE bounded batch
 
-**Task ID: Verify INTRO-02 CI and investigate root sprite35.** Inspect the new action report for source sprite35 and the 15-tick recurring dark frames; fix its playback only when original ActionScript establishes a source-supported stop. Current sprite122 change fixes one confirmed wrap, not the complete short/flickering intro.
+**Task ID: Verify INTRO-03 CI and compare corrected intro frames.** Confirm that the source-stopped sprite35 patch eliminates repeated blackout pulses without replacing the initial Flash fade. Only after that, investigate the original 180-tick scene transition/skip controls as the next isolated batch. The Windows user must still visually approve the intro.
 
 
 ## Reproduction / first commands and links

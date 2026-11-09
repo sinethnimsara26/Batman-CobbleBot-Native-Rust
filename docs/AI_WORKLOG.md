@@ -54,3 +54,11 @@ This is the **short index of meaningful, verified progress and mistakes**. Detai
 - **Verified bug:** sprite122 is 165 source frames with terminal `Stop` on zero-based frame164 at nested byte offset47244; the generic renderer loops it at tick165 because of `frame % frames`. Intro baker now verifies original source action and extends only its visual parent duration to 180, holding its final placement state without changing independent children or native timing.
 - Auditor now also inspects root child sprite35 (15 source frames) to determine whether its own Stop action should prevent repeated dark transitions. No speculative fade removal.
 - **Status:** new code, workflow guard and handoff are committed on draft PR #18; new Windows CI / human playtest pending. Next inspect action report and CI before further correction.
+
+## 2026-11-09 — INTRO-03: recover terminal Stop for looping source fade sprite #35
+
+- Prior [Run #42583921359](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42583921359) completed SUCCESS at `5215b223`; sprite122 visual hold and regression tests passed.
+- Downloaded behavior report artifact **13658473742** and frame diagnostics artifact **13658682539**. Confirmed original sprite35 has a terminal `Stop` at local zero-based frame14, nested payload byte207 (DoAction tag byte201). Source visual loop is 15 frames, while baked image incorrectly resets to a black initial frame at intro ticks 15,30,45,..., creating a rapid 0.6-second blackout pattern.
+- Patched *only* intro asset baker to check source stop evidence and extend the fade sprite's stopped display list to 180 samples. Maintains initial fade, sprite122 stop, original audio/assets, and all native gameplay behavior.
+- CI now requires source sprite35 Stop, full manifest stop metadata, no periodic near-total-black pulses or huge change spikes at 15/30/45/60, and all historical regression tests. **Verification pending new Windows Actions run**; no physical Windows playtest/final fidelity assertion yet.
+- Next batch: verify new CI, review intro contact sheet/diagnostics, then investigate premature auto-ending against Flash event handlers; do not merge draft or implement more levels.

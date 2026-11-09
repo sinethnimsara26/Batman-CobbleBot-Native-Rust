@@ -347,11 +347,24 @@ jobs:
           assert intro["held_stopped_sprites"] == [{
               "symbol":122, "source_frame_count":165,
               "stop_frame_zero_based":164, "baked_frame_count":180,
+          },{
+              "symbol":35, "source_frame_count":15,
+              "stop_frame_zero_based":14, "baked_frame_count":180,
           }]
           assert Path(".generated/intro/intro-contact-sheet.png").is_file()
           diagnostic=json.loads(Path(".generated/intro/intro-frame-diagnostics.json").read_text())
           assert diagnostic["frame_count"]==180
           assert [x["frame"] for x in diagnostic["frames"]]==list(range(180))
+          # At source frame 14 the 15-frame fade stops. Old modulo playback
+          # restarted its fully-black frame at 15,30,45,..., causing flashes.
+          # Confirm the repaired bake doesn't insert those black pulses while
+          # preserving the original initial black fade (frame 0).
+          frames=diagnostic["frames"]
+          assert frames[0]["near_black_fraction"] > 0.95
+          for tick in (15,30,45,60):
+              assert frames[tick]["near_black_fraction"] < 0.90, (tick, frames[tick])
+          assert max(frames[tick]["changed_pixel_fraction_from_previous"] for tick in (15,30,45,60)) < 0.25, "unexpected 15-frame blackout/flash cycle"
+
           assert all(0<=x["near_black_fraction"]<=1 and 0<=x["changed_pixel_fraction_from_previous"]<=1 for x in diagnostic["frames"])
           assert all(isinstance(b["tag_offset"],int) and all(isinstance(a["offset"],int) for a in b["actions"])
                      for blocks in behavior["original_timeline_actions"].values() for b in blocks)
@@ -360,6 +373,9 @@ jobs:
           assert any(b["frame"]==164 and any(a["op"]=="Stop" for a in b["actions"])
                      for b in behavior["original_timeline_actions"]["sprite:122"])
           assert behavior["intro_symbol_ids"] == [122,123,126,35]
+          assert any(b["frame"]==14 and any(a["op"]=="Stop" for a in b["actions"])
+                     for b in behavior["original_timeline_actions"]["sprite:35"])
+
           assert intro["unsupported_fills"] == [], intro["unsupported_fills"]
           assert intro["missing_bitmap_ids"] == [], intro["missing_bitmap_ids"]
           from PIL import ImageChops

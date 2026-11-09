@@ -130,6 +130,29 @@ def main():
         "stop_frame_zero_based": 164, "baked_frame_count": INTRO_FRAMES,
     }]
 
+    # The full-frame artifact exposed a one-frame blackout every 15 frames.
+    # Sprite 35's source has 15 frames and explicitly executes Stop at
+    # zero-based frame 14 (AVM1 action offset 207 within DefineSprite).
+    # Generic frame-modulo rendering replays its opening black fade every
+    # 15 ticks. Hold the last visual frame exactly as Flash would; don't
+    # remove the source fade-in or change the gameplay transition clock.
+    source_35 = collect_movie_sprites(ns.swf.read_bytes()).get(35)
+    if source_35 is None or int(symbols["35"]["frames"]) != 15:
+        raise ValueError("Intro sprite35 source duration changed; re-audit original SWF")
+    actions_35 = scan_timeline(source_35, 4, "sprite:35")["scripts"]
+    if not any(
+        block["frame"] == 14 and any(a["op"] == "Stop" for a in block["actions"])
+        for block in actions_35
+    ):
+        raise ValueError("Original intro sprite35 terminal Stop no longer verified")
+    symbols["35"]["frames"] = INTRO_FRAMES
+    if display_list(symbols["35"], 14) != display_list(symbols["35"], 15):
+        raise AssertionError("Stopped intro fade sprite35 must hold its final display list")
+    held_stopped_sprites.append({
+        "symbol": 35, "source_frame_count": 15,
+        "stop_frame_zero_based": 14, "baked_frame_count": INTRO_FRAMES,
+    })
+
     # Use the same source parser and composed transforms as all existing
     # original-Flash bake jobs. This synthetic 180-frame parent holds the
     # original root-frame-18 display list while child timelines advance.
