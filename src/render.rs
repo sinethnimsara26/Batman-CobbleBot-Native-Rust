@@ -743,11 +743,38 @@ fn draw_tiles_hq(fb:&mut RenderSurface,game:&Game,tiles:&LevelTileSet){
                 // then convert only that origin to presentation pixels.
                 let px=(x as f32+game.camera_x).round() as i32*s+t.crop_x;
                 let py=(y as f32+game.camera_y).round() as i32*s+t.crop_y;
-                blit(fb,&t.image,px,py,t.image.w as i32,t.image.h as i32,false);
+                // Detail tiles are already baked at the exact 3x pixel
+                // resolution. Avoid per-pixel resize math and out-of-bounds
+                // checks of the general sprite blitter.
+                blit_tile_hq_1to1(fb,&t.image,px,py);
             }
             x+=600;
         }
         y+=400;
+    }
+}
+
+/// Clip a source-sized HQ detail tile once per row, then blend visible pixels.
+/// Colors and alpha use the exact existing blend() routine: no approximation,
+/// unsafe pointers, resampling changes or mutations to legacy sprite paths.
+fn blit_tile_hq_1to1(dst:&mut RenderSurface,src:&Image,x:i32,y:i32){
+    if src.w==0 || src.h==0 || dst.w==0 || dst.h==0 {return;}
+    let x0=(x as i64).max(0).min(dst.w as i64) as usize;
+    let y0=(y as i64).max(0).min(dst.h as i64) as usize;
+    let x1=(x as i64+src.w as i64).max(0).min(dst.w as i64) as usize;
+    let y1=(y as i64+src.h as i64).max(0).min(dst.h as i64) as usize;
+    if x0>=x1 || y0>=y1 {return;}
+    let sx=(x0 as i64-x as i64) as usize;
+    let width=x1-x0;
+    for dy in y0..y1{
+        let sy=(dy as i64-y as i64) as usize;
+        let src_start=sy*src.w+sx;
+        let dst_start=dy*dst.w+x0;
+        let src_row=&src.pixels[src_start..src_start+width];
+        let dst_row=&mut dst.pixels[dst_start..dst_start+width];
+        for (&pixel,target) in src_row.iter().zip(dst_row.iter_mut()){
+            blend(target,pixel);
+        }
     }
 }
 fn blend_rgba(dst:&mut u32,src:u32){
@@ -787,7 +814,49 @@ fn blit(dst:&mut RenderSurface,src:&Image,x:i32,y:i32,rw:i32,rh:i32,flip:bool){i
 
 #[cfg(test)]
 mod tests{
-    use super::{blend,blend_rgba};
+    use super::{blend,blend_rgba,blit,blit_tile_hq_1to1};
+    use crate::assets::Image;
+    use crate::surface::RenderSurface;
+
+    #[test]
+    fn hq_tile_clipped_blit_is_identical_to_general_blit(){
+        // Retain all original alpha/blend semantics while testing clipping
+        // on every side and partial visibility across the source rectangle.
+        let palette=[
+            0x00000000u32,0x00010203,0x01020408,0x208080ff,
+            0x8040a0e0,0xfefdfcfb,0xffffffff,0xff123456,
+        ];
+        let image=Image{
+            w:7,h:5,
+            pixels:(0..35).map(|i|palette[(i*5+i/7)%palette.len()]).collect(),
+        };
+        for &x in &[-20,-7,-5,-1,0,2,8,12,13,17]{
+            for &y in &[-20,-5,-3,-1,0,3,7,8,9,17]{
+                let mut reference=RenderSurface::new(13,9);
+                let mut optimized=RenderSurface::new(13,9);
+                for (i,pixel) in reference.pixels.iter_mut().enumerate(){
+                    *pixel=0x00102030u32.wrapping_add(i as u32*0x0003070b);
+                }
+                optimized.pixels.clone_from(&reference.pixels);
+                blit(&mut reference,&image,x,y,7,5,false);
+                blit_tile_hq_1to1(&mut optimized,&image,x,y);
+                assert_eq!(optimized.pixels,reference.pixels,
+                    "HQ 1:1 tile diverged from generic at x={x}, y={y}");
+            }
+        }
+    }
+
+    #[test]
+    fn hq_tile_clipped_blit_keeps_zero_sized_and_offscreen_tiles_noop(){
+        let image=Image{w:0,h:0,pixels:Vec::new()};
+        let mut dst=RenderSurface::new(5,4);
+        dst.fill(0xff336699);
+        blit_tile_hq_1to1(&mut dst,&image,0,0);
+        let other=Image{w:2,h:2,pixels:vec![0xffffffff;4]};
+        blit_tile_hq_1to1(&mut dst,&other,10,-10);
+        assert!(dst.pixels.iter().all(|&px|px==0xff336699));
+    }
+
 
     #[test]
     fn rgba_scratch_blend_matches_legacy_over_opaque_destination(){
