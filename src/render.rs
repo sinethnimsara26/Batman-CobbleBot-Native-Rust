@@ -436,6 +436,16 @@ fn draw_hud_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     let shell_x=(ROOT_X*scale-shell.anchor_x).round() as i32;
     let shell_y=(ROOT_Y*scale-shell.anchor_y).round() as i32;
 
+    let legacy_x=(ROOT_X-LEGACY_ANCHOR_X).round() as i32;
+    let legacy_y=(ROOT_Y-LEGACY_ANCHOR_Y).round() as i32;
+    let s=HQ_SCALE as i32;
+
+    // The original HUD icon geometry is retained. The themed HQ candidate
+    // gets a separate dark-backed bottom status row so the batarang count and
+    // life label/value no longer sit on top of the bat silhouettes. Draw the
+    // new backing underneath the source shell so the original icons win.
+    draw_hud_counter_band_hq(fb,legacy_x*s,(legacy_y+60)*s,283*s,30*s);
+
     // Round 6 HUD assets already live at final presentation resolution.
     // Copy them 1:1; never enlarge the 1x HUD or digit atlases at runtime.
     blit(
@@ -444,15 +454,12 @@ fn draw_hud_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
         shell.image.w as i32,shell.image.h as i32,false
     );
 
-    // Preserve the exact legacy logical centers, then convert only at the
-    // presentation boundary. This makes field registration independently
-    // testable and keeps Game/HUD state in the original 600x400 coordinate system.
-    let legacy_x=(ROOT_X-LEGACY_ANCHOR_X).round() as i32;
-    let legacy_y=(ROOT_Y-LEGACY_ANCHOR_Y).round() as i32;
-    let s=HQ_SCALE as i32;
+    // The legacy 1x field centers stay untouched. The HQ-only presentation
+    // counters move to the separate bottom row; score retains its own column.
+    const HUD_COUNTER_ROW_Y:i32=82;
     draw_number_centered_hq_1to1(
         fb,&assets.hud_digits_small_hq,
-        (legacy_x+53)*s,(legacy_y+68)*s,game.batarangs.max(0)
+        (legacy_x+53)*s,(legacy_y+HUD_COUNTER_ROW_Y)*s,game.batarangs.max(0)
     );
     draw_number_centered_hq_1to1(
         fb,&assets.hud_digits_large_hq,
@@ -460,8 +467,27 @@ fn draw_hud_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     );
     draw_number_centered_hq_1to1(
         fb,&assets.hud_digits_small_hq,
-        (legacy_x+155)*s,(legacy_y+69)*s,game.lives.max(0)
+        (legacy_x+180)*s,(legacy_y+HUD_COUNTER_ROW_Y)*s,game.lives.max(0)
     );
+}
+
+/// Dark backing for the HQ-only lower counter row. The overlay is drawn
+/// beneath the original source HUD shell/icons and uses the native Rust
+/// compositor; the exact original 1x HUD remains untouched for A/B review.
+fn draw_hud_counter_band_hq(fb:&mut RenderSurface,x:i32,y:i32,w:i32,h:i32){
+    if w<=0 || h<=0 {return;}
+    let x0=x.max(0) as usize;
+    let y0=y.max(0) as usize;
+    let x1=((x as i64+w as i64).max(0).min(fb.w as i64)) as usize;
+    let y1=((y as i64+h as i64).max(0).min(fb.h as i64)) as usize;
+    if x0>=x1||y0>=y1{return;}
+    for py in y0..y1{
+        for px in x0..x1{
+            let edge=py==y0||py+1==y1;
+            blend(&mut fb.pixels[py*fb.w+px],
+                if edge{0xd04a291b}else{0xd0121017});
+        }
+    }
 }
 
 fn draw_number_centered_hq_1to1(fb:&mut RenderSurface,atlas:&Image,cx:i32,cy:i32,value:i32){

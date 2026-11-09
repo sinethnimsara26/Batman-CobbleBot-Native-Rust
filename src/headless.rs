@@ -33,36 +33,24 @@ fn render_smoke_mode(out:&str,hq:bool){
     for _ in 0..80 {game.tick(&mut input,&ground);}
     assert_eq!(game.screen,AppScreen::Intro);
     snapshot(hq,&out,"00_intro_call.png",&mut game,&assets);
-    for _ in 0..100 {game.tick(&mut input,&ground);}
+    // The source final sample is near-black: show it for precisely one
+    // native tick, not as an indefinitely held waiting screen.
+    for _ in 0..99 {game.tick(&mut input,&ground);}
     assert_eq!(game.screen,AppScreen::Intro);
     assert_eq!(game.intro_tick,179);
     assert_eq!(game.take_audio_events(),vec![AudioEvent::IntroStop]);
-    // Source timeline stops: long idle must not silently enter Level 1A.
-    for _ in 0..100 {game.tick(&mut input,&ground);}
-    assert_eq!(game.screen,AppScreen::Intro);
-    assert_eq!(game.intro_tick,179);
-    assert!(game.take_audio_events().is_empty());
-    // Explicit SKIP starts original sprite34's 41-frame fade.
-    input.set(VK_ENTER,true);
-    game.tick(&mut input,&ground);
-    input.set(VK_ENTER,false);
-    assert_eq!(game.screen,AppScreen::Intro);
-    assert_eq!(game.intro_fadeout_tick,Some(0));
-    assert!(!game.skip_intro(), "SKIP must not restart the fade");
-    for _ in 0..39 { game.tick(&mut input,&ground); }
-    assert_eq!(game.intro_fadeout_tick,Some(39));
-    assert!(game.take_audio_events().is_empty(), "intro sound already stopped");
-    game.tick(&mut input,&ground);
-    assert_eq!(game.intro_fadeout_tick,Some(40));
-    assert_eq!(game.screen,AppScreen::Intro);
+    snapshot(hq,&out,"00_intro_last.png",&mut game,&assets);
     game.tick(&mut input,&ground);
     assert_eq!(game.screen,AppScreen::Playing);
-    assert_eq!(game.intro_fadeout_tick,None);
     assert_eq!(game.ticks,0);
+    assert_eq!(game.intro_fadeout_tick,None);
     assert_eq!(game.take_audio_events(),vec![AudioEvent::MusicStart]);
+    // No second music start; this is a terminal scene transition.
+    game.tick(&mut input,&ground);
+    assert!(game.take_audio_events().is_empty());
 
-    // Verify early keyboard skip: source fade frame39 StopSounds precedes
-    // frame40's level1a dispatcher transition and background music.
+    // Verify early keyboard skip remains source-correct: sprite34 has all 41
+    // frames and StopSounds precedes gameplay entry/music.
     let mut skipped=Game::new();
     let mut skip_keys=InputState::default();
     skip_keys.set(VK_ENTER,true);
@@ -270,19 +258,13 @@ pub fn benchmark_render(iterations:usize,out:&str){
     input.set(VK_ENTER,true);
     game.tick(&mut input,&ground);
     input.set(VK_ENTER,false);
-    // Original root story stops at frame 179. A timeout is NOT a gameplay
-    // transition: the source SKIP button starts the 41-frame fadeout #34.
-    // Reach Playing through the same Rust state machine as the playable game.
-    for _ in 0..180 { game.tick(&mut input,&ground); }
+    // Native completion after the final 180 story frames must be non-blocking
+    // (the source's final sample is nearly black). SKIP still takes its own
+    // source fade path; this benchmark measures natural Level1A entry.
+    for _ in 0..179 { game.tick(&mut input,&ground); }
     assert_eq!(game.screen,AppScreen::Intro);
     assert_eq!(game.intro_tick,179);
-    assert_eq!(game.intro_fadeout_tick,None);
-    assert!(game.skip_intro(), "benchmark must trigger the source SKIP route");
-    assert_eq!(game.intro_fadeout_tick,Some(0));
-    for _ in 0..40 { game.tick(&mut input,&ground); }
-    assert_eq!(game.screen,AppScreen::Intro);
-    assert_eq!(game.intro_fadeout_tick,Some(40));
-    game.tick(&mut input,&ground); // source fade's final gotoNext=level1a
+    game.tick(&mut input,&ground);
     assert_eq!(game.screen,AppScreen::Playing);
     assert_eq!(game.intro_fadeout_tick,None);
     assert_eq!(game.ticks,0);

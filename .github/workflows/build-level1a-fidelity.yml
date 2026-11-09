@@ -364,6 +364,11 @@ jobs:
           for tick in (15,30,45,60):
               assert frames[tick]["near_black_fraction"] < 0.90, (tick, frames[tick])
           assert max(frames[tick]["changed_pixel_fraction_from_previous"] for tick in (15,30,45,60)) < 0.25, "unexpected 15-frame blackout/flash cycle"
+          # The recovered source's last sample is almost black. The Rust
+          # state machine must never hold that visual indefinitely.
+          assert frames[179]["near_black_fraction"] > 0.95, frames[179]
+          game_code=Path("src/game.rs").read_text()
+          assert "if was_at_end { self.begin_level1a(); }" in game_code
 
           assert all(0<=x["near_black_fraction"]<=1 and 0<=x["changed_pixel_fraction_from_previous"]<=1 for x in diagnostic["frames"])
           assert all(isinstance(b["tag_offset"],int) and all(isinstance(a["offset"],int) for a in b["actions"])
@@ -808,7 +813,12 @@ jobs:
           }
           Path(".generated/hq-hud-asset-report.json").write_text(json.dumps(report,indent=2))
           print(json.dumps(report,indent=2))
-          print("Round 6 HUD contract PASS: true 3x shell/text/digits, 1:1 runtime path, field centers locked.")
+          assert "HUD_COUNTER_ROW_Y:i32=82" in render
+          assert "draw_hud_counter_band_hq" in render
+          assert "xy[1]+10.0*scale" in baker
+          assert "outline=max(2,round(0.74*scale))" in baker
+          assert "outline=max(2,round(0.72*pixel_scale))" in baker
+          print("Round 6 HUD contract PASS: original art and fields preserved, HQ-only dark-backed counter row and black text edging.")
 
       - name: Validate Round 7 true-3x foreground timelines
         shell: python

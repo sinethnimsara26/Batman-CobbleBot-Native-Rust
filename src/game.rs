@@ -317,7 +317,15 @@ impl Game{
                          input.pressed(VK_ESCAPE) {
                     let _=self.skip_intro();
                 }else{
+                    // Source sprite123's final frame is almost entirely black.
+                    // Do not trap the user there indefinitely: display the
+                    // terminal frame for one tick, then enter Level 1A. This
+                    // native auto-completion is a user-requested usability
+                    // correction; the original scripted auto-route is not
+                    // established by the recovered Stop action alone.
+                    let was_at_end=self.intro_tick==179;
                     self.advance_intro_story();
+                    if was_at_end { self.begin_level1a(); }
                 }
                 input.clear_pressed();
                 return

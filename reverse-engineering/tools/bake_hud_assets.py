@@ -140,17 +140,30 @@ def draw_field(image,info,transform,anchor,font_path,style="source"):
         # Especially important near the health icon / lives digit.
         max_width=max(1.0,box[2]-box[0]-2.0*scale)
         max_height=max(1.0,box[3]-box[1]-1.0*scale)
-        size=max(1,round(info.get("font_height",12.0)*scale*1.18))
+        # Player-tested layout: source field 715 originally sits directly
+        # below the health icon; use a smaller caption and move its baseline
+        # onto the native counter ribbon rather than covering the icon.
+        if info["id"]==715:
+            text="LIVES X"
+            xy=(xy[0]-4.0*scale,xy[1]+10.0*scale)
+        size=max(1,round(info.get("font_height",12.0)*scale*
+                         (0.73 if info["id"]==715 else 0.94)))
         while size>1:
             font=ImageFont.truetype(str(font_path),size=size)
             tb=draw.textbbox((0,0),text,font=font,anchor=anchor_type)
             if tb[2]-tb[0]<=max_width and tb[3]-tb[1]<=max_height:
                 break
             size-=1
-        color=(255,196,35,255) if info["id"]!=715 else (255,229,169,255)
-        outline=max(1,round(0.26*scale))
+        color=(255,220,95,255) if info["id"]!=715 else (255,238,185,255)
+        outline=max(2,round(0.74*scale))
+        # Crisp black stroke AND offset shadow are baked at 6x, then
+        # downsampled at 3x; the former 0.26*scale border was too thin.
+        shadow=(xy[0]+0.54*scale,xy[1]+0.54*scale)
+        draw.text(shadow,text,font=font,fill=(5,5,8,255),anchor=anchor_type,
+                  stroke_width=outline+max(1,round(0.20*scale)),
+                  stroke_fill=(5,5,8,255))
         draw.text(xy,text,font=font,fill=color,anchor=anchor_type,
-                  stroke_width=outline,stroke_fill=(45,22,12,255))
+                  stroke_width=outline,stroke_fill=(9,7,10,255))
     else:
         draw.text(xy,text,font=font,fill=color,anchor=anchor_type)
     return box
@@ -168,7 +181,8 @@ def resize_premultiplied(image:Image.Image,size:tuple[int,int],method:str):
 def digit_atlas(font_path:Path,base_size:int,pixel_scale:float,style="source"):
     # Legacy atlases remain unchanged. The HQ atlas uses the exact same
     # condensed typeface as the HQ labels, with distinct number sizes.
-    size=max(1,round(base_size*pixel_scale*(1.08 if style=="themed" else 1.0)))
+    size=max(1,round(base_size*pixel_scale*
+                     ((0.80 if base_size>16 else 0.76) if style=="themed" else 1.0)))
     font=ImageFont.truetype(str(font_path),size=size)
     probe=Image.new("RGBA",(8,8),(0,0,0,0))
     draw=ImageDraw.Draw(probe)
@@ -180,10 +194,13 @@ def digit_atlas(font_path:Path,base_size:int,pixel_scale:float,style="source"):
     for i in range(10):
         xy=(i*cell_w+cell_w/2.0,cell_h/2.0)
         if style=="themed":
-            color=(255,225,130,255) if base_size>16 else (255,244,204,255)
+            color=(255,235,166,255) if base_size>16 else (255,246,211,255)
+            outline=max(2,round(0.72*pixel_scale))
+            draw.text((xy[0]+0.48*pixel_scale,xy[1]+0.48*pixel_scale),
+                      str(i),font=font,fill=(5,5,8,255),anchor="mm",
+                      stroke_width=outline+1,stroke_fill=(5,5,8,255))
             draw.text(xy,str(i),font=font,fill=color,anchor="mm",
-                      stroke_width=max(1,round(0.24*pixel_scale)),
-                      stroke_fill=(40,20,12,255))
+                      stroke_width=outline,stroke_fill=(9,7,10,255))
         else:
             draw.text(xy,str(i),font=font,fill=(255,255,255,255),anchor="mm")
     return atlas,{"cell_w":cell_w,"cell_h":cell_h,"font_px":size}
