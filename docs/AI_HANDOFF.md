@@ -34,11 +34,17 @@
 4. **Full Level 1A playthrough:** physical focus, animation feel, camera, collision, score, batarang, pickup, jump/item sounds, fade/exit all await user's manual acceptance against original Flash. There is no verified Level 1B in this branch.
 5. Multiple earlier HQ PRs remain a chain of experimentation; do not merge them automatically. No permission was given to change `main` or deploy releases.
 
+## Current HUD-01 batch / user screenshot and CI checkpoint
+
+- **New player evidence (2026-11-09):** The Windows game launches and displays gameplay, but the intro **rapidly blinks** and seems **cut off / shorter than the original Flash game**. This is a user-observed issue, not an independently diagnosed root cause; original ActionScript stops/timing are the next task. The user also provided a screenshot where the tutorial prompt is heavy condensed gold but BATARANG/HEALTH/SCORE and ammo/lives/score digits still use generic outlined Arial.
+- **This bounded HUD-01 change:** The generated HQ-only HUD font switches from Windows Arial Bold to Windows **Impact**, a *close visual match* to the game's tutorial display style (not a proven exact SWF embedded font). Gold uppercase labels, warm high-contrast numeric glyphs, and original SWF text-field size constraints are applied in \`reverse-engineering/tools/bake_hud_assets.py\`. The Windows build command and Round6 contract explicitly require \`impact.ttf\`. Original 1× Arial _sans render and all Rust gameplay/rendering logic remain unchanged.
+- **Verification state at commit:** source-level checks passed before push; **the new Windows CI run and A/B screenshot review are pending**. Previous proven green gameplay commit: \`16b341a2287a17f5a0e147efae0b2b304477caf3\`, Run #42575731190. Check the **live branch head** and subsequent workflow run for actual result before declaring success.
+- **If the runner lacks Impact or visual size tests fail:** fix only this HUD-01 failure; preserve the prior green artifact/commit and record the error. Do not disable regression gates.
+
 ## Exact next ONE bounded batch
 
-**Task ID: HUD-01 — Audit one HUD typography/score-layout discrepancy.** Without gameplay changes: inspect latest Round6 HUD A/B artifact and HQ smoke, compare against legacy/source HUD and credible original-game screenshot. Identify one measurable mismatch (e.g., label colour, alignment or digit location), record screenshot/coordinates and an evidence-backed keep/revert/fix choice. If feasible, make **one narrowly scoped change**, rebuild/check visual regressions, and checkpoint; otherwise label the fix TODO with reproducible evidence. Do not start intro timing, campaign, or other HUD items in the same turn.
+**Task ID: INTRO-01 — Inspect and diagnose original story pacing/blinking.** User reports that the original-intro reconstruction flickers rapidly and auto-finishes too soon. Start from the source action/timeline audit and 10-frame contact sheet; isolate **one** source-backed stop/hold/repeat/transition discrepancy. If necessary, capture additional CI frames and update the handoff. Do not silently rewrite the renderer or claim the user-approved original experience. If HUD CI fails, repair HUD-01 first instead.
 
-**FIRST ACTION for the next AI:** Fetch `AGENTS.md`, this handoff, and `docs/AI_TASKS.md` from the **live PR #18 head**, then independently check PR #18, latest branch HEAD and its most recent CI run to rule out intervening commits. Only afterward retrieve the latest `Batman-CobbleBot-Level1A-Round6-HUD-Comparisons` and `HQ3x-Visual-Smoke` artifacts and perform HUD-01.
 
 ## Reproduction / first commands and links
 

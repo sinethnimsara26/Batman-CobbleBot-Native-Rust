@@ -147,3 +147,14 @@ Corrections committed:
 ## Safe rollback
 
 The original Windows artifact is from [Run #110](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42561171602). This branch changes no assets in Git history and can be abandoned without affecting `main` or the preceding experimental PR chain.
+
+### 9. HUD-01: match original tutorial's heavy display-lettering feel (2026-11-09)
+
+**User-observed defect:** even after the earlier gold/Arial Bold treatment, \`BATARANG\`, \`HEALTH\`, \`SCORE\`, ammo, lives, and score digits still felt synthetic compared with the yellow, heavy/condensed in-game instruction \`PRESS THE SPACE BAR TO JUMP\`. A new screenshot confirms this at real 1920×1080 Windows resolution. The same screenshot shows gameplay rendering successfully.
+
+**Bounded fix:** replace *only the HQ HUD typeface* with Windows Impact, fit styled words into original source field boxes, use the same condensed typeface for both digit atlases with small/large hierarchy, and strengthen the gold/yellow-and-dark-outline treatment. Legacy source-style Arial remains unchanged and continues to be protected by pixel-hash checks. This is a conscious design match to the tutorial *appearance*, not a false claim of extracting its actual SWF font; the only true original-font approach is future vector-glyph source analysis.
+
+**Separate blocker explicitly NOT patched here:** the user also reports an intro that rapidly flashes/blinks and ends sooner than the original; the current 180-tick automatic advance may be incorrect because source ActionScript Stop/Goto controls have not been faithfully timed. This becomes next batch INTRO-01 and must be diagnosed with source evidence, not assumed fixed by HUD changes.
+
+**Verification state:** new code, CI contract and checkpoint documentation are committed together. Confirm the ensuing live Windows CI run and visual A/B artifacts; physical Windows screenshot approval pending.
+

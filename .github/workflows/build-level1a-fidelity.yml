@@ -216,7 +216,10 @@ jobs:
           # Round 6: rasterize HUD vector/device-font content at 6x, then
           # premultiplied-alpha Lanczos downsample to the final true 3x assets.
           python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/hud-hq-super" --bitmaps "$work/bitmaps" --symbol 716 --scale 6.0 --all-frames
-          python "$tools/bake_hud_assets.py" "$swf" "$work/reports/symbols.json" "$work/hud-hq-super" "assets" --font "C:/Windows/Fonts/arialbd.ttf" --style themed --output-scale 3 --supersample 2 --downsample lanczos --suffix "_hq" --pack-dir "$work/hud-hq-final"
+          # The new HUD is intentionally visually matched to the game's bold
+          # condensed gold tutorial prompts, not asserted as the original _sans.
+          if (!(Test-Path "C:/Windows/Fonts/impact.ttf")) { throw "Impact display font unavailable on Windows runner" }
+          python "$tools/bake_hud_assets.py" "$swf" "$work/reports/symbols.json" "$work/hud-hq-super" "assets" --font "C:/Windows/Fonts/impact.ttf" --style themed --output-scale 3 --supersample 2 --downsample lanczos --suffix "_hq" --pack-dir "$work/hud-hq-final"
           python "$tools/pack_sprite_frames.py" "$work/hud-hq-final" "assets/hud_shell_hq.bin" --format-version 2 --logical-pixel-scale 3.0
           # Legacy full level remains the exact regression oracle.
           python "$tools/bake_level_tiles.py" "$swf" "$work/reports/symbols.json" "$work/level1a-tiles" --bitmaps "$work/bitmaps" --symbol 152 --place-x 2467.65 --place-y 239.25 --exclude-symbol 149 --exclude-symbol 151 --exclude-symbol 153
@@ -658,6 +661,8 @@ jobs:
           legacy=json.loads(Path("assets/hud.json").read_text())
           hq=json.loads(Path("assets/hud_hq.json").read_text())
           assert legacy["style"] == "source" and hq["style"] == "themed", (legacy["style"],hq["style"])
+          assert legacy["font_filename"].lower()=="arial.ttf", legacy["font_filename"]
+          assert hq["font_filename"].lower()=="impact.ttf", hq["font_filename"]
 
           assert legacy["variables"] == hq["variables"] == {
               "702":"_root.batarangs","713":"_root.score","714":"_root.lives"

@@ -131,18 +131,29 @@ def draw_field(image,info,transform,anchor,font_path,style="source"):
     xy=((box[0]+box[2])/2.0,(box[1]+box[3])/2.0) if centered else (box[0],box[1])
     anchor_type="mm" if centered else "lt"
     if style=="themed":
-        # Keep original SWF bounds and the underlying recovered bitmap art.
-        # A compact high-contrast gold/white label treatment is a proposed
-        # player-facing typography option, not a claim of pixel-perfect Flash
-        # device-font matching. Legacy 1x remains an exact style oracle.
-        color=(239,205,116,255) if info["id"]!=715 else (244,233,208,255)
-        outline=max(1,round(0.22*scale))
+        # Player-requested design candidate: follow the tutorial's condensed,
+        # heavy yellow action lettering (Impact is the closest installed face).
+        # Do not claim Impact is the original Flash embedded tutorial font.
+        # The white _sans legacy rendering above remains the source oracle.
+        text=text.upper()
+        # Respect original SWF field rectangles while gaining visual weight.
+        # Especially important near the health icon / lives digit.
+        max_width=max(1.0,box[2]-box[0]-2.0*scale)
+        max_height=max(1.0,box[3]-box[1]-1.0*scale)
+        size=max(1,round(info.get("font_height",12.0)*scale*1.18))
+        while size>1:
+            font=ImageFont.truetype(str(font_path),size=size)
+            tb=draw.textbbox((0,0),text,font=font,anchor=anchor_type)
+            if tb[2]-tb[0]<=max_width and tb[3]-tb[1]<=max_height:
+                break
+            size-=1
+        color=(255,196,35,255) if info["id"]!=715 else (255,229,169,255)
+        outline=max(1,round(0.26*scale))
         draw.text(xy,text,font=font,fill=color,anchor=anchor_type,
-                  stroke_width=outline,stroke_fill=(30,16,11,255))
+                  stroke_width=outline,stroke_fill=(45,22,12,255))
     else:
         draw.text(xy,text,font=font,fill=color,anchor=anchor_type)
     return box
-
 
 def resize_premultiplied(image:Image.Image,size:tuple[int,int],method:str):
     if image.size==size:
@@ -155,7 +166,9 @@ def resize_premultiplied(image:Image.Image,size:tuple[int,int],method:str):
 
 
 def digit_atlas(font_path:Path,base_size:int,pixel_scale:float,style="source"):
-    size=max(1,round(base_size*pixel_scale))
+    # Legacy atlases remain unchanged. The HQ atlas uses the exact same
+    # condensed typeface as the HQ labels, with distinct number sizes.
+    size=max(1,round(base_size*pixel_scale*(1.08 if style=="themed" else 1.0)))
     font=ImageFont.truetype(str(font_path),size=size)
     probe=Image.new("RGBA",(8,8),(0,0,0,0))
     draw=ImageDraw.Draw(probe)
@@ -167,15 +180,13 @@ def digit_atlas(font_path:Path,base_size:int,pixel_scale:float,style="source"):
     for i in range(10):
         xy=(i*cell_w+cell_w/2.0,cell_h/2.0)
         if style=="themed":
-            # Contrasting numbers with original 16/32px geometry retained.
-            color=(255,238,182,255) if base_size>16 else (255,255,246,255)
+            color=(255,225,130,255) if base_size>16 else (255,244,204,255)
             draw.text(xy,str(i),font=font,fill=color,anchor="mm",
-                      stroke_width=max(1,round(0.20*pixel_scale)),
-                      stroke_fill=(24,17,14,255))
+                      stroke_width=max(1,round(0.24*pixel_scale)),
+                      stroke_fill=(40,20,12,255))
         else:
             draw.text(xy,str(i),font=font,fill=(255,255,255,255),anchor="mm")
     return atlas,{"cell_w":cell_w,"cell_h":cell_h,"font_px":size}
-
 
 def scale_box(box,factor):
     return [value/factor for value in box]
@@ -285,6 +296,7 @@ def main():
     meta={
         "hud_size":list(image.size),
         "style":ns.style,
+        "font_filename":ns.font.name,
         "anchor_in_bitmap":final_anchor,
         "fields":fields,
         "small_digits":small_meta,
