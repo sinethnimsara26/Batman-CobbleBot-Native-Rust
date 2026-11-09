@@ -94,6 +94,8 @@ pub struct Assets {
     pub level1a_detail_tiles_hq: LevelTileSet,
     pub title_screen: Image,
     pub instructions_screen: Image,
+    /// 180 original root-frame-18 story samples, loaded lazily.
+    pub intro_frames: LazySpriteSet,
 }
 
 impl Assets {
@@ -128,6 +130,7 @@ impl Assets {
             level1a_detail_tiles_hq: LevelTileSet::new_expected(include_bytes!("../assets/level1a_detail_tiles_hq.bin"),3.0,4,"level1a_detail_tiles_hq"),
             title_screen: decode_png(include_bytes!("../assets/title_screen.png")),
             instructions_screen: decode_png(include_bytes!("../assets/instructions_screen.png")),
+            intro_frames: decode_sprite_frames_lazy_expected(include_bytes!("../assets/intro_frames.bin"),1.0,"intro_frames"),
         }
     }
 }
