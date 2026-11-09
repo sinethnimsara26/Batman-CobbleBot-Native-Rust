@@ -71,3 +71,10 @@ This is the **short index of meaningful, verified progress and mistakes**. Detai
 - **No gameplay changes:** still awaiting direct evidence of original scene exit; no guessed duration or artificial extra time. Last sprite35 Run #42586294097 was still running at initial inspection; a subsequent branch push can cancel it under concurrency.
 - **Next:** inspect button handler report and confirm source exit mechanism; then plan a single tested Rust state-machine change. All docs committed on draft PR #18, \`main\` unchanged.
 
+
+## 2026-11-09 — INTRO-05, remove fixed timer exit and honor source StopSounds
+
+- [Run #42587338561](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42587338561) succeeded, including sprite35 no-flash diagnostics. Original button #129 action report (artifact **13660301491**) proves release-inside sets `_root.gotoNext=level1a` and invokes `_root.fadeout.play()`. Previous event decoder read UB[16] flags in wrong byte order; corrected to 0x0800 release inside, with source assertion in CI.
+- Source root frame18 stops and sprite123 frame179 executes Stop/StopSounds. Native runtime now holds intro frame179 until explicit skip, stops intro audio once at frame179, and does not duplicate Stop on a later skip. Early skip still stops audio/starts music exactly once.
+- Headless smoke now tests remaining in intro beyond 180 samples, event ordering, and explicit skip. Game renderer, HUD, physics, Level1A routing and other assets unchanged.
+- **New CI pending**; native button skip currently jumps without the source's ~41-frame scripted fadeout. Next single batch after CI: source clip34 fade + original dispatch. Human Windows acceptance still outstanding.

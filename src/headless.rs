@@ -34,9 +34,21 @@ fn render_smoke_mode(out:&str,hq:bool){
     assert_eq!(game.screen,AppScreen::Intro);
     snapshot(hq,&out,"00_intro_call.png",&mut game,&assets);
     for _ in 0..100 {game.tick(&mut input,&ground);}
+    assert_eq!(game.screen,AppScreen::Intro);
+    assert_eq!(game.intro_tick,179);
+    assert_eq!(game.take_audio_events(),vec![AudioEvent::IntroStop]);
+    // Source timeline stops: long idle must not silently enter Level 1A.
+    for _ in 0..100 {game.tick(&mut input,&ground);}
+    assert_eq!(game.screen,AppScreen::Intro);
+    assert_eq!(game.intro_tick,179);
+    assert!(game.take_audio_events().is_empty());
+    // Explicit user SKIP routes into gameplay, with no second sound stop.
+    input.set(VK_ENTER,true);
+    game.tick(&mut input,&ground);
+    input.set(VK_ENTER,false);
     assert_eq!(game.screen,AppScreen::Playing);
     assert_eq!(game.ticks,0);
-    assert_eq!(game.take_audio_events(),vec![AudioEvent::IntroStop,AudioEvent::MusicStart]);
+    assert_eq!(game.take_audio_events(),vec![AudioEvent::MusicStart]);
 
     // Verify the manual skip path independently: Enter from intro advances
     // the story exactly once and starts the Level 1A soundtrack once.

@@ -122,7 +122,11 @@ def inspect_skip_button(data: bytes, root_tag_start: int, button_id: int = 129) 
         if not (5 <= pos and pos + 4 <= len(blob)):
             raise ValueError(f"DefineButton2 {button_id} ActionOffset outside source tag")
         for _ in range(64):
-            cond_size, flags = struct.unpack_from("<HH", blob, pos)
+            # CondActionSize is LE UI16; the adjacent UB[16] condition
+            # flags are MSB-first. Previously both were read LE, which
+            # misclassified the source mouse-release flag as End-key.
+            cond_size = struct.unpack_from("<H", blob, pos)[0]
+            flags = int.from_bytes(blob[pos+2:pos+4], "big")
             end = pos + cond_size if cond_size else len(blob)
             if end < pos + 5 or end > len(blob):
                 raise ValueError(f"DefineButton2 {button_id} invalid CondActionSize {cond_size}")

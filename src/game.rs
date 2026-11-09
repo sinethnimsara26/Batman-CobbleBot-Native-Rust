@@ -171,6 +171,7 @@ pub struct Game{
     pub screen:AppScreen,
     /// Original root frame 18 intro sequence, 0-based at 25 fps.
     pub intro_tick:u16,
+    intro_sound_stopped:bool,
     pub player:Player,
     pub camera_x:f32,pub camera_y:f32,
     pub background_x:f32,pub background_y:f32,
@@ -200,6 +201,7 @@ impl Game{
         Self{
             screen:AppScreen::Title,
             intro_tick:0,
+            intro_sound_stopped:false,
             // Runtime collision uses level-local coordinates. The original
             // player transform is game-local, so subtract the level placement.
             player:Player{
@@ -237,9 +239,12 @@ impl Game{
     fn begin_level1a(&mut self){
         self.screen=AppScreen::Playing;
         self.intro_tick=0;
-        // The SWF's intro sprite invokes StopSounds at frame 179. Stop
-        // its source music before the separate Level 1A track begins.
-        self.audio_events.push(AudioEvent::IntroStop);
+        // Stop source intro sound once, whether skipped early or held after
+        // source sprite 123 reaches its final StopSounds frame.
+        if !self.intro_sound_stopped {
+            self.audio_events.push(AudioEvent::IntroStop);
+            self.intro_sound_stopped=true;
+        }
         self.audio_events.push(AudioEvent::MusicStart);
         // Original level entry has playerJumping=true and snaps the camera.
         self.update_camera();
@@ -260,6 +265,7 @@ impl Game{
                 else if input.pressed(VK_ENTER)||input.pressed(VK_SPACE){
                     self.screen=AppScreen::Intro;
                     self.intro_tick=0;
+                    self.intro_sound_stopped=false;
                     // StartSound id 130 is on original SWF root frame 18.
                     self.audio_events.push(AudioEvent::IntroStart);
                 }
@@ -271,6 +277,7 @@ impl Game{
                 else if input.pressed(VK_ENTER)||input.pressed(VK_SPACE){
                     self.screen=AppScreen::Intro;
                     self.intro_tick=0;
+                    self.intro_sound_stopped=false;
                     // StartSound id 130 is on original SWF root frame 18.
                     self.audio_events.push(AudioEvent::IntroStart);
                 }
@@ -278,15 +285,19 @@ impl Game{
                 return
             },
             AppScreen::Intro=>{
-                // Visual frame samples are recovered from root frame 18.
-                // Original script-directed holds still require a fidelity
-                // pass; the intro StartSound and StopSounds are now sourced.
-                // Enter/Space/Escape skip for testing.
+                // Root frame 18 and the final story clip explicitly Stop.
+                // Original button129 release-inside sets gotoNext=level1a
+                // and plays fadeout; no automatic 180-tick route exists.
+                // Native input still shortcuts the separate scripted fade.
                 if input.pressed(VK_ENTER)||input.pressed(VK_SPACE)||
-                   input.pressed(VK_ESCAPE)||self.intro_tick>=179 {
+                   input.pressed(VK_ESCAPE) {
                     let _=self.skip_intro();
-                }else{
+                }else if self.intro_tick<179 {
                     self.intro_tick+=1;
+                    if self.intro_tick==179 && !self.intro_sound_stopped {
+                        self.intro_sound_stopped=true;
+                        self.audio_events.push(AudioEvent::IntroStop);
+                    }
                 }
                 input.clear_pressed();
                 return

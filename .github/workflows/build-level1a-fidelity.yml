@@ -378,6 +378,12 @@ jobs:
           assert isinstance(button["action_offset"],int)
           assert all(isinstance(h["condition_offset"],int) and isinstance(h["actions"],list)
                      for h in button["handlers"])
+          assert len(button["handlers"])==1
+          release=button["handlers"][0]
+          assert release["conditions_hex"]=="0x0800", release
+          assert release["events"]==["over_down_to_over_up"] and release["key_code"]==0, release
+          assert {"_root","gotoNext","level1a","fadeout","play"}.issubset(release["strings"]), release
+          assert any(x["op"]=="CallMethod" for x in release["actions"]), release
 
           assert any(b["frame"]==14 and any(a["op"]=="Stop" for a in b["actions"])
                      for b in behavior["original_timeline_actions"]["sprite:35"])

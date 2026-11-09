@@ -72,9 +72,17 @@
 - **This bounded batch:** source evidence script \`inspect_intro_behavior.py\` now decodes original DefineButton2 #129 event conditions and AVM1 action records at exact source byte offsets, including push strings/function calls. It uses the documented SWF ActionOffset/CondActionSize coordinate system and writes the data into the existing \`Intro-Behavior-Report\` artifact. New CI checks that the button was found and its handler schema is valid. It does **not** invent a timed pause or change any Rust gameplay, audio, or scene transition behavior.
 - **Next batch:** verify the full Windows run, inspect recovered button action handlers and source-triggered \`gotoNext\`/fade routes. Only then decide whether to remove auto-transition at tick179 and replace it with explicit source-backed interaction/transition behavior. Manual Windows user acceptance remains separate. Keep PR #18 draft and \`main\` unchanged.
 
+## 2026-11-09 — INTRO-05, original button release and held intro (CI pending)
+
+- **Last Windows-green source:** [Run #42587338561](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42587338561) passed for `d8a1e004e4c9772cb0ca4a20fb6e3e8d94f6df1e`. Its frame diagnostics artifact **13660266670** verifies no periodic black resets at 15,30,45,60 (near-black around 0.609, down from 1.0); this is NOT human playback confirmation.
+- **Original source action, recovered:** behavior artifact **13660301491** contains DefineButton2 #129 at FWS byte 376676, conditional record at 376745. UB[16] flag is **0x0800, OverDownToOverUp (release inside)**. Previous script read the flags as little-endian 0x0008 and incorrectly reported End-key 4. Handler sets `_root.gotoNext="level1a"`, calls `_root.fadeout.play()`. Fade clip #34 later calls gotoNext on its final frame. Root frame18 and sprite123 final frame179 stop, so a timer-only jump at 180 samples was unsupported.
+- **This bounded implementation:** `src/game.rs` no longer automatically transitions at tick179; hold source last sample until explicit SKIP. Stop original intro sound precisely once upon frame179 or on an earlier skip. Avoid repeating IntroStop when a later skip begins music. Headless smoke tests verify 100+ extra idle ticks, one-shot sound events, explicit transition, and earlier skip.
+- **Original fade STILL NOT implemented:** clicking the source SKIP button should trigger clip #34's ~41-frame transition, but native SKIP currently jumps immediately. This is the exact next bounded feature after CI; do not misrepresent it as restored.
+- **Verification:** `inspect_intro_behavior.py` now interprets the button's condition bits in MSB order; Windows workflow checks actual release-inside and AVM1 fadeout route. New full Windows CI pending on this commit. Preserve draft [PR #18](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/18), main untouched, no Level1B.
+
 ## Exact next ONE bounded batch
 
-**Task ID: Verify INTRO-03/04 CI and inspect source DefineButton2 #129 action handlers.** Review the no-blackout frame metrics and new SKIP button AVM1 route. Fix only the actual original event-driven terminal scene behavior in a subsequent bounded change, with tests. Do not extend the story timer arbitrarily.
+**Task ID: Verify INTRO-05 Windows CI then restore source fadeout clip #34.** After green build inspect held story and user Windows video; implement source button's actual fadeout animation and route to Level1A only when the fade finishes. Preserve original sound order and keep Level1B blocked.
 
 
 ## Reproduction / first commands and links
