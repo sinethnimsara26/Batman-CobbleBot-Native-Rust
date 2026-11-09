@@ -10,12 +10,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from pathlib import Path
 
 from PIL import Image, ImageDraw
 import struct
 
-from bake_sprite_frames import load_shapes, load_text_defs, render_symbol
+from bake_sprite_frames import load_shapes, load_text_defs, render_symbol, symbol_bounds
+from render_collision_masks import affine
 from swf_re import read_rect, read_matrix, read_cxform_with_alpha, tags
 
 
@@ -116,6 +118,24 @@ def main():
     unsupported = set()
     shapes = load_shapes(ns.swf, unsupported)
     load_text_defs(ns.swf)
+    # Compute the clickable SKIP rect from original source UP-state geometry,
+    # including the original button placement matrix on SWF root frame 18.
+    button_placement = next(p for p in source_scene if p.get("character_id")==129)
+    bounds = symbol_bounds(129,0,affine(button_placement.get("matrix",{})),symbols,shapes)
+    if not all(math.isfinite(v) for v in bounds):
+        raise ValueError("Recovered button has no visible geometry")
+    click_rect = [
+        max(0,math.floor(bounds[0])), max(0,math.floor(bounds[1])),
+        min(600,math.ceil(bounds[2])), min(400,math.ceil(bounds[3]))
+    ]
+    if not (click_rect[0]<click_rect[2] and click_rect[1]<click_rect[3]):
+        raise ValueError(f"Recovered SKIP button bounds invalid: {click_rect}")
+    # Source-generated Rust constant; never hardcode a guessed hotspot in the
+    # native window. The CI-generated file is embedded only at build time.
+    (ns.out/"intro_button_bounds.rs").write_text(
+        "const INTRO_SKIP_RECT:(i32,i32,i32,i32)=("+",".join(map(str,click_rect))+");\n",
+        encoding="utf-8"
+    )
     bitmap_manifest = json.loads((ns.bitmaps/"manifest.json").read_text(encoding="utf-8"))
     bitmaps = {}
     for item in bitmap_manifest:
@@ -159,6 +179,7 @@ def main():
         "missing_bitmap_ids": sorted(missing),
         "root_placements": source_scene,
         "recovered_button_up_state": button_report,
+        "skip_button_stage_bounds": click_rect,
         "deferred_script_controlled_transition_ids": sorted(script_controlled_transitions),
         "frames": manifest_frames,
         "timing_note": "180 timeline samples, 25 fps; ActionScript-directed pauses/sound are not reproduced by visual baking",
