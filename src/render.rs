@@ -467,7 +467,9 @@ fn draw_hud_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     );
     draw_number_centered_hq_1to1(
         fb,&assets.hud_digits_small_hq,
-        (legacy_x+180)*s,(legacy_y+HUD_COUNTER_ROW_Y)*s,game.lives.max(0)
+        // Keep the digit adjacent to 'LIVES X' in the center health column;
+        // the previous +180 anchor left an ~100px visual gap at 3x.
+        (legacy_x+145)*s,(legacy_y+HUD_COUNTER_ROW_Y)*s,game.lives.max(0)
     );
 }
 
