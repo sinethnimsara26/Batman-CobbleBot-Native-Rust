@@ -41,9 +41,17 @@
 - **Verification state at commit:** source-level checks passed before push; **the new Windows CI run and A/B screenshot review are pending**. Previous proven green gameplay commit: \`16b341a2287a17f5a0e147efae0b2b304477caf3\`, Run #42575731190. Check the **live branch head** and subsequent workflow run for actual result before declaring success.
 - **If the runner lacks Impact or visual size tests fail:** fix only this HUD-01 failure; preserve the prior green artifact/commit and record the error. Do not disable regression gates.
 
+## November 9 continuation — HUD verified; INTRO-01 source diagnostics pending CI
+
+- **HUD:** [Windows Run #42580731847](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42580731847) passed at `3138d02a4c788cb2e5efe0101e354cdd50cba76c`. Downloaded and reviewed the new HQ shell and digit A/B artifacts: the font is visibly condensed. Physical gameplay/HUD appearance is not user-approved.
+- **Intro evidence:** Original root frame 18 contains `Stop`; sprite122 frame164 contains `Stop`; sprite123 frame179 contains `Stop` + `StopSounds`. Native `Game::tick` currently calls `skip_intro()` automatically at `intro_tick>=179`. That is a structural timing/flow mismatch, but additional Flash clip/button events may still control the original transition.
+- **Flicker investigation:** 10-panel contact sheet includes dark transition panels, but is insufficient to diagnose rapid alternating flashes. The baker now reports grayscale mean, near-black fraction, and changed-pixel fraction for every one of 180 native baked frames. Original ActionScript audit now includes tag and action byte offsets. New workflow artifact: `Batman-CobbleBot-Level1A-Intro-Frame-Diagnostics`.
+- **No native gameplay timing or renderer changes in INTRO-01.** Fresh diagnostic CI must pass and report reviewed before fixing one event/timing/render-frame discrepancy.
+- **Exact next task:** confirm this commit's Windows Actions outcome, download `Intro-Frame-Diagnostics` and `Intro-Behavior-Report`; locate anomalous one-frame brightness reversals and source action offsets, then implement and test **INTRO-02**. Keep PR #18 draft, `main` unchanged.
+
 ## Exact next ONE bounded batch
 
-**Task ID: INTRO-01 — Inspect and diagnose original story pacing/blinking.** User reports that the original-intro reconstruction flickers rapidly and auto-finishes too soon. Start from the source action/timeline audit and 10-frame contact sheet; isolate **one** source-backed stop/hold/repeat/transition discrepancy. If necessary, capture additional CI frames and update the handoff. Do not silently rewrite the renderer or claim the user-approved original experience. If HUD CI fails, repair HUD-01 first instead.
+**Task ID: INTRO-01 diagnostic verification, then INTRO-02.** Inspect the new all-frame flicker metrics and exact source DoAction byte offsets in CI artifacts. Use the evidence to select *one* corrective change and a focused regression. No claim of intro fix until code and Windows playtest prove it.
 
 
 ## Reproduction / first commands and links

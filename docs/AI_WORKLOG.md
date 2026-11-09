@@ -40,3 +40,10 @@ This is the **short index of meaningful, verified progress and mistakes**. Detai
 - **Verification:** the workflow now asserts the exact source/HQ font filenames, keeps all older legacy screenshot SHA-256 checks, and creates existing Round6 A/B comparisons. **This entry records implementation only; full Windows CI and manual on-screen approval are not yet claimed.**
 - **Risk/limitation:** Impact is *not proved to be the actual embedded Flash tutorial font*. If the user wants pixel-perfect glyph identity, find and re-rasterize the original SWF font in a separate task. If Windows runner lacks Impact, the new build must fail explicitly; do not hide a fallback substitution.
 - **Next distinct batch:** INTRO-01 to diagnose the flickering, short pre-game cutscene. Stop after the HUD checkpoint.
+
+## 2026-11-09 — INTRO-01, original action offsets and every-frame flicker data
+
+- Recovered current PR #18 head `3138d02a` and completed Windows Run #42580731847, confirming HUD condensed-font CI success. Reviewed original intro behavior report, 10-panel contact sheet, and new A/B HUD assets. Manual Windows approval still outstanding.
+- Original root frame18 explicitly `Stop`s; sprite122 frame164 `Stop`s; sprite123 frame179 `Stop`s and `StopSounds`. Native `src/game.rs` transitions on tick179 without checking original Flash event logic. This is the first concrete discrepancy; final original transition rules remain unknown.
+- Added source ActionScript tag/action byte offsets and 180-frame grayscale brightness/change data to Windows diagnostic artifacts. Purpose is to determine whether rapid blinking arises between the ten previously sampled contact-sheet frames. **No intro behavior patched yet**; new diagnostic CI pending.
+- Next batch: inspect uploaded reports, identify the single source-backed cause, implement and test INTRO-02 without touching Level1B or main.

@@ -37,7 +37,7 @@ def scan_timeline(payload: bytes, start: int, context: str, root_frame: int | No
     sounds = []
     scripts = []
     placements = []
-    for code, blob, _, _ in tags(payload, start, len(payload)):
+    for code, blob, tag_offset, payload_offset in tags(payload, start, len(payload)):
         if code == 1:
             frame += 1
         elif code == 15 and len(blob) >= 3:
@@ -46,10 +46,11 @@ def scan_timeline(payload: bytes, start: int, context: str, root_frame: int | No
                 "sound_id": struct.unpack_from("<H", blob, 0)[0],
                 "sound_flags": blob[2],
                 "context": context,
+                "tag_offset": tag_offset,
             })
         elif code == 12:
             from swf_re import disasm_actions
-            acts = disasm_actions(blob)
+            acts = disasm_actions(blob, base=payload_offset)
             significant = []
             for a in acts:
                 if a.get("op") in (
@@ -58,11 +59,11 @@ def scan_timeline(payload: bytes, start: int, context: str, root_frame: int | No
                     "NextFrame", "PreviousFrame",
                 ):
                     significant.append({
-                        key:a[key] for key in ("op", "frame", "string", "values")
+                        key:a[key] for key in ("op", "offset", "frame", "string", "values")
                         if key in a
                     })
             if significant:
-                scripts.append({"frame": frame, "actions": significant})
+                scripts.append({"frame": frame, "tag_offset": tag_offset, "actions": significant})
         elif code == 26 and len(blob) >= 3:
             from swf_re import parse_place2
             obj = parse_place2(blob)
@@ -134,6 +135,7 @@ def main():
 
     result = {
         "source_intro_frame": ROOT_INTRO_FRAME,
+        "offset_coordinates": "Root tag/action offsets are absolute FWS bytes; sprite tag/action offsets are relative to DefineSprite payload.",
         "direct_root_sound_cues": source["root"]["sounds"],
         "intro_symbol_ids": list(INTRO_SYMBOLS),
         "nested_sprite_count": len(visited),

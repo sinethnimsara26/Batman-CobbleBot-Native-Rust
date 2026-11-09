@@ -13,7 +13,7 @@ import json
 import math
 from pathlib import Path
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageChops, ImageStat
 import struct
 
 from bake_sprite_frames import load_shapes, load_text_defs, render_symbol, symbol_bounds
@@ -147,6 +147,8 @@ def main():
 
     ns.out.mkdir(parents=True, exist_ok=True)
     manifest_frames = []
+    frame_diagnostics = []
+    previous_rgb = None
     missing = set()
     gallery = Image.new("RGB", (300*5,220*2),(18,18,22))
     gallery_draw = ImageDraw.Draw(gallery)
@@ -158,6 +160,22 @@ def main():
             symbols,shapes,bitmaps,unsupported,frame_missing,
         )
         missing.update(frame_missing)
+        # Inspect all 180 frames: ten contact-sheet samples can miss one-frame flashes.
+        # A dark source scene is not automatically a rendering bug.
+        rgb = stage.convert("RGB")
+        luma = rgb.convert("L")
+        histogram = luma.histogram()
+        changed_fraction = 0.0
+        if previous_rgb is not None:
+            diff = ImageChops.difference(previous_rgb, rgb).convert("L")
+            changed_fraction = sum(diff.histogram()[24:]) / (STAGE_SIZE[0]*STAGE_SIZE[1])
+        frame_diagnostics.append({
+            "frame":tick,
+            "mean_luma":round(ImageStat.Stat(luma).mean[0],3),
+            "near_black_fraction":round(sum(histogram[:9])/(STAGE_SIZE[0]*STAGE_SIZE[1]),6),
+            "changed_pixel_fraction_from_previous":round(changed_fraction,6),
+        })
+        previous_rgb = rgb
         filename = f"{tick:03}.png"
         stage.save(ns.out/filename,format="PNG",optimize=True)
         manifest_frames.append({"frame":tick,"animation":"root-intro","file":filename})
@@ -168,6 +186,13 @@ def main():
             gallery.paste(stage.convert("RGB").resize((300,200),Image.Resampling.BILINEAR),(x,y))
             gallery_draw.text((x+6,y+202),f"SWF frame {tick:03} / 180",fill=(245,240,220))
 
+    (ns.out/"intro-frame-diagnostics.json").write_text(
+        json.dumps({
+            "source_root_frame": ROOT_INTRO_FRAME, "fps": 25, "frame_count": INTRO_FRAMES,
+            "metrics": "grayscale RGB; near-black 0-8; changed difference >=24",
+            "frames": frame_diagnostics,
+            "note": "Diagnostic only; distinguish original scene fades from unwanted native flicker.",
+        }, indent=2), encoding="utf-8")
     manifest = {
         "symbol": synthetic_id,
         "source_root_frame": ROOT_INTRO_FRAME,
