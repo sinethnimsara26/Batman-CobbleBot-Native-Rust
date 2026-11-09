@@ -48,7 +48,7 @@ Added `reverse-engineering/tools/bake_root_intro.py` to composite source root-fr
 
 Known source limitation:
 - **Symbol 129** is an interactive Flash `DefineButton2` rather than a normal sprite. The initial pipeline correctly failed on a missing symbol, so the first green candidate temporarily omitted that control. Inspecting the downloaded `00_intro_call.png` then revealed the **blank story button**, an unacceptable incomplete presentation. Follow-up change `5babab8` parses original button records, recovers the **UP-state graphics** with original child placement matrices, depths and color transforms, then injects them as a synthetic drawable one-frame sprite. Hover/down/click ActionScript is still not simulated; native Enter/Space/Escape remains the interaction/skip behavior until the original is compared manually.
-- Original `DoAction`-driven stops/pauses and intro-specific `StartSound` events have **not yet been translated**. The current code plays 180 frame samples in order and starts Level 1A music only on entry to gameplay.
+- Original sound #130 is now wired to intro entry, with source-motivated stop before gameplay. **Remaining** ActionScript-driven holds/pauses and original interaction timing have **not** been fully translated. The current code advances 180 visual samples, then enters Level 1A.
 - A **10-frame contact sheet** at source ticks 0,20,...,160,179 is now generated and uploaded by CI to catch source-asset omissions/abrupt cuts that the two smoke screenshots cannot reveal.
 - **Symbol 34** is the root scripted fade-out clip. It must not auto-play and repeatedly black out the story; the intro visual baker now defers this clip entirely. Its exact original transition remains an acceptance item.
 
@@ -110,13 +110,34 @@ However, `WM_LBUTTONDOWN` previously only set focus: the restored SKIP graphic c
 
 The source-up-state hitbox approximates the Flash button's clickable `HitTest` shape; it is grounded in original visible geometry, but a true `HitTest`-state polygon match is still a manual-fidelity follow-up.
 
+### 8. Recover the exact original intro soundtrack from SWF sound events
+
+The focused source audit `reverse-engineering/tools/inspect_intro_behavior.py` was committed and executed in fully green [Run #42574699640](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42574699640). Its `Batman-CobbleBot-Level1A-Intro-Behavior-Report` artifact records:
+
+- **Root frame 18** contains exactly one directly reached `StartSound` event for **DefineSound #130** (`0130_sound_0130.mp3`). The original source encodes `sound_flags=4` (loop information present).
+- Source root frame **18** executes `Stop`: the root clip deliberately stops here while the nested story sprites animate.
+- Nested sprite **122** executes `Stop` on frame **164**.
+- Nested sprite **123** executes `Stop` and `StopSounds` on frame **179**.
+- No other direct `StartSound` events were identified in the scanned reachable intro sprite timelines. There is no evidence requiring speech/voice acting or invented effects.
+
+Corrections committed:
+1. `assets/intro_sound.mp3` is extracted from verified source sound #130 **during CI** (not checked into Git).
+2. `src/audio.rs` opens a dedicated WinMM/MCI `bcb_intro` alias from the extracted original MP3; `IntroStart` seeks to the beginning and plays it exactly at native intro entry.
+3. `src/game.rs` dispatches `IntroStop` followed by `MusicStart` when the intro finishes or is skipped, so the source audio does not overlap with gameplay music.
+4. The headless regression tests verify event order for normal ending, keyboard skip, and mouse-click skip, including idempotent mouse handling.
+5. CI fails if the original `StartSound` or final `StopSounds` evidence changes, or if the source MP3 cannot be extracted.
+
+**Remaining uncertainty:** the native 180-sample sequence currently auto-advances to Level 1A. The original movie's root `Stop` and nested sprite stops show intentional timeline control; the exact user-interaction sequence and on-stage holds are not yet reproduced. WinMM audio playback and synchronization still require real Windows speaker testing. We must not claim manually verified fidelity from the action log alone.
+
 ## Acceptance gate before merge or Level 1B
 
 - [x] First full intro build **Run #42569523565** passed all 54 Windows steps, including original gameplay screenshot hashes and 19 visual-smoke screenshots. The next button-art revision needs its own full green run.
 - [x] Source-button gallery build Run #42571136795 passed all 55 Windows steps; the original SKIP lettering is present in downloaded HQ screenshots.
-- [ ] Latest source-derived clickable SKIP button Windows CI passes all previous tests and the new mouse-input checks.
+- [x] Clickable SKIP build **Run #42572833961** passed all 55 Windows workflow steps; source-derived mouse hitbox tests passed.
+- [x] Focused original intro audio/actions audit **Run #42574699640** passed Windows CI and identified sound #130 / frame179 StopSounds.
+- [ ] Latest intro-audio-wired Windows CI passes compilation, gameplay regressions and artifact publication.
 - [ ] CI intro screenshots show meaningful original call/briefing art with no giant blank/missing portions.
-- [ ] Original Flash's actual story text, button visuals, timing/stops, and sound effects are checked against native playback.
+- [ ] Original Flash story text, button visuals, timing/stops, and sound effects are compared against actual native Windows playback; audio #130 is source-backed but not yet speaker-tested.
 - [ ] Title → intro → gameplay works with keyboard alone, including skip and music timing.
 - [ ] Themed HQ HUD labels and score are visually acceptable **or** restored to source style.
 - [ ] Player can finish Level 1A with movement, attacks, camera, pickups, audio and fade unchanged.
