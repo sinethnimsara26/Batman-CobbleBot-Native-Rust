@@ -219,7 +219,7 @@ jobs:
           # The new HUD is intentionally visually matched to the game's bold
           # condensed gold tutorial prompts, not asserted as the original _sans.
           if (!(Test-Path "C:/Windows/Fonts/impact.ttf")) { throw "Impact display font unavailable on Windows runner" }
-          python "$tools/bake_hud_assets.py" "$swf" "$work/reports/symbols.json" "$work/hud-hq-super" "assets" --font "C:/Windows/Fonts/impact.ttf" --style themed --output-scale 3 --supersample 2 --downsample lanczos --suffix "_hq" --pack-dir "$work/hud-hq-final"
+          python "$tools/bake_hud_assets.py" "$swf" "$work/reports/symbols.json" "$work/hud-hq-super" "assets" --font "C:/Windows/Fonts/impact.ttf" --style themed --hq-layout "reverse-engineering/manifests/hud-hq-layout.json" --emit-rust-layout "assets/hud_hq_layout.rs" --output-scale 3 --supersample 2 --downsample lanczos --suffix "_hq" --pack-dir "$work/hud-hq-final"
           python "$tools/pack_sprite_frames.py" "$work/hud-hq-final" "assets/hud_shell_hq.bin" --format-version 2 --logical-pixel-scale 3.0
           # Legacy full level remains the exact regression oracle.
           python "$tools/bake_level_tiles.py" "$swf" "$work/reports/symbols.json" "$work/level1a-tiles" --bitmaps "$work/bitmaps" --symbol 152 --place-x 2467.65 --place-y 239.25 --exclude-symbol 149 --exclude-symbol 151 --exclude-symbol 153
@@ -816,13 +816,22 @@ jobs:
           # HUD-REAL-03: the dark full-width duplicate band was rejected in
           # actual Windows UI feedback. Protect against its reintroduction,
           # while requiring the existing source-derived translucent shell.
-          assert "HUD_COUNTER_ROW_Y:i32=82" in render
+          layout=json.loads(Path("reverse-engineering/manifests/hud-hq-layout.json").read_text())
+          assert hq["hq_layout_schema"]==layout["schema"]==1
+          generated=Path("assets/hud_hq_layout.rs").read_text()
+          for symbol in ("BATARANG_CENTER","BATARANG_MAX_WIDTH",
+                         "SCORE_CENTER","SCORE_MAX_WIDTH","LIVES_VALUE_LEFT",
+                         "LIVES_CENTER_Y","LIVES_MAX_WIDTH"):
+              assert f"pub const {symbol}:" in generated, symbol
+              assert f"hud_hq_layout::{symbol}" in render, symbol
+          assert 'include!("../assets/hud_hq_layout.rs")' in render
+          assert "HUD_COUNTER_ROW_Y:i32=82" not in render
           assert "draw_hud_counter_band_hq" not in render, "duplicate HQ counter band returned"
           assert "fb,&shell.image," in hud_fn, "original HUD shell no longer blitted"
-          assert "xy[1]+7.0*scale" in baker
+          assert "static_offsets_logical" in baker
           assert "outline=max(2,round(0.74*scale))" in baker
           assert "outline=max(2,round(0.72*pixel_scale))" in baker
-          print("Round 6 HUD contract PASS: source shell and fields preserved, no duplicate HQ counter band, black text edging kept.")
+          print("Round 6 HUD contract PASS: one HQ layout manifest emits Rust constants; source HUD/icons preserved, no duplicate band.")
 
       - name: Validate Round 7 true-3x foreground timelines
         shell: python

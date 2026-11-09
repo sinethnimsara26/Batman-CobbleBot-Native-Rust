@@ -1,0 +1,51 @@
+{
+  "schema": 1,
+  "hud_sprite_id": 716,
+  "logical_stage": [
+    600,
+    400
+  ],
+  "notes": "Themed HQ ONLY. Original Flash HUD placement and legacy1x renderer remain untouched. Coordinates are 600x400 logical stage pixels; baked into Rust constants.",
+  "static_offsets_logical": {
+    "700": [
+      0,
+      -2
+    ],
+    "710": [
+      0,
+      -2
+    ],
+    "711": [
+      0,
+      -2
+    ],
+    "715": [
+      8,
+      5
+    ]
+  },
+  "counters": {
+    "batarangs": {
+      "field_id": 702,
+      "center": [
+        211,
+        60
+      ],
+      "max_width": 60
+    },
+    "score": {
+      "field_id": 713,
+      "center": [
+        387,
+        35
+      ],
+      "max_width": 90
+    },
+    "lives": {
+      "field_id": 714,
+      "left": 313,
+      "center_y": 63,
+      "max_width": 54
+    }
+  }
+}

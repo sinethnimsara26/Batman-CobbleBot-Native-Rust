@@ -75,3 +75,17 @@ Dynamic text expansion at the existing atlas cell widths: score 6 digits uses 6�
 ## 9. HUD-REAL-03 implementation verification addendum — 2026-11-10
 
 The numbered plan above is the baseline research task chronology; **batch 2 (remove extra black bar) is now complete and verified** at game commit `53180670de2868138ba5bcb0cd2fe42d617c2c0f` and [Windows CI #42689334769](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42689334769), 60/60 steps, 12/12 tests, 15/15 legacy screenshots, render/scroll p95 21.8781/26.9261ms. Downloaded [GUI pilot artifact #13707206313](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42689334769/artifacts/13707206313) confirms no full-width black rectangle in actual F7 or mouse-SKIP gameplay while source HUD shell/icons remain. New screenshots show small Batarang counter below original shell against red sky and need planned layout/contrast fixes. Next **HUD-REAL-04 / batch 3** (one logical layout authority and icon clearance); batches 4–6 remain pending. This verification did not change any Rust game code or original SWF art.
+
+## 10. HUD-REAL-04 shared HQ layout design — 2026-11-10 (new-code CI pending)
+
+The prior source-field table remains the 1× SWF-derived comparison oracle, not the authored new HQ layout. **New single authority:** `reverse-engineering/manifests/hud-hq-layout.json`, stage 600×400, schema 1. Offline baker applies static label offsets at 6× then emits `assets/hud_hq_layout.rs`; native renderer `include!`s these constants, never parses JSON at runtime. Values below describe the *themed HQ proposal*, not the original Flash:
+ 
+| Element | HQ target, stage logical | Intent |
+|---|---|---|
+| BATARANG, HEALTH, SCORE title ink | Original label center + (0,-2) | Add top gap from bat/health art |
+| LIVES X caption | Original #715 center + (+8,+5) ≈(298.25,61.675) | Center textual group below Health rather than left-shift |
+| Batarangs numeric | centered (211,60), width max 60 | Float 0 no longer below original rounded source panel |
+| Score numeric | centered (387,35), width max 90 | Large or small existing native 3× digits to fit 1..6+ digits |
+| Lives numeric | fixed left (313,63), max width 54 | Numerals widen rightward so 10 does not push back into caption |
+
+The one logical-layout ownership code is the scope of **batch 3**; giant black bar must remain absent, source alpha panel/art unmodified. Rust width helpers fit cell span but **do not prove alpha/glyph collision clearance**. Actual Win32 screenshots, 15 legacy golden hashes, MSVC build and 40ms performance are mandatory before status VERIFIED. The image-based multi-value matrix and user typography approval remain batches 4–6.
