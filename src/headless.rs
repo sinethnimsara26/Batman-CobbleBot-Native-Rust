@@ -45,9 +45,6 @@ fn render_smoke_mode(out:&str,hq:bool){
     assert_eq!(game.ticks,0);
     assert_eq!(game.intro_fadeout_tick,None);
     assert_eq!(game.take_audio_events(),vec![AudioEvent::MusicStart]);
-    // No second music start; this is a terminal scene transition.
-    game.tick(&mut input,&ground);
-    assert!(game.take_audio_events().is_empty());
 
     // Verify early keyboard skip remains source-correct: sprite34 has all 41
     // frames and StopSounds precedes gameplay entry/music.
@@ -90,7 +87,12 @@ fn render_smoke_mode(out:&str,hq:bool){
     // Preserve the real root presentation instead of skipping straight into
     // gameplay: fade-in starts immediately, level-title continues longer.
     snapshot(hq,&out,"00_fade_start.png",&mut game,&assets);
-    for _ in 0..25 { game.tick(&mut input,&ground); }
+    // Keep the historical fade screenshots at EXACT ticks 0, 25, 50.
+    // Verify no duplicate intro/music events on the first gameplay tick
+    // without shifting all subsequent hash-pinned images by one frame.
+    game.tick(&mut input,&ground);
+    assert!(game.take_audio_events().is_empty());
+    for _ in 0..24 { game.tick(&mut input,&ground); }
     snapshot(hq,&out,"01_fade_mid.png",&mut game,&assets);
     for _ in 0..25 { game.tick(&mut input,&ground); }
     snapshot(hq,&out,"02_level_title.png",&mut game,&assets);
