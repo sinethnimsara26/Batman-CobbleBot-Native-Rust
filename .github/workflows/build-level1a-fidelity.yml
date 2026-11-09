@@ -2,7 +2,7 @@ name: build-level1a-fidelity
 
 on:
   push:
-    branches: [main, level1a-cxform-fidelity, hq-rendering-phase1-halftone, hq-rendering-phase2-surfaces, hq-rendering-phase3-3x-surface, hq-rendering-phase4-pack-v2, hq-rendering-phase5-batman-3x, hq-rendering-phase6-hud-3x, hq-rendering-phase7-overlays-3x, hq-rendering-phase8-world-objects-3x, hq-rendering-phase9-dpi-awareness, hq-rendering-phase10-scenery-eval, hq-rendering-phase11-backdrop-3x, revive/round11-ci-baseline-2026-11-09]
+    branches: [main, level1a-cxform-fidelity, hq-rendering-phase1-halftone, hq-rendering-phase2-surfaces, hq-rendering-phase3-3x-surface, hq-rendering-phase4-pack-v2, hq-rendering-phase5-batman-3x, hq-rendering-phase6-hud-3x, hq-rendering-phase7-overlays-3x, hq-rendering-phase8-world-objects-3x, hq-rendering-phase9-dpi-awareness, hq-rendering-phase10-scenery-eval, hq-rendering-phase11-backdrop-3x, revive/round11-ci-baseline-2026-11-09, revive/level1a-intro-hud-fidelity-2026-11-09]
   workflow_dispatch:
 
 concurrency:
@@ -65,6 +65,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path "$work/reports","$work/bitmaps","$work/sounds","$work/batman-frames","$work/batman-frames-hq","$work/pickup-frames","$work/pickup-frames-hq-super","$work/pickup-frames-hq","$work/batarang-frames","$work/batarang-frames-hq-super","$work/batarang-frames-hq","$work/level-title","$work/level-title-hq-super","$work/level-title-hq","$work/fadein","$work/fadein-hq-super","$work/fadein-hq","$work/fadeout","$work/fadeout-hq-super","$work/fadeout-hq","$work/tutorial-overlay","$work/tutorial-overlay-hq-super","$work/tutorial-overlay-hq","$work/hud","$work/hud-hq-super","$work/hud-hq-final","$work/level1a-tiles","$work/level1a-tiles-hq-base","$work/level1a-detail-tiles-1x","$work/level1a-detail-tiles-hq","$work/scenery-probes","$work/root-moon-hq-super","$work/root-moon-hq","assets","reverse-engineering/generated/collision_masks" | Out-Null
 
           python "$tools/swf_re.py" "$swf" "$work/reports"
+          python "$tools/inspect_intro_hud.py" "$swf" "$work/reports/symbols.json" "$work/reports/root_placements.json" "$work/intro-hud-source-report.json"
           @'
           import json
           from pathlib import Path
@@ -1755,6 +1756,12 @@ jobs:
 
           assert len(list(out.glob("*.png"))) == 1
           print("Built Round-11 moon A/B sheet; sky 131 is an exact flat fill and needs no raster comparison.")
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Batman-CobbleBot-Level1A-Intro-HUD-Source-Report
+          path: .generated/intro-hud-source-report.json
+          if-no-files-found: error
 
       - uses: actions/upload-artifact@v4
         with:
