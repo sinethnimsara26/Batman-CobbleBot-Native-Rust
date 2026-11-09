@@ -91,6 +91,7 @@ The user requested a presentation that better fits Batman's art style. The actua
 | Intro bake first CI run | Sprite renderer cannot draw Flash button 129; missing symbol reported | Explicitly omit only button 129 from intro art; preserve its omission in manifest; native keyboard skip exists | Re-run Windows CI; still requires manual inspection |
 | HUD screenshot | Label/digit color and weight look synthetic | Add HQ-only source-geometry-preserving themed style, keep original 1× oracle | Inspect HUD A/B screenshot artifacts and perform Windows playtest |
 | Intro source behavior | Timeline frames known, but ActionScript stops/sounds not translated | Mark as incomplete and preserve source analysis for next correction | Manual original-vs-native cutscene timing/audio gate pending |
+| First complete integration run (Run #42568860291) | Original CI smoke expected 17 screenshots; two new intro snapshots correctly produced 19 | Update both screenshot-count gates to 19, preserve all 15 historical gameplay SHA-256 pixel checks, and allow *only* the two named intro additions | Re-run Windows CI; Rust compile/test succeeded before this integration-only failure |
 
 ## Acceptance gate before merge or Level 1B
 
