@@ -298,6 +298,19 @@ Actual [Run #42613807273](https://github.com/sinethnimsara26/Batman-CobbleBot-Na
 
 **Recommendation:** no speculative code change; next bounded `WIN-GUI-PILOT-01` checks whether a GitHub Windows runner can launch the true Win32 game window, perform one input, and save a trustworthy screenshot. Preserve draft PR #18, main, and source-original acceptance issue #17. Full documentation closeout is Git-tracked by the new docs-only commit.
 
+
+## AUD-20261109-010 — WIN-GUI-PILOT-01: CI-only tooling audit
+
+**Date/parent:** 2026-11-09, `393cef782cdcb3312c861e5bb85339a91b1bdaa0`; linked RE-20261109-012. **No implementation changes — Rust code audit not applicable.** The only executable-code addition is a Python test script in `reverse-engineering/tools` that CI runs independently, plus bounded workflow/test-artifact steps. No change to `src/`, Cargo.toml, native game binary dependencies, Flash source, animation/rendering/gameplay behavior or release packaging.
+
+**Pure-Rust requirement:** unchanged. A development-only OS testing utility using Python/Pillow/ctypes does not execute as part of the standalone playable Rust game. Existing Rust and Win32 GDI implementation remain authoritative; the script does not embed native Flash or JS or implement game logic. No newly introduced runtime FFI or unsafe Rust.
+
+**Focused quality review:** actual app input is sampled through GetAsyncKeyState, so Win32 SendInput is an appropriate candidate while PostMessage cannot establish genuine input. Foreground-window check prevents blindly sending Enter to other apps; 8-second HWND poll, 240ms key hold, 2-minute CI timeout, process cleanup and JSON failure categorization bound the experiment. Actual OS screenshot (ImageGrab) is more meaningful than preexisting Rust framebuffer smoke for this specific question. CI isolation and lack of paid services respected. Risk: hosted Windows session may not be interactive; PIL or P/Invoke may fail or produce black images; visual diff can reflect repaint not input semantics. CI job must not claim acceptance merely because optional step green.
+
+**Actual tests:** repo source inspection and staged workflow edit review. NOT RUN at documentation authoring time: Windows executable GUI launch, SendInput, screen capture, new Windows Actions run and artifact interpretation; Python script has not been executed on Windows in this chat. No Rust compiler/test changes in this batch. The prior green #42661016299 run predates this experiment and is not proof it works.
+
+**Verdicts:** PURE-RUST COMPLIANCE — UNCHANGED / PASS WITH PREEXISTING PLATFORM QUALIFICATIONS for native game. ENGINEERING — TEST IMPLEMENTED, EXPERIMENT UNVERIFIED pending CI. ORIGINAL-GAME FIDELITY — NOT TESTED by this pilot; manual physical Win32/audio and original Flash comparisons remain open under issue #17. Next step inspect actual first JSON and screenshots, fix one demonstrated pilot error, and keep draft PR #18 unmerged.
+
 ## Mandatory audit entry template — copy and complete AFTER implementation
 
 `## AUD-YYYYMMDD-NNN — [task and referenced RE entry]`

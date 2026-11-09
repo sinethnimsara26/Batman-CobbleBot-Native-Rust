@@ -1560,6 +1560,15 @@ jobs:
           Get-Content ".generated/render-benchmark.json"
           Get-Content ".generated/scenery-scroll-benchmark.json"
 
+      # WIN-GUI-PILOT-01: real Win32 GUI feasibility only; infrastructure
+      # limitations must not invalidate the existing verified headless tests.
+      - name: Pilot real Win32 window capture and OS keyboard input
+        shell: pwsh
+        timeout-minutes: 2
+        continue-on-error: true
+        run: |
+          python reverse-engineering/tools/windows_gui_pilot.py --exe target/x86_64-pc-windows-msvc/release/batman_cobblebot_native.exe --out .generated/windows-gui-pilot
+
       - name: Verify Round 2 legacy pixels against renderer-repair baseline
         shell: python
         run: |
@@ -1875,6 +1884,14 @@ jobs:
           name: Batman-CobbleBot-Level1A-Intro-HUD-Source-Report
           path: .generated/intro-hud-source-report.json
           if-no-files-found: error
+
+      # Always retain report and actual desktop images when available.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Batman-CobbleBot-Level1A-Windows-GUI-Pilot
+          path: .generated/windows-gui-pilot/
+          if-no-files-found: warn
 
       - uses: actions/upload-artifact@v4
         with:

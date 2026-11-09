@@ -181,9 +181,21 @@
 
 **Next single task:** [WIN-GUI-PILOT-01](AI_TASKS.md) — one limited GitHub-hosted Windows **real-window** capture/input feasibility test, not another broad feature batch. Preserve WIN-01 manual source-original/audio/input acceptance gate, draft PR #18, main and Level1B restrictions.
 
+## 2026-11-09 — WIN-GUI-PILOT-01: Windows real-window experiment implemented, new CI pending
+
+**Recovery parent:** `393cef782cdcb3312c861e5bb85339a91b1bdaa0`; new implementation commit is discoverable as the commit containing this entry. Draft PR #18 unchanged, issue #17 remains open. The earlier green code CI [#42661016299](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42661016299) predates this new test-only probe.
+
+**What changed:** CI-only `reverse-engineering/tools/windows_gui_pilot.py` launches `batman_cobblebot_native.exe` in its real Win32 window, finds PID+title, collects display/window metadata, tries actual OS desktop screenshots and `SendInput` Enter while ensuring the target HWND is foreground. Always writes `pilot-report.json` with detailed classification and error context; process is cleaned up. `.github/workflows/build-level1a-fidelity.yml` runs a nonblocking 2-minute probe following already existing EXE smoke; uploads `Batman-CobbleBot-Level1A-Windows-GUI-Pilot` with `if: always()`. No Rust game source, Cargo dependencies, original SWF or gameplay asset changes.
+
+**Verification claimed:** sources and CI wiring inspected; the experiment is **NOT YET VERIFIED by Windows CI** at documentation-write time. Runner desktop input/image capture is uncertain; a reported API key injection or different screenshot is insufficient to prove game behavior. No original-Flash live comparison/audio/DPI acceptance.
+
+**Six documents:** AGENTS.md and mandatory protocols reviewed, unchanged. AI_TASKS, AI_HANDOFF, AI_WORKLOG, RE ledger, Rust audit updated. Deep evidence RE-20261109-012; audit AUD-20261109-010 says no Rust implementation changes.
+
+**Next exact bounded batch:** get newest Windows Actions run and artifact `Batman-CobbleBot-Level1A-Windows-GUI-Pilot`; examine JSON, screenshot evidence, actual window input outcomes, and first genuine failure. If hosted runner cannot interact, record infrastructure limitation and consider a separate free alternative later. Do not merge PR or start Level1B.
+
 ## Exact next ONE bounded batch
 
-**Task ID: WIN-GUI-PILOT-01 — investigate the smallest REAL Windows OS window/capture/input automation proof in the free GitHub-hosted Windows runner.** The new intro-transition smoke metric task has now passed verified CI #42661016299; do not repeat it. Implement one bounded runner feasibility proof, distinguish infrastructure limits from game defects, and preserve source-original human acceptance as an open gate. Physical fidelity pending; PR #18 draft, main untouched, Level1B blocked.
+**Task ID: WIN-GUI-PILOT-01-VERIFY — inspect the actual Windows Actions GUI pilot artifact, report and any desktop screenshots, determine real OS window/input feasibility or infrastructure limitation, and record reproducible next action.** The new test-only probe is committed, CI result pending. Preserve issue #17 manual original-Flash acceptance, PR #18 draft, main and Level1B untouched.
 
 
 ## Reproduction / first commands and links

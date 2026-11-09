@@ -1,11 +1,11 @@
 # Persistent development tasks — Batman Rust port
 
-## 2026-11-09 WIN-GUI-PILOT-01 — next scoped automated Windows window/input feasibility check
+## 2026-11-09 WIN-GUI-PILOT-01 — bounded real Win32 GUI feasibility (implemented, CI pending)
 
-- **Status:** TODO / UNVERIFIED. **Priority:** P0 evidence-gathering subtask supporting WIN-01 source-original acceptance, not a replacement for human approval.
-- **Goal:** On the existing free Windows GitHub Actions runner, prove whether the actual native EXE can be launched in normal GUI mode, its OS window screenshot captured with nonempty observable pixels, and ONE native keyboard or click input delivered. Start with a small feasibility probe; prefer existing Win32 tooling or minimal CI-only script. Do not add a non-Rust gameplay runtime, paid remote desktop, or unreviewed secrets.
-- **Acceptance:** record exact runner desktop/session availability, process/window identity, capture method and two screenshots plus input events with artifact links; distinguish headless simulated game state from genuine Win32 window/OS input. If runner lacks interactive desktop, classify infrastructure unavailable and retain Level A deterministic smoke QA. Do not declare source/gameplay fidelity verified.
-- **Constraints:** stay on draft PR #18, no merge or Level1B; one bounded batch with all six records; avoid breaking proven CI or downloading/playing on user's computer.
+- **Status:** IMPLEMENTED / UNVERIFIED. Existing Windows CI #42661016299 at `6be6c42` previously passed, but predated this probe. Documentation-only run #42663897347 was still running at the start; branch concurrency might cancel it on this push.
+- **Exact new tool:** `reverse-engineering/tools/windows_gui_pilot.py`, a CI-only Python/Pillow+ctypes script, not a game runtime dependency. On `windows-latest`, launch actual EXE with no headless flags; enumerate its visible titled Win32 window by PID, record session/desktop metrics, grab `before_enter.png`, inject Enter keydown/hold 240ms/keyup using Win32 SendInput only when target is foreground, grab `after_enter.png`, hash images and classify `pilot-report.json`. Bound window search to 8 sec and process cleanup.
+- **Workflow addition:** after already existing native executable smoke checks, run the GUI pilot with a two-minute bound and `continue-on-error: true`. Upload `Batman-CobbleBot-Level1A-Windows-GUI-Pilot` on any outcome when files exist. Do NOT weaken older headless tests or assert screenshot change proves actual key delivery.
+- **Acceptance/next step:** new CI must run, report exists; inspect classification, before/after OS screenshots, app window PID/title, desktop availability and SendInput counts; classify physical GUI vs runner limitations vs script bug. Never claim original Flash equivalence or human speaker/input acceptance. See RE-20261109-012 and AUD-20261109-010. Keep PR #18 draft, issue #17 open, `main` and Level1B unchanged.
 
 ## 2026-11-09 INTRO-QA-01 — bounded automated black-screen regression guard
 
