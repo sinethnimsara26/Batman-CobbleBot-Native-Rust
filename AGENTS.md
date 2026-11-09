@@ -8,7 +8,7 @@ This file is the provider-neutral entry point for **ChatGPT, Codex, Claude, Gemi
 
 - **F5:** restart at title.
 - **F6:** restart at the first story-intro frame.
-- **F7:** restart Level 1A in visible gameplay (advance only the title/fade display clock to tick 150 so HUD is immediately inspectable).
+- **F7:** restart Level 1A using the normal Rust level-entry routine and **150 neutral fixed-step gameplay updates** so Batman's physics and camera reach a stable gameplay/HUD inspection frame. This is not merely a display-clock jump.
 
 Use the opt-in mode in desktop GUI automation when moving between original Flash scenes; it is NOT a source-accurate gameplay shortcut and must not be part of original-game acceptance. The CI-only script `reverse-engineering/tools/windows_gui_pilot.py` launches the EXE with this flag, uses real mouse LEFTDOWN/LEFTUP inside the source-derived SKIP button #129, captures OS desktop PNGs after the fade and in gameplay, then captures a **separate** F7 shortcut frame. **Never treat F7 navigation as evidence that SKIP itself succeeded.** Review `pilot-report.json` and images independently. Normal game F5/F6/F7 inputs should have NO effect without the flag.
 

@@ -219,3 +219,11 @@ This is the **short index of meaningful, verified progress and mistakes**. Detai
 - **Confirmed distinct QA issue:** independent F7 scene screenshot reveals Batman partly above viewport; in `src/win32.rs` F7 sets screen Playing and ticks=150 without `begin_level1a` or 150 real updates. Track targeted fix QA-NAV-02; don't use F7 as evidence for mouse SKIP. No speculative code fix in verification-only batch.
 - **Six-file compliance:** AGENTS.md and both permanent protocols reviewed unchanged; AI_TASKS and AI_HANDOFF updated, this worklog appended; deep RE-20261110-002 and audit AUD-20261110-002 recorded (no implementation changes). Next one bounded task QA-NAV-02; PR #18 draft/main/Level1B untouched.
 
+
+## 2026-11-10 — QA-NAV-02: F7 neutral-physics level-entry fix (Windows CI pending)
+
+- **Recovered:** PR #18 open/draft at parent `7215446dbf350ab84a6f6c4f12b9e98609cdfa8e`; prior gameplay #42676704367 green with separate F7 offscreen bug; latest parent docs-only Windows run #42679166276 SUCCESS; six mandatory files and both protocols inspected.
+- **Code:** `src/game.rs` adds `Game::prepare_level1a_for_qa(&CollisionMask)`: existing `begin_level1a()` then 150 neutral `tick` calls, preserving actual physics/camera progression. `src/win32.rs` F7 uses it, then drains level-entry audio events; no more fake `ticks=150` assignment. Normal non-QA gameplay, SKIP and rendering untouched. New unit test compares the full visible QA state with title→intro→41-frame SKIP→150 neutral gameplay and asserts 600×400 stage origin bounds.
+- **Verification:** GitHub source review and parent Windows run read; Rust compilation/tests, new Windows GUI screenshot and original Flash comparison **NOT RUN at checkpoint creation**, pending fresh CI. No local Rust toolchain in this environment; don't call this verified until CI confirms and real PNG is inspected.
+- **Records:** AGENTS F7 guidance corrected; AI_TASKS/HANDOFF updated; RE-20261110-003 investigation and post-edit AUD-20261110-003. No Cargo manifest/third-party changes or added gameplay runtime dependencies. PR #18 remains draft; main/Level1B untouched.
+- **Next only:** inspect new Windows workflow run, focused unit test, screenshot artifact and F7 actor visibility; if CI fails repair QA-NAV-02 first.

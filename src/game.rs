@@ -264,6 +264,18 @@ impl Game{
         self.update_camera();
     }
 
+    /// Developer-only F7 target: use the same level-entry and neutral 25 Hz
+    /// simulation as a normal player who enters Level 1A and waits six seconds.
+    /// Called only from the Win32 --qa-navigation path; never used by the
+    /// original intro / SKIP transition or normal gameplay.
+    pub fn prepare_level1a_for_qa(&mut self,ground:&CollisionMask){
+        self.begin_level1a();
+        let mut neutral=InputState::default();
+        for _ in 0..150 {
+            self.tick(&mut neutral,ground);
+        }
+    }
+
     /// Source button129's release-inside event starts the original fadeout.
     /// No keyboard or mouse path may bypass its 41-frame transition.
     pub fn skip_intro(&mut self)->bool{
@@ -841,5 +853,53 @@ impl Game{
             self.camera_y+=((target-self.camera_y)/4.0).trunc();
             self.background_y=((player_y/2.0-CAM_HEIGHT/1.5)/CAM_JUMP).trunc()-CAM_OFFSET;
         }
+    }
+}
+
+#[cfg(test)]
+mod qa_navigation_tests {
+    use super::{AppScreen,Game,InputState,LEVEL_X,LEVEL_Y,LOGICAL_H,VK_ENTER};
+    use crate::collision::CollisionMask;
+
+    #[test]
+    fn qa_f7_matches_normal_level_entry_after_neutral_gameplay() {
+        let ground=CollisionMask::level1a();
+        let mut natural=Game::new();
+        let mut input=InputState::default();
+
+        // Follow the public title-to-intro and source-derived 41-frame
+        // SKIP path rather than forcing the normal game's screen state.
+        input.set(VK_ENTER,true);
+        natural.tick(&mut input,&ground);
+        input.set(VK_ENTER,false);
+        assert_eq!(natural.screen,AppScreen::Intro);
+        assert!(natural.skip_intro());
+        for _ in 0..41 { natural.tick(&mut input,&ground); }
+        assert_eq!(natural.screen,AppScreen::Playing);
+        assert_eq!(natural.ticks,0);
+        for _ in 0..150 { natural.tick(&mut input,&ground); }
+
+        let mut qa=Game::new();
+        qa.prepare_level1a_for_qa(&ground);
+        assert_eq!(qa.screen,AppScreen::Playing);
+        assert_eq!(qa.ticks,150);
+        assert_eq!(qa.ticks,natural.ticks);
+        assert_eq!(qa.player.state,natural.player.state);
+        assert_eq!(qa.player.jumping,natural.player.jumping);
+        assert_eq!(qa.player.on_ground,natural.player.on_ground);
+        assert_eq!(qa.overlay_frame,natural.overlay_frame);
+        assert!((qa.player.x-natural.player.x).abs()<0.001);
+        assert!((qa.player.y-natural.player.y).abs()<0.001);
+        assert!((qa.camera_x-natural.camera_x).abs()<0.001);
+        assert!((qa.camera_y-natural.camera_y).abs()<0.001);
+
+        // These are the same logical stage coordinates used by the legacy
+        // and HQ Batman renderers, not guessed screen-space spawn offsets.
+        let stage_y=qa.player.y+LEVEL_Y+qa.camera_y;
+        let stage_x=qa.player.x+LEVEL_X+qa.camera_x;
+        assert!(stage_y>=0.0 && stage_y<LOGICAL_H as f32,
+                "QA actor origin offscreen: stage_y={stage_y}");
+        assert!(stage_x>=0.0 && stage_x<super::LOGICAL_W as f32,
+                "QA actor origin offscreen: stage_x={stage_x}");
     }
 }

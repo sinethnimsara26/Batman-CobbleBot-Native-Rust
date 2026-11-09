@@ -82,12 +82,12 @@ impl App{
          self.game.screen=AppScreen::Intro;
          self.audio.handle(AudioEvent::IntroStart);
        },
-       2=>{  // F7: go directly to visible gameplay/HQ HUD.
-         self.game.screen=AppScreen::Playing;
-         // Skip only the intro/title/fade visual display clock, not gameplay.
-         // QA-only start; no assertion of original Flash level-entry parity.
-         self.game.ticks=150;
-         self.audio.handle(AudioEvent::MusicStart);
+       2=>{  // F7: visible gameplay/HQ HUD after real neutral simulation.
+         // Normal level entry establishes audio/camera, then 150 actual
+         // fixed-step physics updates settle the original high player spawn.
+         // This remains an opt-in development shortcut, not Flash fidelity.
+         self.game.prepare_level1a_for_qa(&self.ground);
+         for event in self.game.take_audio_events(){self.audio.handle(event);}
        },
        _=>unreachable!(),
      }

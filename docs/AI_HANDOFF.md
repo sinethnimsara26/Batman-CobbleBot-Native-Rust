@@ -2,6 +2,15 @@
 
 **READ THIS FIRST.** This is a provider-neutral, evidence-based snapshot for an agent that has never seen the original chat. Follow `AGENTS.md`; consult `docs/AI_TASKS.md` and `docs/AI_WORKLOG.md`. **Always verify current remote GitHub state before trusting this snapshot.**
 
+
+## 2026-11-10 — QA-NAV-02 implementation checkpoint (Windows verification pending)
+
+**Latest work:** Starting from verified remote head `7215446dbf350ab84a6f6c4f12b9e98609cdfa8e`, draft PR #18 still open/draft; docs-only Windows workflow [#42679166276](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42679166276) completed SUCCESS at that parent, but it **does not test the new F7 fix**. This batch changes only `src/game.rs` (public QA helper and focused unit regression) and `src/win32.rs` (F7 delegates to normal level-entry/150 neutral game ticks, audio queue dispatched). AGENTS F7 contract and task/research/audit/worklog synchronized. See RE-20261110-003 and AUD-20261110-003. No new dependencies, original asset changes, normal-game controls or Level 1B edits.
+
+**Verification at checkpoint creation:** exact source/code review performed using GitHub; no local Cargo/Rust toolchain available and no fresh Windows CI of these changes has run. **IMPLEMENTED, NOT YET WINDOWS-VERIFIED.** The previously verified actual Win32 normal mouse SKIP and HUD capture remains run #42676704367 at game code `ef3c0fb`. Its independent F7 screenshot is the historical defect, not proof the new code fails.
+
+**Next ONE action after this commit:** check the new development-branch Windows workflow and its Rust test count; if green, inspect `Batman-CobbleBot-Level1A-Windows-GUI-Pilot` → `qa_f7_direct_gameplay.png` and report whether Batman is visibly in-frame. If failed, inspect that exact log and fix the same QA-NAV-02 blocker. Do not close HUD-REAL-01, change source-original timing, merge PR #18 or touch main/Level1B. Final current SHA must be read from Git after commit; a file cannot know its own future SHA.
+
 ## Repository / actual recovered status
 
 - Repo: **https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust** (public).
