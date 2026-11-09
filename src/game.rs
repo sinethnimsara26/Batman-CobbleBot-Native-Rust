@@ -74,7 +74,7 @@ const OVERLAY_TO_STREET:usize=140;
 pub enum AppScreen{Title,Instructions,Intro,Playing}
 
 #[derive(Copy,Clone,Debug,PartialEq,Eq)]
-pub enum AudioEvent{MusicStart,MusicStop,Jump,Item}
+pub enum AudioEvent{IntroStart,IntroStop,MusicStart,MusicStop,Jump,Item}
 
 #[derive(Copy,Clone,Debug,PartialEq,Eq)]
 pub enum PlayerState{
@@ -237,6 +237,9 @@ impl Game{
     fn begin_level1a(&mut self){
         self.screen=AppScreen::Playing;
         self.intro_tick=0;
+        // The SWF's intro sprite invokes StopSounds at frame 179. Stop
+        // its source music before the separate Level 1A track begins.
+        self.audio_events.push(AudioEvent::IntroStop);
         self.audio_events.push(AudioEvent::MusicStart);
         // Original level entry has playerJumping=true and snaps the camera.
         self.update_camera();
@@ -257,6 +260,8 @@ impl Game{
                 else if input.pressed(VK_ENTER)||input.pressed(VK_SPACE){
                     self.screen=AppScreen::Intro;
                     self.intro_tick=0;
+                    // StartSound id 130 is on original SWF root frame 18.
+                    self.audio_events.push(AudioEvent::IntroStart);
                 }
                 input.clear_pressed();
                 return
@@ -266,14 +271,17 @@ impl Game{
                 else if input.pressed(VK_ENTER)||input.pressed(VK_SPACE){
                     self.screen=AppScreen::Intro;
                     self.intro_tick=0;
+                    // StartSound id 130 is on original SWF root frame 18.
+                    self.audio_events.push(AudioEvent::IntroStart);
                 }
                 input.clear_pressed();
                 return
             },
             AppScreen::Intro=>{
                 // Visual frame samples are recovered from root frame 18.
-                // Original ActionScript-directed holds and scene audio need a
-                // separate fidelity pass. Enter/Space/Escape skip for testing.
+                // Original script-directed holds still require a fidelity
+                // pass; the intro StartSound and StopSounds are now sourced.
+                // Enter/Space/Escape skip for testing.
                 if input.pressed(VK_ENTER)||input.pressed(VK_SPACE)||
                    input.pressed(VK_ESCAPE)||self.intro_tick>=179 {
                     let _=self.skip_intro();
