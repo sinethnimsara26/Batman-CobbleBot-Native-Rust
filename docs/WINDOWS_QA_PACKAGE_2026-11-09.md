@@ -40,3 +40,20 @@
 The original CI ZIP and native image artifacts were successfully retrieved and independently hashed. The repackaged QA ZIP passed an internal archive-integrity check. **No Windows process was run in this Linux environment**, and there has been no physical mouse/audio/screen original-vs-native acceptance test. A checksum checks identity/corruption, not source-game fidelity or trustworthiness of an unfamiliar executable; follow normal Windows security guidance and verify provenance.
 
 The next task remains **WIN-01 / FIDELITY-GATE-01 (user's real Windows playtest)**. Once evidence identifies a concrete bug, the project must resolve and retest it before moving on. See [research RE-20261109-007](REVERSE_ENGINEERING_RESEARCH_LEDGER.md) and [docs-only audit AUD-20261109-005](RUST_PURITY_AND_ENGINEERING_AUDIT.md). Keep this text aligned with the exact tested game SHA rather than a later documentation-only SHA.
+
+## 2026-11-09 — WIN-DELIVERY-01: preferred automatic Windows installer (supersedes ZIP as PRIMARY delivery)
+
+**Current verified completed latest workflow:** [Run #42619759787](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42619759787), Git head `ba3a18f140e1519d9c7308df2e5e1ab1aba96dc3`, **57/57 successful workflow steps**, Windows x64 executable artifact **13676630727**, name `Batman-CobbleBot-Level1A-Fidelity-Windows-x64`, not expired at inspection.
+
+**Important separate identities:** From prior code commit `acccd0b70327e2ea1911885f97e21f5e5a5398b3` to `ba3a18f...`, GitHub compare showed **only `AGENTS.md` and documentation files changed, no Rust source/runtime implementation changes**. However the newest CI binary's bytes differ from the earlier build, so do not use the earlier archive's SHA-256 to verify the new one. The following hashes were calculated by downloading and reading the newly produced artifact, not guessed from Git history:
+
+| File | Actual bytes | SHA-256 |
+|---|---:|---|
+| GitHub Actions ZIP artifact 13676630727 | 29,375,231 | `e0180ec868a62e521d31c25a52226fec937c51f50aa8875dfaf691b739f278ca` |
+| Unmodified member `batman_cobblebot_native.exe` | 34,697,216 | `e5394d6e4f044e289023386eae37483e075c587a2d1fd172095bd1b7fd38b28c` |
+
+The ZIP was inspected and **passed ZIP CRC validation** with exactly one member, the expected EXE. Its PE header begins with `MZ`. The previous test archive and hashes in the sections **above remain historically correct for their own earlier CI run**. This addendum does not overwrite them.
+
+**User-preferred primary delivery restored:** The canonical PowerShell 5.1+ installer is now in [AGENTS.md](../AGENTS.md), section *Permanent Windows game delivery contract*. It uses authenticated GitHub CLI (`gh`) to find the most recent successful Windows workflow on the development branch, download its single named executable artifact, verify the SHA-256 across the temporary and staged files, replace `%LOCALAPPDATA%\BatmanCobbleBot\batman_cobblebot_native.exe` with a backup of the old file, write `last-run.txt`, `last-commit.txt` and `last-sha256.txt`, and launch the newly installed game. **Future user-facing playable deliveries must include that copy-paste installer block and a current successful run link, not just an manually repackaged chat ZIP.** The conversation ZIP reported above is optional and bound to its own historical SHA.
+
+**Source documentation and audit:** [RE-20261109-008](REVERSE_ENGINEERING_RESEARCH_LEDGER.md), [AUD-20261109-006](RUST_PURITY_AND_ENGINEERING_AUDIT.md). **No game logic changed.** User-side execution and original Flash visual/audio fidelity remain **UNVERIFIED** until physical Windows feedback. The installer command has been statically reviewed against the official [GitHub CLI run list](https://cli.github.com/manual/gh_run_list), [artifact download](https://cli.github.com/manual/gh_run_download), and [Microsoft File.Replace](https://learn.microsoft.com/dotnet/api/system.io.file.replace) documentation; it has **not** been executed on the user's machine or tested with an installed local PowerShell interpreter in this environment.

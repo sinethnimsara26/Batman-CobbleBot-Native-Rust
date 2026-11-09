@@ -9,6 +9,76 @@ This file is the provider-neutral entry point for **ChatGPT, Codex, Claude, Gemi
 3. Read the relevant entries in **[docs/REVERSE_ENGINEERING_RESEARCH_LEDGER.md](docs/REVERSE_ENGINEERING_RESEARCH_LEDGER.md)** and **[docs/RUST_PURITY_AND_ENGINEERING_AUDIT.md](docs/RUST_PURITY_AND_ENGINEERING_AUDIT.md)**, then [AI_WORKLOG](docs/AI_WORKLOG.md) and the [detailed Level 1A presentation log](docs/revival/LEVEL1A_PRESENTATION_FIDELITY_LOG_2026-11-09.md).
 4. Verify the **actual remote branch head, PR state, CI runs, and artifacts** against those notes before making changes. Correct stale documentation rather than trusting it.
 
+## Permanent Windows game delivery contract — user-preferred workflow (2026-11-09)
+
+**Do not make a manually repackaged conversation ZIP the primary delivery method when the user asks for the playable game.** The standard is the GitHub CLI → latest successful Actions artifact → `%LOCALAPPDATA%\BatmanCobbleBot` → launch workflow. On every future playable-build report:
+
+1. Verify the real latest **successful** run on the development branch for workflow `build-level1a-fidelity.yml`; confirm an unexpired artifact named `Batman-CobbleBot-Level1A-Fidelity-Windows-x64`, its actual head SHA, real test results and that the user is not accidentally getting a pending/failed run.
+2. Say which actual run, revision, Windows test totals and remaining human-fidelity blockers were verified. Provide a clickable **GitHub Actions run URL** that exposes the artifact; label a direct ZIP download as optional, not the preferred installation route.
+3. **Always give a complete copy-paste PowerShell 5.1+ installer command** in the reply, which automatically selects the latest successful run (never a hard-coded stale run ID), downloads the artifact with authenticated `gh`, installs/replaces `batman_cobblebot_native.exe` in `%LOCALAPPDATA%\BatmanCobbleBot`, writes `last-run.txt`, `last-commit.txt`, `last-sha256.txt`, and starts the game. It must not rebuild locally or install Flash/Python/browser runtimes.
+4. Warn the user to close any running Batman window. Require GitHub CLI (`winget install --id GitHub.cli --exact`) and `gh auth login` if needed. Download to a disposable temp directory; verify exe exists and source/staged SHA-256 match before replacing the installed game. Preserve the previous executable as `.bak` where possible and do not claim successful installation until the user runs the script; the assistant does **not** control the user's Windows machine.
+5. If there is no confirmed successful run/artifact, **do not pretend to deliver** an unverified latest executable; report the blocker and prioritize fixing/retrying CI. A documentation-only run may rebuild a byte-different EXE even if Rust source is unchanged; use the actual latest-run binary/hash instead of assuming historical SHA-256 values still match.
+
+**Canonical PowerShell block to include in user-facing game deliveries (copy intact unless verified to need a scoped fix):**
+
+```powershell
+$ErrorActionPreference = "Stop"
+$repo = "sinethnimsara26/Batman-CobbleBot-Native-Rust"
+$branch = "revive/level1a-intro-hud-fidelity-2026-11-09"
+$artifact = "Batman-CobbleBot-Level1A-Fidelity-Windows-x64"
+
+if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
+    throw "GitHub CLI missing. Install with: winget install --id GitHub.cli --exact"
+}
+gh auth status --hostname github.com *> $null
+if ($LASTEXITCODE -ne 0) { throw "Log into GitHub CLI first: gh auth login" }
+
+$runJson = gh run list --repo $repo --branch $branch --workflow build-level1a-fidelity.yml --status success --limit 1 --json databaseId,headSha
+if ($LASTEXITCODE -ne 0) { throw "Could not query successful Windows builds." }
+$run = @($runJson | ConvertFrom-Json) | Select-Object -First 1
+if (-not $run) { throw "No successful Windows build found on the development branch." }
+
+if (Get-Process -Name "batman_cobblebot_native" -ErrorAction SilentlyContinue) {
+    throw "Close the currently running Batman game before updating it."
+}
+$dest = Join-Path $env:LOCALAPPDATA "BatmanCobbleBot"
+$temp = Join-Path $env:TEMP ("BatmanBuild-" + [guid]::NewGuid().ToString("N"))
+$staged = Join-Path $dest ("batman_cobblebot_native.exe." + [guid]::NewGuid().ToString("N") + ".new")
+New-Item -ItemType Directory -Force -Path $dest,$temp | Out-Null
+try {
+    gh run download $run.databaseId --repo $repo --name $artifact --dir $temp
+    if ($LASTEXITCODE -ne 0) { throw "GitHub artifact download failed." }
+
+    $source = Join-Path $temp "batman_cobblebot_native.exe"
+    if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
+        throw "Expected Windows executable was not in the downloaded artifact."
+    }
+    $hash = (Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash
+    Copy-Item -LiteralPath $source -Destination $staged -Force
+    if ((Get-FileHash -LiteralPath $staged -Algorithm SHA256).Hash -ne $hash) {
+        throw "Copy integrity check failed; the previous game was not replaced."
+    }
+
+    $exe = Join-Path $dest "batman_cobblebot_native.exe"
+    if (Test-Path -LiteralPath $exe) {
+        [System.IO.File]::Replace($staged,$exe,(Join-Path $dest "batman_cobblebot_native.exe.bak"))
+    } else {
+        [System.IO.File]::Move($staged,$exe)
+    }
+    Set-Content -LiteralPath (Join-Path $dest "last-run.txt") -Value $run.databaseId
+    Set-Content -LiteralPath (Join-Path $dest "last-commit.txt") -Value $run.headSha
+    Set-Content -LiteralPath (Join-Path $dest "last-sha256.txt") -Value $hash
+    Start-Process -FilePath $exe -WorkingDirectory $dest
+    Write-Host "Launched Batman build $($run.databaseId) ($($run.headSha)); SHA256 $hash"
+}
+finally {
+    Remove-Item -LiteralPath $staged -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $temp -Recurse -Force -ErrorAction SilentlyContinue
+}
+```
+
+**Six-file documentation integrity check:** The 2026-11-09 WIN-01-QA-PACK-01 checkpoint actually added/modified exactly these six persistent files: `docs/WINDOWS_QA_PACKAGE_2026-11-09.md`, `docs/REVERSE_ENGINEERING_RESEARCH_LEDGER.md`, `docs/RUST_PURITY_AND_ENGINEERING_AUDIT.md`, `docs/AI_TASKS.md`, `docs/AI_HANDOFF.md`, and `docs/AI_WORKLOG.md`. Before the next handoff inspect all six in the actual remote branch, confirm current source/CI/file-hash claims and cross-references, preserve old pinned evidence as historical data, and repair any stale *current* delivery instruction. `AGENTS.md` is the **seventh governance file** and must contain these permanent instructions. Future batches must continue the two detailed RE/AUD records, the task/handoff/worklog lifecycle and any relevant QA manifest amendments; do not artificially rewrite all six in unrelated tasks.
+
 ## Mandatory research ledger and post-implementation Rust audit (permanent protocol)
 
 **Effective 2026-11-09. This EXTENDS, not replaces or weakens, all rules below.**
@@ -78,8 +148,7 @@ On interruption, inspect GitHub first: if a prior operation may have succeeded, 
 - `git fetch origin && git status --short && git rev-parse HEAD` (local clone, if present).
 - `gh pr view 18 -R sinethnimsara26/Batman-CobbleBot-Native-Rust`
 - `gh run list -R sinethnimsara26/Batman-CobbleBot-Native-Rust --branch revive/level1a-intro-hud-fidelity-2026-11-09 --limit 5`
-- `gh run view 42575731190 -R sinethnimsara26/Batman-CobbleBot-Native-Rust`
-- `gh run download 42575731190 -R sinethnimsara26/Batman-CobbleBot-Native-Rust -n Batman-CobbleBot-Level1A-Fidelity-Windows-x64 -D ./batman-test`
+- Do not hard-code obsolete build `42575731190` or older SHA in game installation instructions. Use the **Permanent Windows game delivery contract** above and verify the latest successful run and artifact before printing the installer.
 - On a completed Windows CI asset build: `cargo test`, `cargo build --release`, `cargo run --release -- --render-smoke <path>` **only after checking the project's actual CLI usage**; prefer the exact workflow commands rather than guessing flags.
 - Manual gate and reproduction checklist: [issue #17](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/issues/17).
 
