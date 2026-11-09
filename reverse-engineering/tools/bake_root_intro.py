@@ -38,7 +38,14 @@ def main():
     # DefineSprite/DefineShape. The SWF sprite baker cannot render button
     # up/over/down state graphics yet. Preserve this omission explicitly.
     unsupported_controls = {129}
-    scene = [dict(p, frame=0) for p in source_scene if p.get("character_id") not in unsupported_controls]
+    # The root's fadeout movie clip (34) is script-stopped by Flash until
+    # a dispatcher transition. Automatically playing all its frames would
+    # cover the briefing with black and then loop it repeatedly.
+    script_controlled_transitions = {34}
+    scene = [
+        dict(p,frame=0) for p in source_scene
+        if p.get("character_id") not in (unsupported_controls | script_controlled_transitions)
+    ]
     expected = {40, 122, 123, 126, 129}
     found = {p.get("character_id") for p in source_scene}
     if not expected.issubset(found):
@@ -93,6 +100,7 @@ def main():
         "missing_bitmap_ids": sorted(missing),
         "root_placements": source_scene,
         "omitted_interactive_button_ids": sorted(unsupported_controls),
+        "deferred_script_controlled_transition_ids": sorted(script_controlled_transitions),
         "frames": manifest_frames,
         "timing_note": "180 timeline samples, 25 fps; ActionScript-directed pauses/sound are not reproduced by visual baking",
     }
