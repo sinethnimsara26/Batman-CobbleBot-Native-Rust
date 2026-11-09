@@ -65,6 +65,57 @@ These labels do not replace actual tests. Confidence: HIGH / MEDIUM / LOW / UNKN
 
 **Disposition:** This is a DOCUMENTATION-ONLY bootstrap. No remediation patch applied. Highest-priority next code-changing batch: `AUD-BLOCK-001` benchmark setup mismatch; write `RE-...` and post-change `AUD-...` when that batch is actually performed. Preserve draft PR #18; do not merge or expand scope.
 
+
+## AUD-20261109-002 — CI-BENCH-01 post-implementation Rust audit
+
+**Audit date:** 2026-11-09. **Linked evidence:** [RE-20261109-004](REVERSE_ENGINEERING_RESEARCH_LEDGER.md#re-20261109-004--ci-bench-01-rebuild-the-render-benchmarks-source-correct-entry-path); preceding baseline [AUD-20261109-001](#aud-20261109-001--baseline-rust-runtime-and-dependencies). **Base code:** `4ee103a6340bfea26d21e7857b9e80a9147e664a`. **Actual implementation inspected:** [`6e36914d2ab5c6025c40c72acca6789e3479d1e8`](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/commit/6e36914d2ab5c6025c40c72acca6789e3479d1e8), one-file diff: `src/headless.rs::benchmark_render` (+16/−3 lines); `src/game.rs` and all runtime modules unchanged.
+
+### Independent changed-code inspection after implementation
+
+**Behavior:** The benchmark first uses the existing title Enter transition into `AppScreen::Intro` and advances 180 ticks, intentionally stopping at original sampled intro frame179. It now asserts `Intro`, `intro_tick=179`, `intro_fadeout_tick=None`. It invokes existing `Game::skip_intro()` **once**, asserts fade frame0, advances to fade frame40, checks it is still in `Intro`, then ticks once more and asserts `Playing`, `intro_fadeout_tick=None`, `ticks=0`. It then preserves the original gameplay tick advance to105 and exact unchanged HQ rendering measurement/report loop. These are actual source assertions, not claimed user playback.
+
+**Correctness and corner cases:** Existing Rust `Game::skip_intro` rejects non-Intro/double-skip; these are already tested by `render_smoke_mode`. Intro frames are zero-based; the new code requires all 41 fade frame samples and ensures no off-by-one jump to `Playing`. Fixed `InputState` release after title Enter prevents an accidental repeated Enter press during story. Time spent in the intro setup falls **outside** the benchmark's timed rendering samples, so it does not change the meaning of collected per-frame HQ metrics. It does **not** bypass the assertion by directly setting `game.screen=Playing`.
+
+**Pure Rust / dependencies:** The *only code change* is safe Rust in `src/headless.rs`. It adds no `unsafe`, FFI, C/C++, Python, JS, ActionScript execution, external game engine, crate, feature flag, build.rs, code generation command, asset data or API binding. It uses existing `Game`, `InputState`, `CollisionMask` and built-in `assert!`/`assert_eq!` constructs. `Cargo.toml` still directly declares `png="0.17.16"` and `panic="abort"` in release, with no manifest/lockfile changes in this diff. The existing game keeps Rust state/render and documented Win32/GDI/MCI platform FFI plus offline Python SWF extraction; **full transitive dependency/binary composition is not re-audited**. No new crate suitability study is warranted when no crate is changed.
+
+**Idiomatic Rust and maintainability:** Explicit `Game::skip_intro()` call rather than reaching into private states; compile-time enum comparisons and `Option<u16>` checks; deterministic bounded loops with no new allocation or cloning; no mutation to game physics; readable comment referencing original source stop/fade, with an expected explicit assertion for every transition. The function predates this patch and uses imperative setup; a shared helper with smoke tests could reduce duplication, but extracting one now would widen this bounded fix and make the failing benchmark harder to isolate. **Alternative considered:** set `game.screen=Playing` directly to continue benchmarking, rejected because that hides the original routing; alternatively modify `src/game.rs` to reinstate auto-transition, rejected as source fidelity regression. Keeping the benchmark's assertion is deliberate.
+
+**Safety and performance:** No new raw pointer, `unsafe`, thread or resource handling, panic-prone indexing or crate dependency introduced. New `assert!` calls purposely abort/flag a test regression; they are on a dedicated `--benchmark-render` diagnostic CLI path, not inside actual Windows rendering loops. The benchmark still warms caches and times 60 HQ render calls after gameplay reaches its unchanged setup. **Performance improvement is NOT claimed**; retain the actual measured metrics and old baseline for comparing only after tests pass. Existing Win32 `static mut`/FFI and MCI risks from AUD-RISK-002/003 remain, but are **not changed**.
+
+### Actual verification and limits
+
+| Check | Evidence | Result |
+|---|---|---|
+| Remote code/diff | Exact GitHub commit `6e36914d...` inspected via commit API and fetched `src/headless.rs` | **PASS:** only `src/headless.rs` changed (+16/−3), source asserts present |
+| Model/trace of source state transitions | Fetched `src/game.rs::Game::tick/skip_intro` and compared exact branch/index progression | **PASS at code-inspection level**, not independently run executable |
+| Previous failures | Windows [#42589238951](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42589238951) and [#42591045102](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42591045102) | Both **FAIL**, stage22 benchmark; 9/9 prior unit tests passed |
+| Current full Windows workflow | [#42595410918](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42595410918) | **COMPLETED / FAILURE overall; target fixed.** Windows steps20 (9 Rust tests),21 (release build),22 (legacy/HQ smokes + `--benchmark-render 60` and scenery benchmark programs) PASSED; step24 FAILED on separate scenery-scroll p95 check: 42.926ms ≥40ms. Gameplay HQ benchmark p95 36.4716ms PASSED. |
+| Local fmt/check/test/clippy/tree/metadata | No generated Windows asset tree in this environment; modified test needs `include_bytes!` original asset packs to compile | **NOT RUN LOCALLY**; Rust compiler, Clippy and Cargo graph not independently executed here |
+| Manual original Flash vs native Level1A | User Windows playback / issue #17 | **NOT RUN**, fidelity gate remains open |
+
+**Applicable official sources consulted 2026-11-09:** *assert_eq in std*, Rust Project (std 1.99.1, code date 2026-10-13), https://doc.rust-lang.org/std/macro.assert_eq.html, confirms release `assert_eq!` is always active; *Profiles — The Cargo Book*, Rust Project, https://doc.rust-lang.org/cargo/reference/profiles.html, `panic` section, confirms release `panic="abort"` terminates the process; *Fail Fast Exception C0000409*, Microsoft Learn (2018-01-29), https://learn.microsoft.com/en-us/shows/inside/c0000409, warns that subcode not recorded here is needed to distinguish crash scenario. All are technical guidance, not community consensus or live project test output. The `png` crate and release profile already existed; no new libraries. Cargo/Win32/platform compliance notes inherited from pinned AUD-20261109-001.
+
+### Determinations (post-code review; test outcomes must remain separate)
+
+1. **PURE-RUST COMPLIANCE: PASS WITH DOCUMENTED PLATFORM/BUILD QUALIFICATIONS — HIGH confidence for this diff, MEDIUM for broader runtime.** The actual patch is strictly safe Rust and invokes established Rust gameplay; external platform APIs exist elsewhere and offline Python only prepares embedded data. Transitive `png` feature/native composition not reverified.
+2. **ENGINEERING QUALITY: NEEDS IMPROVEMENT — HIGH confidence.** The targeted benchmark state-machine correction works in Windows CI (step22 success), but full workflow still **FAILS** step24 on the **independent HQ scenery-scroll p95** budget. Do not call the game release-ready. This batch did not modify rendering logic; prioritize separate measured performance investigation. The implementation itself has no new code-quality/unsafe dependency concerns.
+3. **ORIGINAL-GAME FIDELITY: PARTIALLY VERIFIED — MEDIUM source-evidence confidence, LOW full-user-experience confidence.** Original action-based story exit is preserved by current native code; headless test-setup now follows it. The patch itself does not improve sprite/art, typography, audio capture or verified on-device gameplay.
+
+### CI-closeout and new blocking finding
+
+Actual [Run #42595410918](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42595410918), Windows job `129086770688`:
+- `cargo test --release --target x86_64-pc-windows-msvc`: **PASS, 9 tests** (step20).
+- `cargo build --release --target x86_64-pc-windows-msvc`: **PASS** (step21).
+- Both `--render-smoke` and `--render-smoke-hq` child processes and the formerly aborting `--benchmark-render 60 .generated/render-benchmark.json`: **PASS** (step22), as did `--benchmark-scenery-scroll` executable invocation.
+- Original gate for HQ render: p95 **36.4716ms**, under **40ms** (**PASS**). Existing 3× frame dimensions/reports were checked.
+- Existing scenery-scroll gate: **41 samples**, p95 **42.9260ms**, p50 **16.3843ms**, mean **19.6801ms**, max **46.1800ms**; `assert scroll["p95_ms"] < 40.0` **FAIL**, step24. Specific high readings: x=0 **46.0933ms**, x=600 **46.1800ms**, x=1200 **42.9260ms**, x=1800 **42.5766ms**. The final CI verdict is **FAIL**, not a complete green build. Capturing the full Windows exception for the old abort is no longer a release prerequisite unless the abort returns.
+
+**AUD-BLOCK-001 / HIGH (prior benchmark abort): RESOLVED for tested code SHA** (Windows stage22 passes on `6e36914d...`); do not erase history of the previous failed runs. **AUD-BLOCK-007 / HIGH (new performance gate): OPEN**, affected `src/headless.rs::benchmark_scenery_scroll`, `src/render.rs`, `.github/workflows/build-level1a-fidelity.yml`, observed p95 42.926ms vs <40ms CI bound. **Cause UNKNOWN:** could be complex-scene CPU compositing/cache cost or runner contention. **Remediation:** next **one** bounded task `CI-SCROLL-P95-01`, reproduce and profile offending camera windows; optimize in Rust only if supported by measurements, leaving gate intact. **Blocks:** full CI/release/merge; manual visual acceptance independently outstanding. **AUD-RISK-002..006** unchanged.
+
+**Audit closed for this bounded code-changing batch:** post-implementation Rust source and diff inspected; compiled Windows run validates the corrected benchmark, though a separate performance failure prevents green full CI. No Python runtime, JS engine, new native dependency or non-Rust gameplay introduced. Next code batch must append a new RE and new post-code AUD entry after actual tests, per AGENTS.md.
+
+---
+
 ## Mandatory audit entry template — copy and complete AFTER implementation
 
 `## AUD-YYYYMMDD-NNN — [task and referenced RE entry]`
