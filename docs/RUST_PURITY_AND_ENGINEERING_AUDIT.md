@@ -169,6 +169,29 @@ Actual [Run #42613807273](https://github.com/sinethnimsara26/Batman-CobbleBot-Na
 
 ---
 
+
+## AUD-20261109-004 — WIN-01 acceptance documentation only
+
+**Date:** 2026-11-09. **Task:** Update stale source-vs-native Windows manual acceptance issue #17 with the current tested code SHA, GitHub Actions Windows executable, accurate original-Flash transition expectations, and evidence reporting protocol. **Related research:** [RE-20261109-006](REVERSE_ENGINEERING_RESEARCH_LEDGER.md#re-20261109-006--win-01-source-correct-windows-manual-acceptance-candidate). **Documentation-only: No implementation changes — Rust code audit not applicable.**
+
+**Artifact and code basis:** User-run candidate [`acccd0b70327e2ea1911885f97e21f5e5a5398b3`](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/commit/acccd0b70327e2ea1911885f97e21f5e5a5398b3), [Windows #42613807273](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42613807273), successful 57/57 CI checks, 11 passing Rust tests, artifact `Batman-CobbleBot-Level1A-Fidelity-Windows-x64` (ID 13672241525). This artifact is the compiled **native Rust** executable `batman_cobblebot_native.exe` per the actual workflow upload declaration, not a web or Python/Flash runtime. Actual user desktop acceptance was not performed here.
+
+**What was inspected and changed:** Exact issue #17 body originally described prior candidate `16b341a`, obsolete automatic story→Level1A transition, and outdated claims regarding audio implementation. Updated existing *open* issue #17 with a superseding current-candidate section, clarified 180-sample intro hold + explicit 41-frame SKIP fade and release-inside mouse semantics, preserved older historical data for reproducibility, and stated manual visual/audio approval remains an independent blocker. The GitHub issue API returned successful update. All Rust implementation files, crate manifests, dependencies, FFI, assets, CI thresholds, tests, PR and `main` were left unchanged; this task should not trigger a native rebuild.
+
+**Safety, dependency and source fidelity determination:** Since no Rust code or dependencies changed, no new crates, `unsafe`, allocation, concurrency, transitive graph changes, platform wrappers or runtime purity risk were introduced. Prior source-backed system behavior and CI green results remain the baseline, subject to manual testing. The issue instructions require reproducible step, expected-original vs observed-native, build SHA, Windows version/DPI, video/screenshot, and a blocker-first fix/retest process.
+
+**Actual verification:** GitHub issue #17 read and updated; [#42613807273](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42613807273) artifact ID/name and uploader path retrieved from GitHub connector; PR #18 still draft; no executable downloaded locally and no user physical playtest occurred. No local `cargo test`, `cargo fmt`, `cargo tree`, `cargo clippy`, `rustc`, or flash-to-native visual comparison performed for this documentation-only task. Existing source and benchmark results were not silently replaced with new measurements.
+
+**Audit classifications (docs-only task):**
+- **PURE-RUST COMPLIANCE:** **UNCHANGED — PASS WITH DOCUMENTED PLATFORM/BUILD QUALIFICATIONS** from prior audited code. Not a new comprehensive Rust audit.
+- **ENGINEERING QUALITY:** **UNCHANGED — PASS WITH NON-BLOCKING CONCERNS** at the tested prior code SHA, while physical gameplay remains unapproved.
+- **ORIGINAL-GAME FIDELITY:** **PARTIALLY VERIFIED** from source-action and automated regression contracts; actual Windows original-side-by-side remains **UNVERIFIED**. No claim that updating the issue proves fidelity.
+
+**Next exactly one task:** actual Windows Level1A manual test using the pinned successful artifact (or clear user-submitted video); if a concrete deviation is observed, repair it and re-test *before* unrelated game development. Keep issue #17 open, PR #18 draft and `main` unchanged. New code batches require their own complete independent post-code AUD and evidence-led RE entries.
+
+
+---
+
 ## Mandatory audit entry template — copy and complete AFTER implementation
 
 `## AUD-YYYYMMDD-NNN — [task and referenced RE entry]`

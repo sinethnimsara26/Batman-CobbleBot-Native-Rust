@@ -198,6 +198,35 @@ No Reddit post, third-party benchmark comparison, crate migration or community s
 
 ---
 
+
+## RE-20261109-006 — WIN-01: source-correct Windows manual acceptance candidate
+
+**Date:** 2026-11-09. **Batch type:** Manual acceptance gate preparation and correction of outdated GitHub issue #17, **no gameplay implementation changes**. Branch `revive/level1a-intro-hud-fidelity-2026-11-09`, draft PR #18; preceding documentation SHA `e734597bba9ef6488d338058a77f36e84acdf7ee`. Source executable is pinned to Rust code SHA [`acccd0b70327e2ea1911885f97e21f5e5a5398b3`](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/commit/acccd0b70327e2ea1911885f97e21f5e5a5398b3), not the later documentation-only SHA. User physical Windows original-Flash comparison is **NOT YET PERFORMED**. Related docs-only audit: [AUD-20261109-004](RUST_PURITY_AND_ENGINEERING_AUDIT.md#aud-20261109-004--win-01-acceptance-documentation-only).
+
+### Original-game evidence, changed understanding and exact locations
+
+- Original root frame18 story Stop, 180 source intro samples indexed 0–179 at 25Hz, nested sprite #123 frame179 Stop/StopSounds, original SKIP `DefineButton2` #129 release-inside `0x0800` at FWS tag offset 376676 / conditional action offset 376745, and scripted fadeout sprite #34 frames 0..40 with StopSounds at frame39 and Level1A dispatch at final frame: **surviving evidence from previous source action audit** documented in RE-20261109-002 and original behavior report [CI #42587338561](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42587338561). The source SWF was NOT reinterpreted in this documentation-only batch.
+- Native Rust implementation in `src/game.rs::Game::tick/skip_intro`, `src/win32.rs`, `src/render.rs` at `acccd0b...`: story holds at index179 until explicit SKIP, original 41-frame fade is rendered at stage offset (301,205), and mouse follows press-inside/release-inside (keyboard Enter/Space/Escape as native convenience). All game-specific runtime logic is Rust and original artwork is embedded; offline Python/Pillow baking is build-time only.
+- **Discovered manual-gate defect:** [GitHub issue #17](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/issues/17) still featured earlier native candidate `16b341a` from Run #42575731190 and instructed testers that the intro automatically enters Level1A; it also said original intro audio was not yet fully implemented. These were **stale** relative to the latest source-backed Rust game and could cause erroneous user feedback. This was a documentation/test-procedure defect, not evidence that the actual executable behaved incorrectly.
+- **Corrected issue #17** without closing it or changing labels/state: prepend a prominent current executable candidate; preserve historical section clearly labeled old; replace obsolete auto-advance/skip/audio language with source-correct behavior; explain what to report and what remains unverified. This is a live GitHub issue mutation, not a Rust code change.
+
+### Exact verified artifact and test instructions
+
+- Last fully green code run [#42613807273](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42613807273), commit `acccd0b...`, **57/57 Windows CI steps successful**, Rust 11/11 tests, source-asset image oracles and standard HQ native render benchmark tests passed. Artifacts listing returned `Batman-CobbleBot-Level1A-Fidelity-Windows-x64`, **artifact ID 13672241525**, size 29,375,232 bytes. Actual workflow `.github/workflows/build-level1a-fidelity.yml` `actions/upload-artifact@v4` path verified as `target/x86_64-pc-windows-msvc/release/batman_cobblebot_native.exe`. Run Artifact download from the GitHub run page, unzip, run EXE with no Flash/browser/interpreter.
+- Recorded manual acceptance order: cold launch Enter → original story panels and no periodic black flashes → stopped/held frame179 → keyboard or mouse release-inside SKIP → 41 source fade frames with sound-stop timing → exact Level1A start/music → attacks, pickups, camera, movement, HUD type/numbers, lives, restart/exit, native 3× smoothness. Compare against original Flash screenshots/capture and attach a reproducible original-vs-native difference before changing any code. Current CI p95 scenery scrolling 25.8716ms and normal HQ p95 29.6811ms on GitHub host do **not** guarantee user's hardware frame times.
+- Minimum defect report: exact executable code SHA, actual Windows version, DPI/resolution, keyboard/mouse route, reproduction steps, expected source result, observed native result, short video/screenshot if feasible, severity. Physical user test cannot be replaced by CI. Do not infer original Flash on-platform runtime behavior from action tag data alone.
+
+### Alternatives, decisions, confidence and limitations
+
+**Chosen:** fix existing source of truth, issue #17, while keeping PR #18 draft and `main` untouched; preserve old checklist context but clearly supersede stale portions. **Rejected:** start Level1B (blocked by approval rule), declare fidelity success from 57 green CI steps (unsupported), revert to a previously green but outdated binary, ask user to install Flash to run the native game, or change code solely to match the old incorrect issue text. The last operation would regress the source-backed timing.
+
+**Verification actually performed:** fetched current GitHub issue body and open state, exact successful workflow run artifact metadata, PR head/draft, and the workflow artifact upload path. Updated the issue and received successful GitHub update response; read the unchanged draft PR state. **Not performed:** local Windows EXE execution, real desktop mouse click/sound verification, original-game side-by-side video, Cargofmt/Clippy, Rust code or build-tool changes. No external research claim is needed for this issue-specific acceptance correction; source evidence comes from the cited repository and GitHub reports.
+
+**Confidence:** HIGH the issue text and chosen code artifact now refer to the source-backed tested candidate; HIGH CI succeeded for that SHA; LOW/UNKNOWN about original on-user hardware visual/audio fidelity until the user tests. **Next task:** collect manual physical feedback from the exact candidate and immediately fix the first confirmed discrepancy, with a new post-implementation RE/AUD record if gameplay code changes. No bug is asserted merely from the absence of physical acceptance.
+
+
+---
+
 ## Provenance record for this bootstrap
 
 **Repository sources actually read (2026-11-09):** GitHub native connector at the pinned `c2b872e` tree; `Cargo.toml`, `AGENTS.md`, `src/main.rs`, `src/game.rs`, `src/assets.rs`, `src/render.rs`, `src/audio.rs`, `src/collision.rs`, `src/win32.rs`, `src/headless.rs`, `AI_HANDOFF.md`, `AI_TASKS.md`, `AI_WORKLOG.md`, manifests and CI run/job logs identified above. Earlier measurements that were NOT personally regenerated are identified as historical evidence.

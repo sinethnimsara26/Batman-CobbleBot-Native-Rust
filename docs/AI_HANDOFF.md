@@ -117,9 +117,17 @@
 - **User's additional rule:** [AGENTS.md](../AGENTS.md) now explicitly requires *diagnose/repair/retest a blocker before unrelated batches*; if impossible, preserve exact evidence and keep first unresolved task next. The per-turn one-bounded-task limit and untouched `main` and draft [PR #18](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/18) remain.
 - **NEXT:** `WIN-01 / FIDELITY-GATE-01`. Have user test the exact successful Windows artifact against original Flash: intro former flicker, cut-off, HUD font and positions, mouse release-inside SKIP, start/stop audio, controls, camera, attacks, pickups, exit and frame smoothness. Fix the first reproducible difference before further work.
 
+## 2026-11-09 — WIN-01 acceptance instructions corrected; physical test still open
+
+- **Issue #17 has been updated and remains OPEN:** [Manual Windows fidelity gate](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/issues/17) now pins verified Rust gameplay SHA `acccd0b70327e2ea1911885f97e21f5e5a5398b3` rather than historical `16b341a`. Latest [Windows Run #42613807273](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42613807273) passed **57/57** checks and **11/11 Rust tests**. Download artifact `Batman-CobbleBot-Level1A-Fidelity-Windows-x64` (ID **13672241525**); workflow confirmed it uploads `batman_cobblebot_native.exe`.
+- **Original-source expectation:** the 180-frame story holds at source frame179 until explicit SKIP; Enter/Space/Escape or mouse press-and-release inside source button #129 plays 41-frame fadeout sprite #34 before entering Level1A. Source music stop and game music start should occur once. Older issue instructions expected an automatic jump and claimed intro audio incomplete; these were corrected without modifying the game.
+- **What remains unverified:** actual keyboard/mouse focus, sound, HUD font/spaces, former blinking and cutoff, actual frame smoothness and complete Level1A on user's Windows PC. User should report first specific original-vs-Rust mismatch with exact build SHA, Windows version, DPI, reproduction and screenshot/video, and we should **fix/retest it before unrelated development**. No manual acceptance/approval claimed.
+- **Permanent records:** [RE-20261109-006](REVERSE_ENGINEERING_RESEARCH_LEDGER.md) evidence-based issue/artifact correction, [AUD-20261109-004](RUST_PURITY_AND_ENGINEERING_AUDIT.md) docs-only audit explicitly stating **No implementation changes — Rust code audit not applicable**. [PR #18](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/18) remains draft, `main` untouched. No Level1B.
+- **NEXT:** user performs manual original-vs-native Windows playtest of the exact green artifact and reports first issue. Repair/retest that issue; if none, obtain explicit fidelity approval before any merge/expansion.
+
 ## Exact next ONE bounded batch
 
-**Task ID: WIN-01 / FIDELITY-GATE-01 — user physical Windows original-vs-Rust comparison.** Supply the exact green build artifact and playtest checklist, capture the first reproducible mismatch, fix/retest it before unrelated features. Do not merge draft PR or expand to Level1B until manual issue #17 approved.
+**Task ID: WIN-01 / FIDELITY-GATE-01 — user physical Windows test, not yet performed.** [Issue #17](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/issues/17) now provides correct Run #42613807273 download and 41-frame fade checklist. Collect original-vs-Rust observations and immediately fix/retest first reproducible discrepancy; do not merge or start Level1B before approval.
 
 
 ## Reproduction / first commands and links
@@ -129,8 +137,8 @@ $repo = "sinethnimsara26/Batman-CobbleBot-Native-Rust"
 $branch = "revive/level1a-intro-hud-fidelity-2026-11-09"
 gh pr view 18 -R $repo
 gh run list -R $repo --branch $branch --limit 5
-gh run view 42575731190 -R $repo
-gh run download 42575731190 -R $repo --name "Batman-CobbleBot-Level1A-Fidelity-Windows-x64" --dir "./batman-test"
+gh run view 42613807273 -R $repo
+gh run download 42613807273 -R $repo --name "Batman-CobbleBot-Level1A-Fidelity-Windows-x64" --dir "./batman-test"
 ```
 
 The full workflow is `.github/workflows/build-level1a-fidelity.yml` using `windows-latest`; code runs with generated `assets/` created from the SHA-256-verified original SWF. Local `cargo test` without those assets is not a complete reproduction. The user's local game launcher may use `%LOCALAPPDATA%\BatmanCobbleBot`; verify what is actually installed instead of assuming it was updated.
