@@ -171,6 +171,8 @@ pub struct Game{
     pub screen:AppScreen,
     /// Original root frame 18 intro sequence, 0-based at 25 fps.
     pub intro_tick:u16,
+    /// The 41 original frames of Flash fadeout sprite #34, started by SKIP.
+    pub intro_fadeout_tick:Option<u16>,
     intro_sound_stopped:bool,
     pub player:Player,
     pub camera_x:f32,pub camera_y:f32,
@@ -201,6 +203,7 @@ impl Game{
         Self{
             screen:AppScreen::Title,
             intro_tick:0,
+            intro_fadeout_tick:None,
             intro_sound_stopped:false,
             // Runtime collision uses level-local coordinates. The original
             // player transform is game-local, so subtract the level placement.
@@ -236,25 +239,36 @@ impl Game{
         }
     }
 
+    fn stop_intro_sound_once(&mut self){
+        if !self.intro_sound_stopped {
+            self.intro_sound_stopped=true;
+            self.audio_events.push(AudioEvent::IntroStop);
+        }
+    }
+
+    fn advance_intro_story(&mut self){
+        if self.intro_tick<179 {
+            self.intro_tick+=1;
+            // Source sprite #123 frame179 stops its audio independently.
+            if self.intro_tick==179 { self.stop_intro_sound_once(); }
+        }
+    }
+
     fn begin_level1a(&mut self){
         self.screen=AppScreen::Playing;
         self.intro_tick=0;
-        // Stop source intro sound once, whether skipped early or held after
-        // source sprite 123 reaches its final StopSounds frame.
-        if !self.intro_sound_stopped {
-            self.audio_events.push(AudioEvent::IntroStop);
-            self.intro_sound_stopped=true;
-        }
+        self.intro_fadeout_tick=None;
+        self.stop_intro_sound_once();
         self.audio_events.push(AudioEvent::MusicStart);
         // Original level entry has playerJumping=true and snaps the camera.
         self.update_camera();
     }
 
-    /// Used by the original on-screen SKIP button as well as keyboard skip.
-    /// Returns false outside the intro so clicks cannot double-start music.
+    /// Source button129's release-inside event starts the original fadeout.
+    /// No keyboard or mouse path may bypass its 41-frame transition.
     pub fn skip_intro(&mut self)->bool{
-        if self.screen!=AppScreen::Intro{return false;}
-        self.begin_level1a();
+        if self.screen!=AppScreen::Intro || self.intro_fadeout_tick.is_some(){return false;}
+        self.intro_fadeout_tick=Some(0);
         true
     }
 
@@ -265,6 +279,7 @@ impl Game{
                 else if input.pressed(VK_ENTER)||input.pressed(VK_SPACE){
                     self.screen=AppScreen::Intro;
                     self.intro_tick=0;
+                    self.intro_fadeout_tick=None;
                     self.intro_sound_stopped=false;
                     // StartSound id 130 is on original SWF root frame 18.
                     self.audio_events.push(AudioEvent::IntroStart);
@@ -277,6 +292,7 @@ impl Game{
                 else if input.pressed(VK_ENTER)||input.pressed(VK_SPACE){
                     self.screen=AppScreen::Intro;
                     self.intro_tick=0;
+                    self.intro_fadeout_tick=None;
                     self.intro_sound_stopped=false;
                     // StartSound id 130 is on original SWF root frame 18.
                     self.audio_events.push(AudioEvent::IntroStart);
@@ -285,19 +301,23 @@ impl Game{
                 return
             },
             AppScreen::Intro=>{
-                // Root frame 18 and the final story clip explicitly Stop.
-                // Original button129 release-inside sets gotoNext=level1a
-                // and plays fadeout; no automatic 180-tick route exists.
-                // Native input still shortcuts the separate scripted fade.
-                if input.pressed(VK_ENTER)||input.pressed(VK_SPACE)||
-                   input.pressed(VK_ESCAPE) {
-                    let _=self.skip_intro();
-                }else if self.intro_tick<179 {
-                    self.intro_tick+=1;
-                    if self.intro_tick==179 && !self.intro_sound_stopped {
-                        self.intro_sound_stopped=true;
-                        self.audio_events.push(AudioEvent::IntroStop);
+                // Root frame18 is stopped; button129 release-inside starts
+                // fadeout sprite34. Its frame39 StopSounds precedes the
+                // frame40 dispatcher jump to level1a.
+                if let Some(frame)=self.intro_fadeout_tick{
+                    self.advance_intro_story();
+                    if frame>=40 {
+                        self.begin_level1a();
+                    }else{
+                        let next=frame+1;
+                        self.intro_fadeout_tick=Some(next);
+                        if next==39 { self.stop_intro_sound_once(); }
                     }
+                }else if input.pressed(VK_ENTER)||input.pressed(VK_SPACE)||
+                         input.pressed(VK_ESCAPE) {
+                    let _=self.skip_intro();
+                }else{
+                    self.advance_intro_story();
                 }
                 input.clear_pressed();
                 return

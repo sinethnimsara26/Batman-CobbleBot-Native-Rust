@@ -51,8 +51,18 @@ pub fn render_with_config(
 
             if game.screen!=AppScreen::Playing{
                 // Title/instructions still use the exact Round-3 path.
-                render_legacy(base,game,assets);
-                upscale_opaque_base(base,target);
+                if game.screen==AppScreen::Intro && game.intro_fadeout_tick.is_some(){
+                    // Do not double-composite a low-res fade. Rust draws the
+                    // existing original sprite34 asset at genuine 3x.
+                    render_legacy_intro_overlay(base,game,assets,false);
+                    upscale_opaque_base(base,target);
+                    if let Some(t)=game.intro_fadeout_tick {
+                        draw_root_timeline_hq_lazy(target,&assets.fadeout_frames_hq,t as u64,301.0,205.0);
+                    }
+                }else{
+                    render_legacy(base,game,assets);
+                    upscale_opaque_base(base,target);
+                }
             }else{
                 // Round 8 preserves the original depth split while removing
                 // the last small moving objects from the blurry 1x world:
@@ -177,6 +187,10 @@ fn upscale_alpha_layer(src:&RenderSurface,dst:&mut RenderSurface){
 }
 
 fn render_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
+    render_legacy_intro_overlay(fb,game,assets,true);
+}
+
+fn render_legacy_intro_overlay(fb:&mut RenderSurface,game:&Game,assets:&Assets,show_fade:bool){
     fb.fill(0xff000000);
     match game.screen{
         AppScreen::Title=>{blit(fb,&assets.title_screen,0,0,600,400,false);return},
@@ -189,6 +203,11 @@ fn render_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
                 -story.anchor_x.round() as i32,-story.anchor_y.round() as i32,
                 story.image.w as i32,story.image.h as i32,false
             );
+            if show_fade {
+                if let Some(t)=game.intro_fadeout_tick{
+                    draw_root_timeline_lazy_legacy(fb,&assets.fadeout_frames,t as u64,301.0,205.0);
+                }
+            }
             return
         },
         AppScreen::Playing=>{}

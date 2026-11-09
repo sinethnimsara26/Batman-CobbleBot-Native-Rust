@@ -42,16 +42,27 @@ fn render_smoke_mode(out:&str,hq:bool){
     assert_eq!(game.screen,AppScreen::Intro);
     assert_eq!(game.intro_tick,179);
     assert!(game.take_audio_events().is_empty());
-    // Explicit user SKIP routes into gameplay, with no second sound stop.
+    // Explicit SKIP starts original sprite34's 41-frame fade.
     input.set(VK_ENTER,true);
     game.tick(&mut input,&ground);
     input.set(VK_ENTER,false);
+    assert_eq!(game.screen,AppScreen::Intro);
+    assert_eq!(game.intro_fadeout_tick,Some(0));
+    assert!(!game.skip_intro(), "SKIP must not restart the fade");
+    for _ in 0..39 { game.tick(&mut input,&ground); }
+    assert_eq!(game.intro_fadeout_tick,Some(39));
+    assert!(game.take_audio_events().is_empty(), "intro sound already stopped");
+    game.tick(&mut input,&ground);
+    assert_eq!(game.intro_fadeout_tick,Some(40));
+    assert_eq!(game.screen,AppScreen::Intro);
+    game.tick(&mut input,&ground);
     assert_eq!(game.screen,AppScreen::Playing);
+    assert_eq!(game.intro_fadeout_tick,None);
     assert_eq!(game.ticks,0);
     assert_eq!(game.take_audio_events(),vec![AudioEvent::MusicStart]);
 
-    // Verify the manual skip path independently: Enter from intro advances
-    // the story exactly once and starts the Level 1A soundtrack once.
+    // Verify early keyboard skip: source fade frame39 StopSounds precedes
+    // frame40's level1a dispatcher transition and background music.
     let mut skipped=Game::new();
     let mut skip_keys=InputState::default();
     skip_keys.set(VK_ENTER,true);
@@ -60,15 +71,31 @@ fn render_smoke_mode(out:&str,hq:bool){
     skipped.tick(&mut skip_keys,&ground);
     skip_keys.set(VK_ENTER,true);
     skipped.tick(&mut skip_keys,&ground);
+    skip_keys.set(VK_ENTER,false);
+    assert_eq!(skipped.screen,AppScreen::Intro);
+    assert_eq!(skipped.intro_fadeout_tick,Some(0));
+    for _ in 0..38 { skipped.tick(&mut skip_keys,&ground); }
+    assert_eq!(skipped.intro_fadeout_tick,Some(38));
+    assert_eq!(skipped.take_audio_events(),vec![AudioEvent::IntroStart]);
+    skipped.tick(&mut skip_keys,&ground); // fade #34 frame39 StopSounds
+    assert_eq!(skipped.take_audio_events(),vec![AudioEvent::IntroStop]);
+    skipped.tick(&mut skip_keys,&ground); // fade frame40 still displayed
+    assert_eq!(skipped.screen,AppScreen::Intro);
+    skipped.tick(&mut skip_keys,&ground); // original gotoNext=level1a
     assert_eq!(skipped.screen,AppScreen::Playing);
-    assert_eq!(skipped.take_audio_events(),vec![AudioEvent::IntroStart,AudioEvent::IntroStop,AudioEvent::MusicStart]);
+    assert_eq!(skipped.take_audio_events(),vec![AudioEvent::MusicStart]);
 
-    // Window button clicks call the same idempotent intro transition.
+    // Win32 release-inside dispatches the same idempotent native Rust fade.
     let mut clicked=Game::new();
+    let mut mouse_input=InputState::default();
     assert!(!clicked.skip_intro());
     clicked.screen=AppScreen::Intro;
     assert!(clicked.skip_intro());
     assert!(!clicked.skip_intro());
+    assert_eq!(clicked.screen,AppScreen::Intro);
+    for _ in 0..40 { clicked.tick(&mut mouse_input,&ground); }
+    assert_eq!(clicked.intro_fadeout_tick,Some(40));
+    clicked.tick(&mut mouse_input,&ground);
     assert_eq!(clicked.screen,AppScreen::Playing);
     assert_eq!(clicked.take_audio_events(),vec![AudioEvent::IntroStop,AudioEvent::MusicStart]);
 

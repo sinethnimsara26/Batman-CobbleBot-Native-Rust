@@ -78,3 +78,12 @@ This is the **short index of meaningful, verified progress and mistakes**. Detai
 - Source root frame18 stops and sprite123 frame179 executes Stop/StopSounds. Native runtime now holds intro frame179 until explicit skip, stops intro audio once at frame179, and does not duplicate Stop on a later skip. Early skip still stops audio/starts music exactly once.
 - Headless smoke now tests remaining in intro beyond 180 samples, event ordering, and explicit skip. Game renderer, HUD, physics, Level1A routing and other assets unchanged.
 - **New CI pending**; native button skip currently jumps without the source's ~41-frame scripted fadeout. Next single batch after CI: source clip34 fade + original dispatch. Human Windows acceptance still outstanding.
+
+## 2026-11-09 — INTRO-06 native Rust 41-frame SKIP fadeout
+
+- User reiterated native Rust only. Recovered source fadeout sprite34 (41 frames) and existing asset packs already embedded in Rust. The game executable has no Python, Flash, JavaScript or web runtime; existing Python reverse-engineering tooling is offline/CI-only. Contract added to `AGENTS.md`.
+- Predecessor **Run #42589238951 failed** although Rust compiled, 9 unit tests passed, and visual smoke executable calls succeeded. CI's render benchmark child process exited -1073740791 (`0xC0000409`), causing failed workflow step22. No successful build claimed for INTRO-05; last full-green run remains #42587338561.
+- Changed Rust `Game::skip_intro()` to arm fadeout only once; `AppScreen::Intro` now plays source fade frames0..40 at 25Hz, stops intro sound once at fade frame39 (or source story frame179 if earlier), and enters Level1A only after rendering frame40. Repeated keyboard/mouse skip cannot restart the sequence.
+- Original SKIP button event is release-inside. Win32 now records mouse-down inside the source-derived hitbox, triggers Rust transition on release inside, cancels if outside or focus lost. No scripting runtime.
+- Rust legacy renderer overlays source sprite34 at (301,205); HQ overlays existing true3x sprite34 once, avoiding duplicate alpha. Unrelated gameplay renderer, level fades, physics and HUD unchanged.
+- Updated headless smoke contract for early/late skip, 41-frame timeline, one-shot StopSounds and MusicStart after final frame. Workflow asserts 41 baked sprite frames and source fade StopSounds. **New CI pending**. Any repeat of previous benchmark crash must be investigated before user acceptance or merge.
