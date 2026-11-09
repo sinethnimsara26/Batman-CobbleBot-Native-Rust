@@ -2,6 +2,17 @@
 
 This file is the provider-neutral entry point for **ChatGPT, Codex, Claude, Gemini, or any other contributor**. Do not depend on any previous chat, account memory, scratchpad, or ephemeral local file.
 
+## PERMANENT MANDATORY PROTOCOLS — READ BEFORE EVERY BATCH (2026-11-09)
+
+**USER-DIRECTED, BINDING PROJECT RULES.** This repository's six-document workflow and free Windows executable testing policy must not depend on any ChatGPT conversation. ALL current and future coding agents must read these two self-contained documents, then follow them on EVERY bounded development batch:
+
+1. **[docs/DEVELOPMENT_WORKFLOW_PROTOCOL.md](docs/DEVELOPMENT_WORKFLOW_PROTOCOL.md)** — complete **mandatory SIX-document lifecycle**, including AGENTS.md, AI_TASKS.md, AI_HANDOFF.md, AI_WORKLOG.md, REVERSE_ENGINEERING_RESEARCH_LEDGER.md, and RUST_PURITY_AND_ENGINEERING_AUDIT.md. Every batch: recover actual Git state → select ONE small task → investigate → implement → verify → document research → independently audit changed Rust → synchronize six files → commit/verify → report → STOP. Every file must be reviewed; update when applicable; never silently omit the older four because the two newer files are more recent.
+2. **[docs/AUTOMATED_WINDOWS_TESTING_PROTOCOL.md](docs/AUTOMATED_WINDOWS_TESTING_PROTOCOL.md)** — mandatory staged, free executable QA objective: build/run actual Windows Rust EXE in GitHub Actions, exercise deterministic gameplay, capture screenshots and short frame sequences, compare against verified original evidence, archive failure artifacts, let an agent actually inspect the images where tools permit, and pilot real Win32 window/input testing separately. Existing headless/CI infrastructure is not a substitute for a real GUI test and does not prove original fidelity. Implementation is a separate small-batch roadmap item, not a claim of completed automation.
+
+**Priority and continuity:** These protocols EXTEND all earlier project constraints, do not remove the existing Windows delivery contract, and do not authorize a risky mid-task rewrite. Preserve pure-Rust game runtime, draft PR #18, current gameplay branch and source-original acceptance issue #17. Agents continuing work already in progress should finish the current safe checkpoint, then READ BOTH PROTOCOLS and synchronize required records before their next batch. A GitHub push does NOT automatically inject instructions into an active ChatGPT chat; reread on the next turn. Do not overwrite another agent's in-flight work.
+
+**Every final batch report must include the six-file compliance table and a truthful test/CI/artifact summary.** Distinguish actual tests from plans, original-Flash proof from Rust-on-Rust regression, and docs-only status from implementation verification.
+
 ## Mandatory recovery order
 
 1. Read **[docs/AI_HANDOFF.md](docs/AI_HANDOFF.md)** for the most recent evidence-based checkpoint.
