@@ -21,12 +21,35 @@ fn render_smoke_mode(out:&str,hq:bool){
     let mut game=Game::new();
     let mut input=InputState::default();
 
-    // Enter Level 1A without requiring a mouse click.
+    // Start the recovered Flash intro with keyboard input, no mouse.
     input.set(VK_ENTER,true);
     game.tick(&mut input,&ground);
     input.set(VK_ENTER,false);
+    assert_eq!(game.screen,AppScreen::Intro);
+    assert_eq!(game.intro_tick,0);
+    assert!(game.take_audio_events().is_empty());
+    assert_eq!(assets.intro_frames.len(),180);
+    snapshot(hq,&out,"00_intro_start.png",&mut game,&assets);
+    for _ in 0..80 {game.tick(&mut input,&ground);}
+    assert_eq!(game.screen,AppScreen::Intro);
+    snapshot(hq,&out,"00_intro_call.png",&mut game,&assets);
+    for _ in 0..100 {game.tick(&mut input,&ground);}
     assert_eq!(game.screen,AppScreen::Playing);
+    assert_eq!(game.ticks,0);
     assert_eq!(game.take_audio_events(),vec![AudioEvent::MusicStart]);
+
+    // Verify the manual skip path independently: Enter from intro advances
+    // the story exactly once and starts the Level 1A soundtrack once.
+    let mut skipped=Game::new();
+    let mut skip_keys=InputState::default();
+    skip_keys.set(VK_ENTER,true);
+    skipped.tick(&mut skip_keys,&ground);
+    skip_keys.set(VK_ENTER,false);
+    skipped.tick(&mut skip_keys,&ground);
+    skip_keys.set(VK_ENTER,true);
+    skipped.tick(&mut skip_keys,&ground);
+    assert_eq!(skipped.screen,AppScreen::Playing);
+    assert_eq!(skipped.take_audio_events(),vec![AudioEvent::MusicStart]);
 
     // Preserve the real root presentation instead of skipping straight into
     // gameplay: fade-in starts immediately, level-title continues longer.
@@ -199,6 +222,9 @@ pub fn benchmark_render(iterations:usize,out:&str){
     input.set(VK_ENTER,true);
     game.tick(&mut input,&ground);
     input.set(VK_ENTER,false);
+    // Benchmark only real gameplay, not the new pre-level story timeline.
+    for _ in 0..180{game.tick(&mut input,&ground);}
+    assert_eq!(game.screen,AppScreen::Playing);
     while game.ticks<105{game.tick(&mut input,&ground);}
 
     let mut base=RenderSurface::new(LOGICAL_W,LOGICAL_H);
