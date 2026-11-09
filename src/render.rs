@@ -469,7 +469,10 @@ fn draw_hud_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
         fb,&assets.hud_digits_small_hq,
         // Keep the digit adjacent to 'LIVES X' in the center health column;
         // the previous +180 anchor left an ~100px visual gap at 3x.
-        (legacy_x+145)*s,(legacy_y+HUD_COUNTER_ROW_Y)*s,game.lives.max(0)
+        // The lower-row batarang baseline is not the source 'LIVES X'
+        // caption baseline. Raise only this digit by 5 logical pixels
+        // (15 at 3x) so the label and the value read as 'LIVES X5'.
+        (legacy_x+145)*s,(legacy_y+HUD_COUNTER_ROW_Y-5)*s,game.lives.max(0)
     );
 }
 
