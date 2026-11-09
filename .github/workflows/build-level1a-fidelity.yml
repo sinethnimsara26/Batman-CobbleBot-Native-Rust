@@ -112,6 +112,7 @@ jobs:
           }
 
           python "$tools/extract_sounds.py" "$swf" "$work/sounds"
+          python "$tools/inspect_intro_behavior.py" "$swf" "$work/sounds/manifest.json" "$work/intro-behavior-report.json"
           Copy-Item "$work/sounds/0751_sound_0751.mp3" "assets/level1a_music.mp3"
           Copy-Item "$work/sounds/0248_sound_0248.mp3" "assets/jump.mp3"
           Copy-Item "$work/sounds/0004_item.mp3" "assets/item.mp3"
@@ -1782,6 +1783,12 @@ jobs:
 
           assert len(list(out.glob("*.png"))) == 1
           print("Built Round-11 moon A/B sheet; sky 131 is an exact flat fill and needs no raster comparison.")
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Batman-CobbleBot-Level1A-Intro-Behavior-Report
+          path: .generated/intro-behavior-report.json
+          if-no-files-found: error
 
       - uses: actions/upload-artifact@v4
         with:
