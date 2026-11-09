@@ -311,6 +311,17 @@ Actual [Run #42613807273](https://github.com/sinethnimsara26/Batman-CobbleBot-Na
 
 **Verdicts:** PURE-RUST COMPLIANCE — UNCHANGED / PASS WITH PREEXISTING PLATFORM QUALIFICATIONS for native game. ENGINEERING — TEST IMPLEMENTED, EXPERIMENT UNVERIFIED pending CI. ORIGINAL-GAME FIDELITY — NOT TESTED by this pilot; manual physical Win32/audio and original Flash comparisons remain open under issue #17. Next step inspect actual first JSON and screenshots, fix one demonstrated pilot error, and keep draft PR #18 unmerged.
 
+
+## AUD-20261109-011 — WIN-GUI-PILOT-01-VERIFY: actual CI and screenshots, no Rust implementation changes
+
+**Date:** 2026-11-09; tested source `a9ec8d4f2da2b30c8b3998dbdf64fc0cc6616f09`, PR #18 draft. **No implementation changes — Rust code audit not applicable to this verification-only batch.** The earlier test-tool implementation and its CI-only Python/Pillow boundaries were assessed in [AUD-20261109-010](RUST_PURITY_AND_ENGINEERING_AUDIT.md#aud-20261109-010--win-gui-pilot-01-ci-only-tooling-audit); current evidence analysis in [RE-20261109-013](REVERSE_ENGINEERING_RESEARCH_LEDGER.md#re-20261109-013--win-gui-pilot-01-verify-verified-real-windows-titleintro-via-os-keyboard).
+
+**Actual executed validations:** [Windows Actions #42666398737](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42666398737) succeeded (60 steps, zero failed), 11 passing Rust tests, 15/15 legacy pixel oracle; generated Windows EXE ran in actual normal Win32 window on Windows Server 2025 runner. Downloaded `Batman-CobbleBot-Level1A-Windows-GUI-Pilot` artifact 13695879947, validated SHA-256/ZIP/JSON, visually inspected normal-window title and intro screenshots. Real OS `SendInput` Enter down/up each inserted 1 with error 0, actual window foreground true, clear title→intro image change and matching in-repository input state transition. No Windows user-controlled physical desktop was needed for this CI test. No new dependencies or run-time C/JS/Flash code.
+
+**Verdicts:** PURE-RUST COMPLIANCE — **unchanged / pass with pre-existing Windows platform/API qualifications**; experimental CI-only Python remains outside playable EXE and does not count as gameplay logic. ENGINEERING QUALITY — **PASS FOR TESTED GUI PILOT** (HIGH confidence in actual title→intro normal Win32 window capture/input; narrower than full gameplay automated suite). ORIGINAL-GAME FIDELITY — **NOT VERIFIED BY THIS PILOT** (only native Rust state transition observed; source Flash exact timeline, mouse hitbox, audio and human review remain unknown). Tests did not verify full intro or post-skip transition. The two desktop screenshots contain ordinary OS window chrome, not just Rust framebuffer, and constitute actual GUI evidence.
+
+**Nonblocking concerns:** test-only PIL getdata future deprecation, fragility across other runner desktop sessions, no automated semantic OCR/game-state introspection; report none of these as a present Rust game failure. Next small batch WIN-GUI-PILOT-02 actual mouse SKIP and later scene captures, preserve draft PR #18 and issue #17 manual source-fidelity gate.
+
 ## Mandatory audit entry template — copy and complete AFTER implementation
 
 `## AUD-YYYYMMDD-NNN — [task and referenced RE entry]`

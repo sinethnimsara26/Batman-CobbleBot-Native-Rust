@@ -193,9 +193,26 @@
 
 **Next exact bounded batch:** get newest Windows Actions run and artifact `Batman-CobbleBot-Level1A-Windows-GUI-Pilot`; examine JSON, screenshot evidence, actual window input outcomes, and first genuine failure. If hosted runner cannot interact, record infrastructure limitation and consider a separate free alternative later. Do not merge PR or start Level1B.
 
+## 2026-11-09 — WIN-GUI-PILOT-01-VERIFY: real desktop/input and screenshot proof
+
+**Latest verified gameplay/test SHA:** `a9ec8d4f2da2b30c8b3998dbdf64fc0cc6616f09` on development branch `revive/level1a-intro-hud-fidelity-2026-11-09`. Draft PR #18. **Completed real Windows workflow:** [#42666398737](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42666398737) finished SUCCESS, 60 steps / 0 failures, 11 Rust tests passed, 15/15 historical legacy screenshot hashes unchanged, previous 20 standard and 20 HQ screenshot gates preserved.
+
+**Actual GUI evidence downloaded and reviewed:** [`Batman-CobbleBot-Level1A-Windows-GUI-Pilot` artifact ID 13695879947](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42666398737/artifacts/13695879947). ZIP SHA-256 `32c74f89f93ad1afe41762efc8b75175f75db5896ecadc09c1dc7380756b8d3d`. Three members inspected:
+- `pilot-report.json` 1,843 B, SHA-256 `6aafd69edb4c756816de8d527b5e79d1a65ce64a1a326a3b8762ccf99209c8f8`.
+- `before_enter.png` 607,996 B, SHA-256 `58ce41f5e5768cf2668c848b2762e8af1ab0222a4abf44a6be1b5b178a635489`.
+- `after_enter.png` 87,927 B, SHA-256 `cf0d824b8192e1448772f59c32440946bf0217cfef7777a883f1972b6e150166`.
+
+**Exact observed runner/environment:** Windows-2025Server-10.0.26100-SP0, session id **2**, desktop **1024×768**, actual window title `The Batman - CobbleBot Caper - Level 1A Fidelity Slice`, running PID 3976 in this ephemeral CI session, window geometry `[26,26,956,686]`, captured image dimensions **930×660**. Game-window foreground confirmed. `SendInput` Enter down and up both returned **1** with `last_error:0`. Desktop screenshot window-pixel change flagged true; image hashes above. The human-visible captured BEFORE frame shows the Batman/CobbleBot title art; AFTER shows phone + text describing Gotham Bank break-in and native SKIP button. This is **strong real Win32 OS keyboard→Title/Intro transition evidence**, not merely a headless simulation.
+
+**Boundaries:** Probe classification from JSON was `WINDOW_CAPTURED_INPUT_API_ACCEPTED_VISUAL_CHANGE_NEEDS_REVIEW`. Visual review now supports **GUI_AUTOMATION_VERIFIED for Enter Title→Intro only**. It does NOT verify later mouse interactions, natural full intro transition/black-screen absence in real window, audio, original Flash exact timing/font, or physical user acceptance. Minor PIL `Image.Image.getdata` deprecation warning present in CI logs, no functional error. Full source/inspection in RE-20261109-013; code-change status AUD-20261109-011.
+
+**Six-file policy:** AGENTS.md and linked permanent protocols read, no revisions needed. Roadmap, worklog and handoff updated. RE ledger and Rust audit appended as appropriate. No `src/`, Cargo.toml, CI or testing Python code changed in this verification-only batch. The docs-only commit containing this entry is independently identified by GitHub history; its own SHA cannot appear in its own contents. A docs-only CI rerun does not invalidate prior gameplay evidence.
+
+**Next exact ONE batch:** WIN-GUI-PILOT-02 — implement one true OS mouse click of intro SKIP and bounded real-window capture of subsequent progression on free GitHub Windows runner; keep PR #18 draft and manual fidelity issue #17 open, `main` untouched, Level1B blocked.
+
 ## Exact next ONE bounded batch
 
-**Task ID: WIN-GUI-PILOT-01-VERIFY — inspect the actual Windows Actions GUI pilot artifact, report and any desktop screenshots, determine real OS window/input feasibility or infrastructure limitation, and record reproducible next action.** The new test-only probe is committed, CI result pending. Preserve issue #17 manual original-Flash acceptance, PR #18 draft, main and Level1B untouched.
+**Task ID: WIN-GUI-PILOT-02 — extend the successfully demonstrated real Win32 desktop automation by one bounded OS mouse-SKIP interaction and subsequent captured transition.** Verify press and release inside source hitbox, actual screen output after fade, evidence and complete six-file checkpoint. Do not repeat already-proven Enter/title test, merge PR #18 or start Level1B. Issue #17 source-original manual acceptance stays open.
 
 
 ## Reproduction / first commands and links

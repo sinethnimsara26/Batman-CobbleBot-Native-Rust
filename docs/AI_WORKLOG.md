@@ -171,3 +171,12 @@ This is the **short index of meaningful, verified progress and mistakes**. Detai
 - **Verification:** focused static repository/source/CI inspection, NOT Windows execution. No gameplay Rust code changes; post-change audit AUD-20261109-010 (code audit not applicable); research RE-20261109-012. Updated six-file handoff/task/worklog/research/audit; AGENTS.md read, unchanged.
 - **Next ONE task:** inspect first new Windows run and its GUI-pilot report/screenshots; distinguish scripts/infrastructure/game behavior. Keep PR #18 draft and issue #17 source-original acceptance open.
 
+
+## 2026-11-09 — WIN-GUI-PILOT-01-VERIFY: real OS GUI input and screenshot proof, full CI green
+
+- **Code SHA / CI:** `a9ec8d4f2da2b30c8b3998dbdf64fc0cc6616f09`, [GitHub Windows run #42666398737](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42666398737), completed SUCCESS, 60 steps no failures, 11 Rust unit tests pass, 15/15 historical legacy hashes pass, 20 PNGs each standard/HQ smoke preserved.
+- **Downloaded actual artifact:** [GUI artifact ID 13695879947](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42666398737/artifacts/13695879947). ZIP checksum `32c74f89f93ad1afe41762efc8b75175f75db5896ecadc09c1dc7380756b8d3d`, valid ZIP with report and 2 PNGs. JSON parsed and both **actual Windows desktop** screenshots visually opened, not merely counted.
+- **Results:** Windows-2025Server 10.0.26100, session 2, 1024×768 desktop, game HWND/title found, foreground granted, 930×660 screenshot area, OS SendInput Enter down/up each returned 1 with no API error. BEFORE shows Batman title art; AFTER shows phone/story text and SKIP. This supports genuine Win32 Title→Intro via input on the free GitHub runner, NOT exact Flash fidelity or physical game approval. No runner infrastructure issue.
+- **Logged caveats:** PIL `getdata` deprecation warning (future maintenance), no gameplay mouse/cutscene-ending/audio/DPI testing yet. Microsoft SendInput docs used as precise authority; see RE-20261109-013 and AUD-20261109-011.
+- **Scope:** documentation/evidence review only. Existing Python probe, Rust game, Cargo and CI not changed. AGENTS and both protocols reviewed unchanged; AI_TASKS and AI_HANDOFF updated; worklog/research/audit appended.
+- **Next single bounded task:** WIN-GUI-PILOT-02, OS mouse press/release inside SKIP hitbox and captured transition, not another broad feature batch. PR #18 remains draft; issue #17/manual original parity still open.
