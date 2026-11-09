@@ -790,7 +790,7 @@ jobs:
           for needle in (
               "draw_number_centered_hq_1to1",
               "blit_region_1to1",
-              "Round 6 HUD assets already live at final presentation resolution",
+              "Original sprite 716: icon art and rounded translucent backing remain.",
           ):
               assert needle in render, needle
 

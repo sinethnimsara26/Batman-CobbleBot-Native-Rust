@@ -1,5 +1,11 @@
 # Persistent development tasks — Batman Rust port
 
+## 2026-11-10 HUD-REAL-04 — same-batch Round-6 test-contract repair
+
+- First changed-code Windows run [#42696631241](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42696631241) reached Round-6 HUD validation after successful source asset/HQ manifest generation, then FAILED on obsolete exact source-comment assertion. Cargo build/tests and real GUI were not reached, so this is NOT evidence of a Rust compile error or verified new build.
+- Fixed only the obsolete test source string, changing the requirement to the current Rust source-shell preservation comment. Kept the actual 1:1 shell blit check, generated Rust constants/manifest checks, absent black band, 15/15 original pixel hashes and 40ms performance/GUI gates. No Rust/asset gameplay change. RE-20261110-009, AUD-20261110-009.
+- **NEXT IN SAME BATCH:** rerun Windows and inspect compiler, 14 Rust tests, legacy images, p95, separate F7/mouse-SKIP capture; repair any remaining real HUD-REAL-04 blocker. Draft PR #18, main/Level1B untouched.
+
 ## 2026-11-10 HUD-REAL-04 — share HQ text/counter layout (BATCH 3 / 6)
 
 - **Status: IMPLEMENTED — FRESH WINDOWS CI / GUI INSPECTION PENDING.** Starting at `cee4a3643803f712e0db1d51393b1e4a7150f1b3`, draft PR #18. New `reverse-engineering/manifests/hud-hq-layout.json` owns all 600×400 themed-HQ logical positions (not source-original Flash authored placements). Offline `bake_hud_assets.py` uses its four label offsets and generates `assets/hud_hq_layout.rs`; native `src/render.rs` compiles the same constants (no runtime JSON parser or new dependency). Original 1× Arial HUD, source sprite716 icon artwork, rounded panel and absence of the rejected full-width dark strip remain preserved.

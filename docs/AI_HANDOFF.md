@@ -3,6 +3,12 @@
 **READ THIS FIRST.** This is a provider-neutral, evidence-based snapshot for an agent that has never seen the original chat. Follow `AGENTS.md`; consult `docs/AI_TASKS.md` and `docs/AI_WORKLOG.md`. **Always verify current remote GitHub state before trusting this snapshot.**
 
 
+## 2026-11-10 — HUD-REAL-04 first CI failure and same-batch repair
+
+**Current code source is NOT Windows-verified:** Run [#42696631241](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42696631241) at 1b2042d5eec1782c984d19e5f10c9830cfb1c765 completed FAILURE at Round-6 because a Python check demanded an obsolete exact Rust comment. The 1x+HQ sprite rebuild and new shared manifest baker executed successfully; native Cargo compilation/tests and GUI captures did NOT execute. The correction changes only the workflow comment-contract to require the existing source-shell preservation marker instead. All functional shell, field, generated-layout, no-black-band, pixel-hash, p95 and GUI gates remain active. No code/asset/Rust changes. RE-20261110-009, AUD-20261110-009.
+
+**NEXT SAME BATCH:** Check new run for compilation/14 tests/15 hashes/performance, obtain actual F7 and independent mouse-SKIP GUI images, and fix any blocker before marking HUD-REAL-04 verified. Previous green #42689334769 is old code only; draft PR #18/main/Level1B protected.
+
 ## 2026-11-10 — HUD-REAL-04 / batch 3 source checkpoint (Windows verification pending)
 
 **Actual baseline recovered:** `cee4a3643803f712e0db1d51393b1e4a7150f1b3` branch `revive/level1a-intro-hud-fidelity-2026-11-09`, PR #18 OPEN/DRAFT, main and Level1B unchanged, issue #17 remains user-fidelity gate. Prior **code** `5318067` passed [Windows #42689334769](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42689334769), 60/60 steps, 12 Rust tests, 15/15 original hashes, real Win32 mouse-SKIP & F7 images, but the user-identified Batarang 0 remained below shell and LIVES X5 crowding persisted. Docs-only head `cee4a3643803f712e0db1d51393b1e4a7150f1b3` has no different executable.
