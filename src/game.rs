@@ -71,7 +71,7 @@ const OVERLAY_WALK:usize=58;
 const OVERLAY_TO_STREET:usize=140;
 
 #[derive(Copy,Clone,Debug,PartialEq,Eq)]
-pub enum AppScreen{Title,Instructions,Playing}
+pub enum AppScreen{Title,Instructions,Intro,Playing}
 
 #[derive(Copy,Clone,Debug,PartialEq,Eq)]
 pub enum AudioEvent{MusicStart,MusicStop,Jump,Item}
@@ -169,6 +169,8 @@ pub struct Shot{pub x:f32,pub y:f32,pub dir:i32}
 
 pub struct Game{
     pub screen:AppScreen,
+    /// Original root frame 18 intro sequence, 0-based at 25 fps.
+    pub intro_tick:u16,
     pub player:Player,
     pub camera_x:f32,pub camera_y:f32,
     pub background_x:f32,pub background_y:f32,
@@ -197,6 +199,7 @@ impl Game{
     pub fn new()->Self{
         Self{
             screen:AppScreen::Title,
+            intro_tick:0,
             // Runtime collision uses level-local coordinates. The original
             // player transform is game-local, so subtract the level placement.
             player:Player{
@@ -231,16 +234,21 @@ impl Game{
         }
     }
 
+    fn begin_level1a(&mut self){
+        self.screen=AppScreen::Playing;
+        self.intro_tick=0;
+        self.audio_events.push(AudioEvent::MusicStart);
+        // Original level entry has playerJumping=true and snaps the camera.
+        self.update_camera();
+    }
+
     pub fn tick(&mut self,input:&mut InputState,ground:&CollisionMask){
         match self.screen{
             AppScreen::Title=>{
                 if input.pressed(VK_I){self.screen=AppScreen::Instructions}
                 else if input.pressed(VK_ENTER)||input.pressed(VK_SPACE){
-                    self.screen=AppScreen::Playing;
-                    self.audio_events.push(AudioEvent::MusicStart);
-                    // The original level begins with playerJumping=true, so
-                    // cameraLogic snaps vertically on its first enterFrame.
-                    self.update_camera();
+                    self.screen=AppScreen::Intro;
+                    self.intro_tick=0;
                 }
                 input.clear_pressed();
                 return
@@ -248,9 +256,21 @@ impl Game{
             AppScreen::Instructions=>{
                 if input.pressed(VK_ESCAPE){self.screen=AppScreen::Title}
                 else if input.pressed(VK_ENTER)||input.pressed(VK_SPACE){
-                    self.screen=AppScreen::Playing;
-                    self.audio_events.push(AudioEvent::MusicStart);
-                    self.update_camera();
+                    self.screen=AppScreen::Intro;
+                    self.intro_tick=0;
+                }
+                input.clear_pressed();
+                return
+            },
+            AppScreen::Intro=>{
+                // Visual frame samples are recovered from root frame 18.
+                // Original ActionScript-directed holds and scene audio need a
+                // separate fidelity pass. Enter/Space/Escape skip for testing.
+                if input.pressed(VK_ENTER)||input.pressed(VK_SPACE)||
+                   input.pressed(VK_ESCAPE)||self.intro_tick>=179 {
+                    self.begin_level1a();
+                }else{
+                    self.intro_tick+=1;
                 }
                 input.clear_pressed();
                 return
