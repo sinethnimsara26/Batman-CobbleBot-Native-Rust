@@ -12,14 +12,65 @@ import argparse
 import json
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageDraw
+import struct
 
 from bake_sprite_frames import load_shapes, load_text_defs, render_symbol
+from swf_re import read_rect, read_matrix, read_cxform_with_alpha, tags
 
 
 ROOT_INTRO_FRAME = 18
 INTRO_FRAMES = 180
 STAGE_SIZE = (600, 400)
+GALLERY_TICKS = (0, 20, 40, 60, 80, 100, 120, 140, 160, 179)
+
+
+def recover_button_up_state(swf: Path, button_id: int):
+    """Read original DefineButton2 UP-state records into a synthetic sprite.
+
+    The source sprite renderer supports shape/text placement but cannot read
+    ButtonRecord arrays directly. Preserve child matrix/depth/CXFORM and
+    exclude nonvisual hit-test-only/down/hover records.
+    """
+    data = swf.read_bytes()
+    _, pos = read_rect(data, 8)
+    pos += 4
+    for code, payload, _, _ in tags(data, pos, len(data)):
+        if code != 34 or len(payload) < 6:
+            continue
+        sid = struct.unpack_from("<H", payload, 0)[0]
+        if sid != button_id:
+            continue
+        action_offset = struct.unpack_from("<H", payload, 3)[0]
+        records = []
+        up = []
+        position = 5
+        while position < len(payload):
+            flags = payload[position]
+            position += 1
+            if flags == 0:
+                break
+            if flags & 0xF0:
+                raise ValueError(f"DefineButton2 {sid} uses unsupported button flags 0x{flags:02x}")
+            if position+4 > len(payload):
+                raise ValueError("Truncated DefineButton2 ButtonRecord")
+            character_id,depth = struct.unpack_from("<HH", payload, position)
+            position += 4
+            matrix,position = read_matrix(payload,position)
+            cxform,position = read_cxform_with_alpha(payload,position)
+            record = {"states":flags & 0x0F, "character_id":character_id,
+                      "depth":depth, "matrix":matrix, "cxform":cxform}
+            records.append(record)
+            if flags & 0x01:
+                up.append({"frame":0,"tag_offset":len(up),"depth":depth,
+                           "character_id":character_id,"matrix":matrix,"cxform":cxform})
+        if not up:
+            raise ValueError(f"DefineButton2 {sid} has no visible UP-state records")
+        return up, {"symbol":sid,"up_state_record_count":len(up),
+                    "all_state_record_count":len(records),
+                    "up_state_character_ids":[r["character_id"] for r in up],
+                    "action_offset":action_offset}
+    raise ValueError(f"Expected DefineButton2 source symbol {button_id} was not found")
 
 
 def main():
@@ -34,17 +85,17 @@ def main():
     symbols = json.loads(ns.symbols_json.read_text(encoding="utf-8"))
     placements = json.loads(ns.root_placements.read_text(encoding="utf-8"))
     source_scene = [p for p in placements if p.get("frame") == ROOT_INTRO_FRAME]
-    # Symbol 129 is a DefineButton2 interactive control, not a drawable
-    # DefineSprite/DefineShape. The SWF sprite baker cannot render button
-    # up/over/down state graphics yet. Preserve this omission explicitly.
-    unsupported_controls = {129}
+    # Recover original button 129's visual UP state in source order instead of
+    # presenting an empty outline or substituting a made-up native button.
+    button_up,button_report = recover_button_up_state(ns.swf,129)
+    symbols["129"] = {"frames":1,"placements":button_up,"removals":[]}
     # The root's fadeout movie clip (34) is script-stopped by Flash until
     # a dispatcher transition. Automatically playing all its frames would
     # cover the briefing with black and then loop it repeatedly.
     script_controlled_transitions = {34}
     scene = [
         dict(p,frame=0) for p in source_scene
-        if p.get("character_id") not in (unsupported_controls | script_controlled_transitions)
+        if p.get("character_id") not in script_controlled_transitions
     ]
     expected = {40, 122, 123, 126, 129}
     found = {p.get("character_id") for p in source_scene}
@@ -76,6 +127,8 @@ def main():
     ns.out.mkdir(parents=True, exist_ok=True)
     manifest_frames = []
     missing = set()
+    gallery = Image.new("RGB", (300*5,220*2),(18,18,22))
+    gallery_draw = ImageDraw.Draw(gallery)
     for tick in range(INTRO_FRAMES):
         stage = Image.new("RGBA", STAGE_SIZE, (0, 0, 0, 255))
         frame_missing = set()
@@ -87,6 +140,12 @@ def main():
         filename = f"{tick:03}.png"
         stage.save(ns.out/filename,format="PNG",optimize=True)
         manifest_frames.append({"frame":tick,"animation":"root-intro","file":filename})
+        if tick in GALLERY_TICKS:
+            idx=GALLERY_TICKS.index(tick)
+            x=(idx%5)*300
+            y=(idx//5)*220
+            gallery.paste(stage.convert("RGB").resize((300,200),Image.Resampling.BILINEAR),(x,y))
+            gallery_draw.text((x+6,y+202),f"SWF frame {tick:03} / 180",fill=(245,240,220))
 
     manifest = {
         "symbol": synthetic_id,
@@ -99,12 +158,13 @@ def main():
         "unsupported_fills": sorted(unsupported),
         "missing_bitmap_ids": sorted(missing),
         "root_placements": source_scene,
-        "omitted_interactive_button_ids": sorted(unsupported_controls),
+        "recovered_button_up_state": button_report,
         "deferred_script_controlled_transition_ids": sorted(script_controlled_transitions),
         "frames": manifest_frames,
         "timing_note": "180 timeline samples, 25 fps; ActionScript-directed pauses/sound are not reproduced by visual baking",
     }
     (ns.out/"manifest.json").write_text(json.dumps(manifest,indent=2),encoding="utf-8")
+    gallery.save(ns.out/"intro-contact-sheet.png",format="PNG",optimize=True)
     print("Intro source bake:",{k:manifest[k] for k in ("source_root_frame","frame_count","size","unsupported_fills","missing_bitmap_ids")})
     if unsupported or missing:
         raise SystemExit("Original intro assets incomplete; do not accept partial frames")
