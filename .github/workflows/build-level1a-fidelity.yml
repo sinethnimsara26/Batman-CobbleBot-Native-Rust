@@ -325,6 +325,10 @@ jobs:
           assert intro["source_root_frame"] == 18
           assert intro["frame_count"] == 180
           assert intro["size"] == [600,400]
+          assert intro["recovered_button_up_state"]["symbol"] == 129
+          assert intro["recovered_button_up_state"]["up_state_record_count"] >= 1
+          assert intro["deferred_script_controlled_transition_ids"] == [34]
+          assert Path(".generated/intro/intro-contact-sheet.png").is_file()
           assert intro["unsupported_fills"] == [], intro["unsupported_fills"]
           assert intro["missing_bitmap_ids"] == [], intro["missing_bitmap_ids"]
           from PIL import ImageChops
@@ -1773,6 +1777,12 @@ jobs:
 
           assert len(list(out.glob("*.png"))) == 1
           print("Built Round-11 moon A/B sheet; sky 131 is an exact flat fill and needs no raster comparison.")
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Batman-CobbleBot-Level1A-Intro-Contact-Sheet
+          path: .generated/intro/intro-contact-sheet.png
+          if-no-files-found: error
 
       - uses: actions/upload-artifact@v4
         with:
