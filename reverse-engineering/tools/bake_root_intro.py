@@ -33,9 +33,14 @@ def main():
 
     symbols = json.loads(ns.symbols_json.read_text(encoding="utf-8"))
     placements = json.loads(ns.root_placements.read_text(encoding="utf-8"))
-    scene = [dict(p, frame=0) for p in placements if p.get("frame") == ROOT_INTRO_FRAME]
+    source_scene = [p for p in placements if p.get("frame") == ROOT_INTRO_FRAME]
+    # Symbol 129 is a DefineButton2 interactive control, not a drawable
+    # DefineSprite/DefineShape. The SWF sprite baker cannot render button
+    # up/over/down state graphics yet. Preserve this omission explicitly.
+    unsupported_controls = {129}
+    scene = [dict(p, frame=0) for p in source_scene if p.get("character_id") not in unsupported_controls]
     expected = {40, 122, 123, 126, 129}
-    found = {p.get("character_id") for p in scene}
+    found = {p.get("character_id") for p in source_scene}
     if not expected.issubset(found):
         raise ValueError(f"Missing source scene characters: {sorted(expected-found)}")
     if int(symbols["123"]["frames"]) != INTRO_FRAMES or int(symbols["126"]["frames"]) != INTRO_FRAMES:
@@ -86,7 +91,8 @@ def main():
         "anchor_in_bitmap": [0.0,0.0],
         "unsupported_fills": sorted(unsupported),
         "missing_bitmap_ids": sorted(missing),
-        "root_placements": scene,
+        "root_placements": source_scene,
+        "omitted_interactive_button_ids": sorted(unsupported_controls),
         "frames": manifest_frames,
         "timing_note": "180 timeline samples, 25 fps; ActionScript-directed pauses/sound are not reproduced by visual baking",
     }
