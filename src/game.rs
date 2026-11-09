@@ -242,6 +242,14 @@ impl Game{
         self.update_camera();
     }
 
+    /// Used by the original on-screen SKIP button as well as keyboard skip.
+    /// Returns false outside the intro so clicks cannot double-start music.
+    pub fn skip_intro(&mut self)->bool{
+        if self.screen!=AppScreen::Intro{return false;}
+        self.begin_level1a();
+        true
+    }
+
     pub fn tick(&mut self,input:&mut InputState,ground:&CollisionMask){
         match self.screen{
             AppScreen::Title=>{
@@ -268,7 +276,7 @@ impl Game{
                 // separate fidelity pass. Enter/Space/Escape skip for testing.
                 if input.pressed(VK_ENTER)||input.pressed(VK_SPACE)||
                    input.pressed(VK_ESCAPE)||self.intro_tick>=179 {
-                    self.begin_level1a();
+                    let _=self.skip_intro();
                 }else{
                     self.intro_tick+=1;
                 }
