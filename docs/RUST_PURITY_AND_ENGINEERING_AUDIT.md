@@ -116,6 +116,59 @@ Actual [Run #42595410918](https://github.com/sinethnimsara26/Batman-CobbleBot-Na
 
 ---
 
+
+## AUD-20261109-003 — CI-SCROLL-P95-01 post-implementation Rust audit
+
+**Date:** 2026-11-09. **Review scope:** actual optimized `src/render.rs` diff, not a proposal. **Development branch:** `revive/level1a-intro-hud-fidelity-2026-11-09`, draft PR #18. **Base commit:** `6c6c2cb84731163c9bb147c0d9b82aec56ca079a`; **implementation:** [`acccd0b70327e2ea1911885f97e21f5e5a5398b3`](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/commit/acccd0b70327e2ea1911885f97e21f5e5a5398b3). **Linked independent research:** [RE-20261109-005](REVERSE_ENGINEERING_RESEARCH_LEDGER.md#re-20261109-005--ci-scroll-p95-01-repeated-windows-measurements-and-pixel-exact-hq-tile-clipping). **Changed code:** `src/render.rs::draw_tiles_hq` calls new `blit_tile_hq_1to1` (instead of generic `blit`), with 2 new unit tests under `render::tests`. No `Cargo.toml`, `Cargo.lock`, Win32, audio, collision, Python source, generated asset, workflow or game-state changes.
+
+### Independent post-code change inspection
+
+1. **Original call and changed path.** HQ scenery detail pack `Assets::level1a_detail_tiles_hq` is a `LevelTileSet` constructed with logical scale 3.0; `draw_tiles_hq` positions its source images at integer 3× stage-pixel origins after crop offsets. Previously passed each image to generic `blit(..., image.w, image.h, false)`. The new function takes source-sized images and clips once, then runs one blend per *visible* pixel. It does not replace the legacy 600×400 renderer, non-tile sprites, 3× sky/moon, 1× alpha city, or world object UI composition.
+2. **Source parity.** For output size equal to source size and flip=false, old `blit` computes `sx=ox*src.w/src.w=ox`, `sy=oy*src.h/src.h=oy`, whereas the new bounded row intersection maps exactly those x/y to the same source pixel. Relative draw ordering in `draw_tiles_hq` is unchanged. The new function calls the **same** `blend` routine; RGBA alpha=0, fully opaque and partial opacity output math remain unchanged. Arbitrary resampling and mirrored sprites still invoke original `blit` elsewhere.
+3. **Memory safety and arithmetic.** The clipped rectangle clamps to destination dimensions, checks empty source/output, then derives `sx`, `sy` and width. Access uses safe `src.pixels[a..b]` and `dst.pixels[a..b]` and `iter().zip(iter_mut())`. No `unsafe`, `get_unchecked`, raw pointers, FFI, shared mutable alias, new thread or cached global. i32 screen positions are widened to i64 for clipping additions, avoiding potential i32 overflow during camera offsets. Source dimensions and buffer consistency remain governed by existing image/asset decoding; pathological impossible >i64 image dimensions are out of realistic input scope, not formally proven. Runtime slices check indexing bounds.
+4. **Rust API/design assessment.** The new specialized function is small and separate from the generic blitter; it has a single HQ tile call site, makes no new public API, and uses safe contiguous iteration. `zip` truncates to the shorter iterator, but both clipped ranges are constructed with identical `width`; this is supported by local invariants, not an excuse to skip parity tests. No new allocations per rendered tile. The helper itself is generic enough for cropped/scrolled tile coordinates but not silently used for other layers.
+5. **Measured performance distinction.** A prior Windows run on the unoptimized code exceeded `scroll.p95_ms < 40.0`: [#42595410918](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42595410918) p95 42.9260ms and max46.1800ms, step24 failed. A later run with **the same Rust source**, [#42597104708](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42597104708), had p95 27.3516ms (all 57 steps passed). The difference shows test-run variability; it does NOT prove the optimized blitter is faster before a new measured run or isolate the PNG cache as the root cause.
+
+### Correctness tests, expected compatibility gates and actual execution
+
+- **Added test `render::tests::hq_tile_clipped_blit_is_identical_to_general_blit`:** iterates 10 x offsets × 10 y offsets (100 unique clipped/offscreen positions) with patterned 7×5 source/destination, transparent and multiple partial/opaque alpha values; old general `blit` and new specialized path must yield identical complete destination vectors. This is a stronger pixel-level equivalence condition than approximate screenshot review.
+- **Added test `render::tests::hq_tile_clipped_blit_keeps_zero_sized_and_offscreen_tiles_noop`:** edge behavior and pixel preservation. Original renderer tests remain.
+- **Existing workflow:** Windows `cargo test --release --target x86_64-pc-windows-msvc`, release `cargo build`, two native visual smokes, gameplay/HQ screenshot and hash comparisons, actual `--benchmark-render 60`, `--benchmark-scenery-scroll` 41-camera-sample run, pixel-level asset/oracle assertions and strict **40 ms p95**. These must not be disabled or diluted.
+- **Current implementation CI:** [Run #42613807273](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42613807273), pinned to `acccd0b...`. **COMPLETED SUCCESS, all 57 Windows steps.** Job 129148589727 reports 11 passing Rust tests including both new tile tests, release build and existing source-asset/hash and visual smoke gates passing, full native benchmarks successful, 40ms p95 threshold unchanged. Scenery-scroll p95 **25.8716ms**, mean 14.3048ms, max 26.2268ms; ordinary HQ benchmark p95 29.6811ms. No physical Windows user verification was done.
+- **Local limits:** No local Rust toolchain (both `rustc` and `cargo` absent in the available container), and the source-derived asset packs aren't mounted. Therefore `cargo fmt --all -- --check`, `cargo clippy`, `cargo tree`, `cargo metadata`, local project build, Windows debugger/perf profiler and actual Flash comparison were **NOT RUN** here. Do not report them as passed. Windows Actions is the execution evidence.
+
+### Dependency suitability and safety
+
+- Direct `Cargo.toml` dependency `png="0.17.16"` is **unchanged**. `LevelTileSet::tile` still uses Rust `Rc<Image>`, `RefCell` and four-entry LRU with PNG decode on cache miss. This batch does NOT upgrade crates, change resolution or claim exact transitive dependency graph proof; earlier `AUD-RISK-004` remains.
+- Windows `user32/gdi32/kernel32` and `winmm` platform FFI remain confined to preexisting modules, not changed or used in the new helper. No C/C++ game engine, Ruffle, Flash player, ActionScript interpreter, JavaScript or Python gameplay dependency is introduced. Python and Pillow continue solely as original-asset build-time preprocessors, as permitted by `AGENTS.md`.
+- Official reference used for the safe implementation: Rust Project, *Primitive Type slice*, https://doc.rust-lang.org/std/primitive.slice.html (**Iteration**, `iter_mut`), Rust Project *Iterator::zip*, https://doc.rust-lang.org/std/iter/trait.Iterator.html#method.zip, and Rust Project *IterMut*, https://doc.rust-lang.org/std/slice/struct.IterMut.html; consulted Nov 9, 2026. These document safety semantics; they are not performance benchmarks and do not imply guaranteed auto-vectorization. No relevant external crate/community adoption claims needed.
+
+### Alternatives, risks and severity
+
+| Finding | Severity/status | Evidence and disposition |
+|---|---|---|
+| `AUD-BLOCK-007` scenery-scroll p95 | **HIGH, conditional until current CI measured** | Same code revision alternated 42.9260ms fail and 27.3516ms pass. New clipped one-to-one Rust path targets repeated work. Preserve unchanged 40ms CI threshold, check repeatability and any regression. |
+| `AUD-RISK-008` renderer clipping/equivalence | **HIGH fidelity, guarded by new unit tests/CI screenshots** | Pixel-level parity verified logically from source mapping; automated test execution required. If source alpha/order differs, repair before moving on. |
+| `AUD-RISK-009` broader performance path | **MEDIUM, not measured** | 3× full-frame alpha promotion and 4-entry cached PNG detail pack can also be expensive. No speculation about exact bottleneck without profiling. |
+| Existing unsafe Win32 and WinMM scope | **Previously tracked, unchanged** | No new `unsafe` or platform API. Full transitive dependency and FFI soundness not recertified in this batch. |
+| Manual game/source parity | **OPEN** | Physical Windows playthrough, real audio and pixel/original comparison for user issue #17 remain unverified; automated parity doesn't replace human confirmation. |
+
+### Post-implementation verdicts and next action
+
+- **PURE-RUST COMPLIANCE: PASS WITH DOCUMENTED PLATFORM/BUILD QUALIFICATIONS** — **HIGH confidence in changed file**, MEDIUM confidence across all transitive dependencies. Only safe Rust added; original permitted OS FFI and offline Python asset preprocessing remain outside game logic.
+- **ENGINEERING QUALITY: PASS WITH NON-BLOCKING CONCERNS** — high confidence in tested code and existing Windows strict checks. 11 tests pass, screenshot/source-asset oracle tests pass, CI 57/57 steps green and scenery p95 25.8716ms (<40ms). Prior same-source variance means measured advantage is not robustly attributed to this change. Unchanged baseline platform/FFI, memory and dependency risks remain.
+- **ORIGINAL-GAME FIDELITY: PARTIALLY VERIFIED** — original source data and tile placement unchanged; unit pixel equivalence plus CI screenshot comparisons support the tested 3× detail path, but manual Flash-vs-native verification remains open.
+
+### Completed verification and issue disposition
+
+Actual [Run #42613807273](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42613807273), source SHA `acccd0b70327e2ea1911885f97e21f5e5a5398b3`, **SUCCESS 57/57 workflow steps**. Rust `cargo test --release` on Windows **11/11 tests PASS**, including source-sized pixel-for-pixel comparison across 100 placements and the empty/offscreen tests. Original assets rebuilt, release executable and native smoke runs passed, HQ dimensions 1800×1200 and screenshot/hash contracts passed, normal HQ benchmark p95 **29.6811ms** and scrolling p95 **25.8716ms**, both below the same **40ms** gate. Scenery mean **14.3048ms**, maximum **26.2268ms**.
+
+**AUD-BLOCK-007 (scenery 40ms threshold): CLOSED for this test/commit**, conditional on future repeatability; prior same-Rust run variability proves a single green CI should not establish durable speedup. **AUD-RISK-008 (pixel parity): PASS** under new focused unit tests and existing original-image CI comparisons; source art unchanged. Baseline Win32/WinMM FFI safety, complete transitive dependency audit and manual user Windows fidelity acceptance remain outstanding.
+
+**Verdicts:** PURE-RUST COMPLIANCE **PASS WITH DOCUMENTED PLATFORM/BUILD QUALIFICATIONS**; ENGINEERING QUALITY **PASS WITH NON-BLOCKING CONCERNS**; ORIGINAL-GAME FIDELITY **PARTIALLY VERIFIED**, pending issue #17. Independent post-code review complete. User's new blocker-first rule is committed to `AGENTS.md` as part of this checkpoint. Next: source-vs-native Windows visual/audio gameplay acceptance, and fix any first concrete defect before unrelated work.
+
+---
+
 ## Mandatory audit entry template — copy and complete AFTER implementation
 
 `## AUD-YYYYMMDD-NNN — [task and referenced RE entry]`
