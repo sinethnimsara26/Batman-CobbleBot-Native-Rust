@@ -189,6 +189,18 @@ def digit_atlas(font_path:Path,base_size:int,pixel_scale:float,style="source"):
     bounds=[draw.textbbox((0,0),str(i),font=font,anchor="lt") for i in range(10)]
     cell_w=max(b[2]-b[0] for b in bounds)+max(1,round(6*pixel_scale))
     cell_h=max(b[3]-b[1] for b in bounds)+max(1,round(8*pixel_scale))
+    if style=="themed":
+        # The revised, smaller Impact glyphs must retain the source-sized
+        # presentation CELLS; shrinking the whole 3x atlas breaks the HUD
+        # asset contract and changes every number's placement/spacing.
+        # Legacy source atlases have 15x20 (small) and 24x31 (large)
+        # cells. Keep at least 92% of those *at the requested raster scale*
+        # while drawing smaller centered glyphs inside their empty padding.
+        # This preserves >2.5x legacy physical atlas dimensions after the
+        # 6x -> 3x Lanczos step, without enlarging the actual type.
+        source_cell=(15,20) if base_size==16 else (24,31)
+        cell_w=max(cell_w,math.ceil(source_cell[0]*pixel_scale*0.92))
+        cell_h=max(cell_h,math.ceil(source_cell[1]*pixel_scale*0.92))
     atlas=Image.new("RGBA",(cell_w*10,cell_h),(0,0,0,0))
     draw=ImageDraw.Draw(atlas)
     for i in range(10):
