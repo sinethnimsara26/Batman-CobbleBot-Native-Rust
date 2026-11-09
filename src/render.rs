@@ -181,6 +181,16 @@ fn render_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     match game.screen{
         AppScreen::Title=>{blit(fb,&assets.title_screen,0,0,600,400,false);return},
         AppScreen::Instructions=>{blit(fb,&assets.instructions_screen,0,0,600,400,false);return},
+        AppScreen::Intro=>{
+            let frame=(game.intro_tick as usize).min(assets.intro_frames.len()-1);
+            let story=assets.intro_frames.frame(frame);
+            blit(
+                fb,&story.image,
+                -story.anchor_x.round() as i32,-story.anchor_y.round() as i32,
+                story.image.w as i32,story.image.h as i32,false
+            );
+            return
+        },
         AppScreen::Playing=>{}
     }
     render_world_legacy(fb,game,assets);
