@@ -21,6 +21,7 @@ fn command(s:&str)->bool{
 
 pub struct Audio {
     dir:PathBuf,
+    intro:bool,
     music:bool,
     jump:bool,
     item:bool,
@@ -31,9 +32,12 @@ impl Audio {
         let dir=std::env::temp_dir().join(format!("batman_cobblebot_native_{}",std::process::id()));
         let _=fs::create_dir_all(&dir);
 
+        let intro_path=dir.join("intro.mp3");
         let music_path=dir.join("level1a.mp3");
         let jump_path=dir.join("jump.mp3");
         let item_path=dir.join("item.mp3");
+        let intro=fs::write(&intro_path,include_bytes!("../assets/intro_sound.mp3")).is_ok()
+            && command(&format!("open \"{}\" type mpegvideo alias bcb_intro",intro_path.display()));
         let music=fs::write(&music_path,include_bytes!("../assets/level1a_music.mp3")).is_ok()
             && command(&format!("open \"{}\" type mpegvideo alias bcb_music",music_path.display()));
         let jump=fs::write(&jump_path,include_bytes!("../assets/jump.mp3")).is_ok()
@@ -41,11 +45,21 @@ impl Audio {
         let item=fs::write(&item_path,include_bytes!("../assets/item.mp3")).is_ok()
             && command(&format!("open \"{}\" type mpegvideo alias bcb_item",item_path.display()));
 
-        Self{dir,music,jump,item}
+        Self{dir,intro,music,jump,item}
     }
 
     pub fn handle(&mut self,event:AudioEvent){
         match event{
+            AudioEvent::IntroStart if self.intro=>{
+                let _=command("stop bcb_intro");
+                let _=command("seek bcb_intro to start");
+                // Original SWF StartSound #130 occurs on intro root frame 18.
+                let _=command("play bcb_intro");
+            }
+            AudioEvent::IntroStop if self.intro=>{
+                let _=command("stop bcb_intro");
+                let _=command("seek bcb_intro to start");
+            }
             AudioEvent::MusicStart if self.music=>{
                 let _=command("stop bcb_music");
                 let _=command("seek bcb_music to start");
@@ -72,6 +86,7 @@ impl Audio {
 
 impl Drop for Audio{
     fn drop(&mut self){
+        if self.intro{let _=command("close bcb_intro");}
         if self.music{let _=command("close bcb_music");}
         if self.jump{let _=command("close bcb_jump");}
         if self.item{let _=command("close bcb_item");}
