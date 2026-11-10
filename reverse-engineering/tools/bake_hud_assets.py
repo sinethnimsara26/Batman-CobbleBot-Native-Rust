@@ -177,7 +177,7 @@ def resize_premultiplied(image:Image.Image,size:tuple[int,int],method:str):
     return image.convert("RGBa").resize(size,Image.Resampling.LANCZOS).convert("RGBA")
 
 
-def digit_atlas(font_path:Path,base_size:int,pixel_scale:float,style="source"):
+def digit_atlas(font_path:Path,base_size:int,pixel_scale:float,style="source",vertical_percent:int=100):
     # Legacy atlases remain unchanged. The HQ atlas uses the exact same
     # condensed typeface as the HQ labels, with distinct number sizes.
     size=max(1,round(base_size*pixel_scale*
@@ -214,7 +214,32 @@ def digit_atlas(font_path:Path,base_size:int,pixel_scale:float,style="source"):
                       stroke_width=outline,stroke_fill=(9,7,10,255))
         else:
             draw.text(xy,str(i),font=font,fill=(255,255,255,255),anchor="mm")
-    return atlas,{"cell_w":cell_w,"cell_h":cell_h,"font_px":size}
+    if style=="themed" and base_size==16 and vertical_percent>100:
+        # Enlarge ONLY the visible small-digit ink in the offline 6x bake.
+        # Keep atlas cell dimensions and original fill/stroke colors intact.
+        # The native game still blits already-baked 3x pixels at exact 1:1.
+        stretched_atlas=Image.new("RGBA",atlas.size,(0,0,0,0))
+        margin=max(1,round(0.5*pixel_scale))
+        for i in range(10):
+            cell=atlas.crop((i*cell_w,0,(i+1)*cell_w,cell_h))
+            bounds=cell.getbbox()
+            if bounds is None:
+                raise ValueError(f"Small HQ digit {i} has no visible ink")
+            glyph=cell.crop(bounds)
+            new_height=min(cell_h-2*margin,round(glyph.height*vertical_percent/100))
+            if new_height<=glyph.height:
+                raise ValueError(f"Small HQ digit {i} lacks headroom to stretch")
+            taller=resize_premultiplied(
+                glyph,(glyph.width,new_height),"lanczos"
+            )
+            stretched_atlas.alpha_composite(
+                taller,(i*cell_w+bounds[0],(cell_h-new_height)//2)
+            )
+        atlas=stretched_atlas
+    meta={"cell_w":cell_w,"cell_h":cell_h,"font_px":size}
+    if style=="themed" and base_size==16:
+        meta["vertical_percent"]=vertical_percent
+    return atlas,meta
 
 def scale_box(box,factor):
     return [value/factor for value in box]
@@ -243,6 +268,15 @@ def read_hq_layout(path:Path):
         if not (type(x) is int and type(y) is int and 0<x<600 and 0<y<400 and
                 type(c["max_width"]) is int and 20<=c["max_width"]<=150):
             raise ValueError(f"Invalid HQ {role} position/width")
+    if not (type(ctr["batarangs"].get("digit_advance")) is int and
+            6<=ctr["batarangs"]["digit_advance"]<=13):
+        raise ValueError("Batarang digit pitch must fit visible ink and cell")
+    if not (type(ctr["lives"].get("digit_advance")) is int and
+            6<=ctr["lives"]["digit_advance"]<=13):
+        raise ValueError("Lives digit pitch must fit visible ink and cell")
+    percent=cfg.get("small_counter_height_percent")
+    if type(percent) is not int or not 100<=percent<=125:
+        raise ValueError("Small digit vertical stretch must be 100..125 percent")
     l=ctr["lives"]
     if not (type(l["left"]) is int and type(l["center_y"]) is int and
             0<l["left"]<600 and 0<l["center_y"]<400 and
@@ -260,11 +294,13 @@ def generate_rust_hq_layout(path:Path,cfg:dict):
         "// Original 600x400 logical stage, compiled into native Rust HUD.",
         f"pub const BATARANG_CENTER:(i32,i32)=({b['center'][0]},{b['center'][1]});",
         f"pub const BATARANG_MAX_WIDTH:i32={b['max_width']};",
+        f"pub const BATARANG_DIGIT_ADVANCE:i32={b['digit_advance']};",
         f"pub const SCORE_CENTER:(i32,i32)=({s['center'][0]},{s['center'][1]});",
         f"pub const SCORE_MAX_WIDTH:i32={s['max_width']};",
         f"pub const LIVES_VALUE_LEFT:i32={l['left']};",
         f"pub const LIVES_CENTER_Y:i32={l['center_y']};",
         f"pub const LIVES_MAX_WIDTH:i32={l['max_width']};",
+        f"pub const LIVES_DIGIT_ADVANCE:i32={l['digit_advance']};",
     ]
     path.parent.mkdir(parents=True,exist_ok=True)
     path.write_text("\n".join(lines)+"\n",encoding="utf-8")
@@ -345,7 +381,10 @@ def main():
             temp_fields[str(cid)]=field_box(info,found[cid],temp_anchor)
 
     temp_scale=ns.output_scale*ns.supersample
-    small_image,small_meta=digit_atlas(ns.font,16,temp_scale,ns.style)
+    small_image,small_meta=digit_atlas(
+        ns.font,16,temp_scale,ns.style,
+        hq_layout["small_counter_height_percent"] if hq_layout is not None else 100
+    )
     large_image,large_meta=digit_atlas(ns.font,32,temp_scale,ns.style)
 
     factor=float(ns.supersample)
@@ -366,6 +405,8 @@ def main():
                 "cell_w":final_cell_w,
                 "cell_h":final_cell_h,
                 "font_px":round(meta["font_px"]/factor),
+                **({"vertical_percent":meta["vertical_percent"]}
+                   if "vertical_percent" in meta else {}),
             }
 
         small_image,small_meta=finish_atlas(small_image,small_meta)

@@ -5,7 +5,7 @@
     600,
     400
   ],
-  "notes": "Themed HQ ONLY. Original Flash HUD placement and legacy1x renderer remain untouched. Coordinates are 600x400 logical stage pixels; baked into Rust constants.",
+  "notes": "Themed HQ only: 600x400 logical coordinates, 9px Batarang and 10px lives digit advances; small atlas glyph ink stretched +15% vertically at build time. 1x Flash source remains unchanged.",
   "static_offsets_logical": {
     "700": [
       0,
@@ -29,9 +29,10 @@
       "field_id": 702,
       "center": [
         211,
-        60
+        59
       ],
-      "max_width": 60
+      "max_width": 60,
+      "digit_advance": 9
     },
     "score": {
       "field_id": 713,
@@ -45,7 +46,9 @@
       "field_id": 714,
       "left": 313,
       "center_y": 63,
-      "max_width": 54
+      "max_width": 54,
+      "digit_advance": 10
     }
-  }
+  },
+  "small_counter_height_percent": 115
 }

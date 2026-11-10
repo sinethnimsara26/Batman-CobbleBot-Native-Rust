@@ -818,10 +818,15 @@ jobs:
           # while requiring the existing source-derived translucent shell.
           layout=json.loads(Path("reverse-engineering/manifests/hud-hq-layout.json").read_text())
           assert hq["hq_layout_schema"]==layout["schema"]==1
+          assert hq["small_digits"]["vertical_percent"]==layout["small_counter_height_percent"]==115
+          assert layout["counters"]["batarangs"]["digit_advance"]==9
+          assert layout["counters"]["lives"]["digit_advance"]==10
+          assert layout["counters"]["batarangs"]["center"]==[211,59]
           generated=Path("assets/hud_hq_layout.rs").read_text()
           for symbol in ("BATARANG_CENTER","BATARANG_MAX_WIDTH",
                          "SCORE_CENTER","SCORE_MAX_WIDTH","LIVES_VALUE_LEFT",
-                         "LIVES_CENTER_Y","LIVES_MAX_WIDTH"):
+                         "LIVES_CENTER_Y","LIVES_MAX_WIDTH",
+              "BATARANG_DIGIT_ADVANCE","LIVES_DIGIT_ADVANCE"):
               assert f"pub const {symbol}:" in generated, symbol
               assert f"hud_hq_layout::{symbol}" in render, symbol
           assert 'include!("../assets/hud_hq_layout.rs")' in render
@@ -829,6 +834,9 @@ jobs:
           assert "draw_hud_counter_band_hq" not in render, "duplicate HQ counter band returned"
           assert "fb,&shell.image," in hud_fn, "original HUD shell no longer blitted"
           assert "static_offsets_logical" in baker
+          assert "stretched_atlas.alpha_composite(" in baker
+          assert "hud_digit_step_width" in render
+          assert "preferred_advance" in render
           assert "outline=max(2,round(0.74*scale))" in baker
           assert "outline=max(2,round(0.72*pixel_scale))" in baker
           print("Round 6 HUD contract PASS: one HQ layout manifest emits Rust constants; source HUD/icons preserved, no duplicate band.")

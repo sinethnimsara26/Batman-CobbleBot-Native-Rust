@@ -447,7 +447,8 @@ fn draw_hud_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     let (bx,by)=hud_hq_layout::BATARANG_CENTER;
     draw_number_centered_hq_1to1(
         fb,&assets.hud_digits_small_hq,bx*s,by*s,game.batarangs.max(0),
-        hud_hq_layout::BATARANG_MAX_WIDTH*s
+        hud_hq_layout::BATARANG_MAX_WIDTH*s,
+        hud_hq_layout::BATARANG_DIGIT_ADVANCE*s
     );
 
     let score=game.score.max(0);
@@ -461,7 +462,7 @@ fn draw_hud_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     }else{
         &assets.hud_digits_large_hq
     };
-    draw_number_centered_hq_1to1(fb,score_atlas,sx*s,sy*s,score,score_budget);
+    draw_number_centered_hq_1to1(fb,score_atlas,sx*s,sy*s,score,score_budget,0);
 
     // LIVES X is baked directly before this fixed value-left edge.
     // Widening numbers extend rightward, never back over the caption.
@@ -469,41 +470,47 @@ fn draw_hud_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
         fb,&assets.hud_digits_small_hq,
         hud_hq_layout::LIVES_VALUE_LEFT*s,
         hud_hq_layout::LIVES_CENTER_Y*s,
-        game.lives.max(0),hud_hq_layout::LIVES_MAX_WIDTH*s
+        game.lives.max(0),hud_hq_layout::LIVES_MAX_WIDTH*s,
+        hud_hq_layout::LIVES_DIGIT_ADVANCE*s
     );
 }
 
-// Return the 1:1 glyph-cell advance and full display span. Only existing
-// transparent padding may overlap when many digits exceed a fixed column.
-fn hud_digit_step_width(cell_w:i32,count:usize,max_width:i32)->(i32,i32){
+// Return full 1:1 glyph-cell span with an independently chosen digit pitch.
+// Compact the transparent cell margins, never rescale runtime pixels or
+// truncate numeric values. Score keeps its original natural cell advance.
+fn hud_digit_step_width(cell_w:i32,count:usize,max_width:i32,preferred:i32)->(i32,i32){
     if cell_w<=0 || count==0{return (0,0);}
     let n=count as i32;
     let room=max_width.max(cell_w);
-    let step=if n>1 && cell_w*n>room{
-        ((room-cell_w)/(n-1)).clamp(1,cell_w)
-    }else{cell_w};
+    let requested=if preferred<=0{cell_w}else{preferred.min(cell_w)};
+    let step=if n>1 && cell_w+(n-1)*requested>room{
+        ((room-cell_w)/(n-1)).clamp(1,requested)
+    }else{requested};
     (step,cell_w+step*(n-1))
 }
-
 fn draw_number_centered_hq_1to1(
-    fb:&mut RenderSurface,atlas:&Image,cx:i32,cy:i32,value:i32,max_width:i32
+    fb:&mut RenderSurface,atlas:&Image,cx:i32,cy:i32,value:i32,
+    max_width:i32,preferred_advance:i32
 ){
-    draw_number_hq_1to1(fb,atlas,cx,cy,value,max_width,true);
+    draw_number_hq_1to1(fb,atlas,cx,cy,value,max_width,preferred_advance,true);
 }
 fn draw_number_left_hq_1to1(
-    fb:&mut RenderSurface,atlas:&Image,x:i32,cy:i32,value:i32,max_width:i32
+    fb:&mut RenderSurface,atlas:&Image,x:i32,cy:i32,value:i32,
+    max_width:i32,preferred_advance:i32
 ){
-    draw_number_hq_1to1(fb,atlas,x,cy,value,max_width,false);
+    draw_number_hq_1to1(fb,atlas,x,cy,value,max_width,preferred_advance,false);
 }
 fn draw_number_hq_1to1(
     fb:&mut RenderSurface,atlas:&Image,ax:i32,cy:i32,value:i32,
-    max_width:i32,centered:bool
+    max_width:i32,preferred_advance:i32,centered:bool
 ){
     if atlas.w<10||atlas.h==0{return;}
     let cell_w=(atlas.w/10) as i32;
     if cell_w<=0{return;}
     let digits=value.max(0).to_string();
-    let (advance,total)=hud_digit_step_width(cell_w,digits.len(),max_width);
+    let (advance,total)=hud_digit_step_width(
+        cell_w,digits.len(),max_width,preferred_advance
+    );
     let x=if centered{ax-total/2}else{ax};
     let y=cy-atlas.h as i32/2;
     for (i,byte) in digits.bytes().enumerate(){
@@ -854,18 +861,20 @@ mod tests{
     #[test]
     fn hud_hq_layout_keeps_digits_in_readable_columns(){
         let s=HQ_SCALE as i32;
-        assert_eq!(hud_hq_layout::BATARANG_CENTER,(211,60));
+        assert_eq!(hud_hq_layout::BATARANG_CENTER,(211,59));
+        assert_eq!(hud_hq_layout::BATARANG_DIGIT_ADVANCE,9);
+        assert_eq!(hud_hq_layout::LIVES_DIGIT_ADVANCE,10);
         assert_eq!(hud_hq_layout::SCORE_CENTER,(387,35));
         assert_eq!(hud_hq_layout::LIVES_VALUE_LEFT,313);
         assert_eq!(hud_hq_layout::LIVES_CENTER_Y,63);
-        for &(len,budget,cell) in &[
-            (1,hud_hq_layout::BATARANG_MAX_WIDTH*s,42),
-            (3,hud_hq_layout::BATARANG_MAX_WIDTH*s,42),
-            (2,hud_hq_layout::LIVES_MAX_WIDTH*s,42),
-            (6,hud_hq_layout::SCORE_MAX_WIDTH*s,42),
-            (10,hud_hq_layout::SCORE_MAX_WIDTH*s,42),
+        for &(len,budget,cell,preferred) in &[
+            (1,hud_hq_layout::BATARANG_MAX_WIDTH*s,42,27),
+            (3,hud_hq_layout::BATARANG_MAX_WIDTH*s,42,27),
+            (2,hud_hq_layout::LIVES_MAX_WIDTH*s,42,30),
+            (6,hud_hq_layout::SCORE_MAX_WIDTH*s,42,42),
+            (10,hud_hq_layout::SCORE_MAX_WIDTH*s,42,42),
         ]{
-            let (step,width)=hud_digit_step_width(cell,len,budget);
+            let (step,width)=hud_digit_step_width(cell,len,budget,preferred);
             assert!(step>0 && step<=cell && width<=budget,
                     "{len} digits exceed their HUD layout region");
         }
@@ -875,9 +884,12 @@ mod tests{
 
     #[test]
     fn hud_digit_layout_preserves_all_glyph_cells(){
-        assert_eq!(hud_digit_step_width(42,1,180),(42,42));
-        assert_eq!(hud_digit_step_width(42,3,180),(42,126));
-        let (step,width)=hud_digit_step_width(42,10,270);
+        assert_eq!(hud_digit_step_width(42,1,180,27),(27,42));
+        assert_eq!(hud_digit_step_width(42,3,180,27),(27,96));
+        assert_eq!(hud_digit_step_width(42,2,180,27),(27,69));
+        assert_eq!(hud_digit_step_width(42,2,180,30),(30,72));
+        assert_eq!(hud_digit_step_width(42,3,180,42),(42,126));
+        let (step,width)=hud_digit_step_width(42,10,270,42);
         assert!(step<42 && step>=1 && width<=270);
     }
 
