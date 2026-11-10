@@ -19,9 +19,36 @@ fn command(s:&str)->bool{
     unsafe{mciSendStringW(wide(s).as_ptr(),std::ptr::null_mut(),0,std::ptr::null_mut())==0}
 }
 
+// The paused soundtrack must follow the fixed-step Intro animation.
+// Failed MCI operations may not falsely change playback state.
+#[derive(Clone,Copy,Debug,Default,PartialEq,Eq)]
+enum IntroTransport {
+    #[default]
+    Stopped,
+    Playing,
+    PausedForFocus,
+}
+impl IntroTransport {
+    fn focus_command(self,active:bool)->Option<&'static str>{
+        match (self,active) {
+            (Self::Playing,false)=>Some("pause bcb_intro"),
+            (Self::PausedForFocus,true)=>Some("resume bcb_intro"),
+            _=>None,
+        }
+    }
+    fn accept_focus_result(&mut self,active:bool,success:bool){
+        if !success{return;}
+        match (*self,active) {
+            (Self::Playing,false)=>*self=Self::PausedForFocus,
+            (Self::PausedForFocus,true)=>*self=Self::Playing,
+            _=>{},
+        }
+    }
+}
 pub struct Audio {
     dir:PathBuf,
     intro:bool,
+    intro_transport:IntroTransport,
     music:bool,
     jump:bool,
     item:bool,
@@ -45,7 +72,17 @@ impl Audio {
         let item=fs::write(&item_path,include_bytes!("../assets/item.mp3")).is_ok()
             && command(&format!("open \"{}\" type mpegvideo alias bcb_item",item_path.display()));
 
-        Self{dir,intro,music,jump,item}
+        Self{dir,intro,intro_transport:IntroTransport::Stopped,music,jump,item}
+    }
+
+    /// While Win32 stops the 25Hz simulation off-focus, the original intro
+    /// MCI media must also pause. Other audio is outside this batch's scope.
+    pub fn on_focus_changed(&mut self,active:bool){
+        if !self.intro{return;}
+        if let Some(mci)=self.intro_transport.focus_command(active){
+            let success=command(mci);
+            self.intro_transport.accept_focus_result(active,success);
+        }
     }
 
     pub fn handle(&mut self,event:AudioEvent){
@@ -54,9 +91,15 @@ impl Audio {
                 let _=command("stop bcb_intro");
                 let _=command("seek bcb_intro to start");
                 // Original SWF StartSound #130 occurs on intro root frame 18.
-                let _=command("play bcb_intro");
+                self.intro_transport=if command("play bcb_intro"){
+                    IntroTransport::Playing
+                }else{
+                    IntroTransport::Stopped
+                };
             }
             AudioEvent::IntroStop if self.intro=>{
+                // A subsequent focus gain must never restart a stopped intro.
+                self.intro_transport=IntroTransport::Stopped;
                 let _=command("stop bcb_intro");
                 let _=command("seek bcb_intro to start");
             }
@@ -81,6 +124,38 @@ impl Audio {
             }
             _=>{}
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::IntroTransport;
+    #[test]
+    fn focus_pause_resume_is_idempotent_and_preserves_media_position(){
+        let mut state=IntroTransport::Stopped;
+        assert_eq!(state.focus_command(false),None);
+        state=IntroTransport::Playing;
+        assert_eq!(state.focus_command(true),None);
+        assert_eq!(state.focus_command(false),Some("pause bcb_intro"));
+        state.accept_focus_result(false,true);
+        assert_eq!(state,IntroTransport::PausedForFocus);
+        assert_eq!(state.focus_command(false),None);
+        assert_eq!(state.focus_command(true),Some("resume bcb_intro"));
+        state.accept_focus_result(true,true);
+        assert_eq!(state,IntroTransport::Playing);
+        assert_eq!(state.focus_command(true),None);
+    }
+
+    #[test]
+    fn failed_mci_calls_and_scene_stop_do_not_invent_audio_resume(){
+        let mut state=IntroTransport::Playing;
+        state.accept_focus_result(false,false);
+        assert_eq!(state,IntroTransport::Playing);
+        state.accept_focus_result(false,true);
+        state.accept_focus_result(true,false);
+        assert_eq!(state,IntroTransport::PausedForFocus);
+        state=IntroTransport::Stopped;
+        assert_eq!(state.focus_command(true),None);
     }
 }
 
