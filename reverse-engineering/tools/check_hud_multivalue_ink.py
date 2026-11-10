@@ -51,6 +51,21 @@ def run():
     batarang = Image.open("assets/hud_digits_batarang_hq.png").convert("RGBA")
     assert batarang.size==small.size, "Batarang-specific ink must keep original small atlas cell geometry"
     large = Image.open("assets/hud_digits_large_hq.png").convert("RGBA")
+    # Test all 100 ordered adjacent large SCORE digit pairs from actual
+    # Windows-baked 3x Impact atlas. Conservative horizontal ink gap check.
+    score_pitch=layout["counters"]["score"]["large_digit_advance"]*S
+    large_cell=large.width//10
+    bounds=[
+        binary(large.crop((i*large_cell,0,(i+1)*large_cell,large.height))
+               .getchannel("A"), INK_THRESHOLD).getbbox()
+        for i in range(10)
+    ]
+    assert all(b is not None for b in bounds), "Large SCORE atlas has blank digit"
+    min_gap=min(score_pitch+b[0]-a[2] for a in bounds for b in bounds)
+    assert min_gap>=2, (
+        f"Large SCORE glyphs at {score_pitch}px pitch leave only {min_gap}px "
+        "horizontal thresholded ink clearance; increase manifest advance"
+    )
     shell = Image.open("assets/hud_base_hq.png").convert("RGBA")
     anchor = meta["anchor_in_bitmap"]
     shell_alpha = Image.new("L", CANVAS, 0)
@@ -63,6 +78,12 @@ def run():
         "shell_opaque_threshold": OPAQUE_SHELL_THRESHOLD,
         "shell_mask_scope": "opaque icon/static-label ink; not the translucent panel",
         "canvas": list(CANVAS), "cases": [], "overlaps": [],
+        "large_score_pairwise_test": {
+            "ordered_pairs_checked":100,
+            "preferred_advance_px":score_pitch,
+            "min_horizontal_alpha_gap_px":min_gap,
+            "threshold":INK_THRESHOLD
+        },
     }
     for name, b_count, l_count, score in CASES:
         b, l, sc = (layout["counters"][n] for n in ("batarangs", "lives", "score"))
@@ -72,7 +93,7 @@ def run():
                              l["max_width"]*S, l["digit_advance"]*S, False)
         score_atlas = small if (large.width//10)*len(str(score)) > sc["max_width"]*S else large
         sm, sd = glyph_masks(score_atlas, score, sc["center"][0]*S, sc["center"][1]*S,
-                             sc["max_width"]*S, 0, True)
+                             sc["max_width"]*S, score_pitch if score_atlas is large else 0, True)
         groups = {"batarangs":bm, "lives":lm, "score":sm}
         case = {"name":name,"values":[b_count,l_count,score],
                 "score_atlas":"small" if score_atlas is small else "large",

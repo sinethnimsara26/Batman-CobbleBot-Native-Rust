@@ -275,6 +275,9 @@ def read_hq_layout(path:Path):
     if not (type(ctr["lives"].get("digit_advance")) is int and
             6<=ctr["lives"]["digit_advance"]<=13):
         raise ValueError("Lives digit pitch must fit visible ink and cell")
+    large_advance=ctr["score"].get("large_digit_advance")
+    if type(large_advance) is not int or not 14<=large_advance<=22:
+        raise ValueError("HQ large SCORE digit advance must be 14..22 logical pixels")
     percent=cfg.get("small_counter_height_percent")
     if type(percent) is not int or not 100<=percent<=125:
         raise ValueError("Small digit vertical stretch must be 100..125 percent")
@@ -301,6 +304,7 @@ def generate_rust_hq_layout(path:Path,cfg:dict):
         f"pub const BATARANG_DIGIT_ADVANCE:i32={b['digit_advance']};",
         f"pub const SCORE_CENTER:(i32,i32)=({s['center'][0]},{s['center'][1]});",
         f"pub const SCORE_MAX_WIDTH:i32={s['max_width']};",
+        f"pub const SCORE_LARGE_DIGIT_ADVANCE:i32={s['large_digit_advance']};",
         f"pub const LIVES_VALUE_LEFT:i32={l['left']};",
         f"pub const LIVES_CENTER_Y:i32={l['center_y']};",
         f"pub const LIVES_MAX_WIDTH:i32={l['max_width']};",

@@ -457,12 +457,23 @@ fn draw_hud_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     let large_cell=assets.hud_digits_large_hq.w/10;
     // Preserve true-3x pixels: use the already-baked small atlas when a
     // multi-digit score cannot fit the large glyphs into its column.
-    let score_atlas=if large_cell*score.to_string().len()>score_budget as usize{
+    let use_small_score=large_cell*score.to_string().len()>score_budget as usize;
+    let score_atlas=if use_small_score{
         &assets.hud_digits_small_hq
     }else{
         &assets.hud_digits_large_hq
     };
-    draw_number_centered_hq_1to1(fb,score_atlas,sx*s,sy*s,score,score_budget,0);
+    // HUD-REAL-06C: compact transparent padding between the large SCORE
+    // glyphs without rescaling the pixels or moving the source shell/labels.
+    // Preserve the verified natural-step compact fallback for long scores.
+    let score_advance=if use_small_score{
+        0
+    }else{
+        hud_hq_layout::SCORE_LARGE_DIGIT_ADVANCE*s
+    };
+    draw_number_centered_hq_1to1(
+        fb,score_atlas,sx*s,sy*s,score,score_budget,score_advance
+    );
 
     // LIVES X is baked directly before this fixed value-left edge.
     // Widening numbers extend rightward, never back over the caption.
@@ -477,7 +488,7 @@ fn draw_hud_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
 
 // Return full 1:1 glyph-cell span with an independently chosen digit pitch.
 // Compact the transparent cell margins, never rescale runtime pixels or
-// truncate numeric values. Score keeps its original natural cell advance.
+// truncate numeric values. Long SCORE values retain their tested small-atlas fallback.
 fn hud_digit_step_width(cell_w:i32,count:usize,max_width:i32,preferred:i32)->(i32,i32){
     if cell_w<=0 || count==0{return (0,0);}
     let n=count as i32;
@@ -865,6 +876,7 @@ mod tests{
         assert_eq!(hud_hq_layout::BATARANG_DIGIT_ADVANCE,9);
         assert_eq!(hud_hq_layout::LIVES_DIGIT_ADVANCE,10);
         assert_eq!(hud_hq_layout::SCORE_CENTER,(387,35));
+        assert_eq!(hud_hq_layout::SCORE_LARGE_DIGIT_ADVANCE,16);
         assert_eq!(hud_hq_layout::LIVES_VALUE_LEFT,313);
         assert_eq!(hud_hq_layout::LIVES_CENTER_Y,63);
         for &(len,budget,cell,preferred) in &[
@@ -889,6 +901,10 @@ mod tests{
         assert_eq!(hud_digit_step_width(42,2,180,27),(27,69));
         assert_eq!(hud_digit_step_width(42,2,180,30),(30,72));
         assert_eq!(hud_digit_step_width(42,3,180,42),(42,126));
+        // 06C only: large 3x SCORE glyphs keep 66px cells but use 48px pitch.
+        // Two digits occupy 114px, four occupy 210px; centered x unchanged.
+        assert_eq!(hud_digit_step_width(66,2,276,16*3),(48,114));
+        assert_eq!(hud_digit_step_width(66,4,276,16*3),(48,210));
         let (step,width)=hud_digit_step_width(42,10,270,42);
         assert!(step<42 && step>=1 && width<=270);
         // HUD-REAL-05C: the real 3x Impact small atlas has 42px cells;

@@ -862,9 +862,11 @@ jobs:
           assert layout["counters"]["lives"]["digit_advance"]==10
           assert layout["counters"]["batarangs"]["center"]==[211,58]
           assert layout["counters"]["score"]["max_width"]==92
+          assert layout["counters"]["score"]["large_digit_advance"]==16
+          assert "hud_hq_layout::SCORE_LARGE_DIGIT_ADVANCE*s" in render
           generated=Path("assets/hud_hq_layout.rs").read_text()
           for symbol in ("BATARANG_CENTER","BATARANG_MAX_WIDTH",
-                         "SCORE_CENTER","SCORE_MAX_WIDTH","LIVES_VALUE_LEFT",
+                         "SCORE_CENTER","SCORE_MAX_WIDTH","SCORE_LARGE_DIGIT_ADVANCE","LIVES_VALUE_LEFT",
                          "LIVES_CENTER_Y","LIVES_MAX_WIDTH",
               "BATARANG_DIGIT_ADVANCE","LIVES_DIGIT_ADVANCE"):
               assert f"pub const {symbol}:" in generated, symbol
