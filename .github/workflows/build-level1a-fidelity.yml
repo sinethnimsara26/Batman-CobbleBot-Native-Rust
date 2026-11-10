@@ -1680,6 +1680,23 @@ jobs:
           path: .generated/windows-icon-resource-qa/
           if-no-files-found: warn
 
+      # ICON-SHELL-PIXEL-QA-09: sample TRUE Windows Shell-extracted HICON
+      # artwork, not merely nonzero handles. Original source PNG vs captured
+      # pixels at actual 16/32px, with real Win32 DrawIconEx evidence retained.
+      - name: Verify actual Windows Shell icon pixels (Batch09)
+        shell: pwsh
+        timeout-minutes: 3
+        run: |
+          python reverse-engineering/tools/windows_icon_visual_probe.py --exe target/x86_64-pc-windows-msvc/release/batman_cobblebot_native.exe --art .generated/windows-icon-art --out .generated/windows-icon-visual-qa
+          if ($LASTEXITCODE -ne 0) { throw "Batch09 real Shell HICON pixel proof failed" }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Batman-CobbleBot-Real-Windows-Shell-Icon-Pixel-QA
+          path: .generated/windows-icon-visual-qa/
+          if-no-files-found: warn
+
       - name: Smoke-check executable, legacy pixels, HQ output and render timing
         shell: pwsh
         run: |
