@@ -19,6 +19,19 @@ fn command(s:&str)->bool{
     unsafe{mciSendStringW(wide(s).as_ptr(),std::ptr::null_mut(),0,std::ptr::null_mut())==0}
 }
 
+// QA-ONLY: the MCI alias is owned by this Rust process. External Python
+// cannot truthfully query it; expose read-only status inside the game only
+// when the opt-in BCB_FOCUS_QA_LOG telemetry path is present.
+fn mci_status(query:&str)->(String,u32){
+    let mut reply=[0u16;128];
+    let status=unsafe{mciSendStringW(
+        wide(query).as_ptr(),reply.as_mut_ptr(),reply.len() as u32,
+        std::ptr::null_mut()
+    )};
+    let end=reply.iter().position(|&u|u==0).unwrap_or(reply.len());
+    (String::from_utf16_lossy(&reply[..end]).replace(['\t','\r','\n']," "),status)
+}
+
 // The paused soundtrack must follow the fixed-step Intro animation.
 // Failed MCI operations may not falsely change playback state.
 #[derive(Clone,Copy,Debug,Default,PartialEq,Eq)]
@@ -82,6 +95,26 @@ impl Audio {
         if let Some(mci)=self.intro_transport.focus_command(active){
             let success=command(mci);
             self.intro_transport.accept_focus_result(active,success);
+        }
+    }
+
+    /// Read the real Windows MCI driver's mode, position and time format.
+    /// Called solely by the opt-in offline QA trace; never on a normal run.
+    pub fn qa_intro_mci_status(&self)->(String,String,String,u32,u32,u32){
+        if !self.intro {
+            return ("not_open".into(),"".into(),"".into(),1,1,1);
+        }
+        let (mode,em)=mci_status("status bcb_intro mode");
+        let (position,ep)=mci_status("status bcb_intro position");
+        let (format,ef)=mci_status("status bcb_intro time format");
+        (mode,position,format,em,ep,ef)
+    }
+
+    pub fn qa_intro_transport(&self)->&'static str{
+        match self.intro_transport{
+            IntroTransport::Stopped=>"stopped",
+            IntroTransport::Playing=>"playing",
+            IntroTransport::PausedForFocus=>"paused_for_focus",
         }
     }
 
