@@ -15,9 +15,12 @@ use std::time::Instant;
 include!("../assets/intro_button_bounds.rs");
 
 const WM_DESTROY:u32=0x0002; const WM_SETFOCUS:u32=0x0007; const WM_KILLFOCUS:u32=0x0008; const WM_PAINT:u32=0x000F; const WM_CLOSE:u32=0x0010; const WM_ERASEBKGND:u32=0x0014; const WM_ACTIVATE:u32=0x0006; const WM_LBUTTONDOWN:u32=0x0201; const WM_LBUTTONUP:u32=0x0202; const WM_TIMER:u32=0x0113; const WM_DPICHANGED:u32=0x02E0;
+const WS_POPUP:u32=0x80000000; const GWL_STYLE:i32=-16; const MONITOR_DEFAULTTONEAREST:u32=2; const SWP_FRAMECHANGED:u32=0x0020; const SWP_NOMOVE:u32=0x0002; const SWP_NOSIZE:u32=0x0001; const SWP_NOOWNERZORDER:u32=0x0200;
 const CS_HREDRAW:u32=2; const CS_VREDRAW:u32=1; const IDC_ARROW:*const u16=32512usize as *const u16; const WS_OVERLAPPEDWINDOW:u32=0x00CF0000; const WS_VISIBLE:u32=0x10000000; const CW_USEDEFAULT:i32=i32::MIN; const SW_SHOW:i32=5; const SRCCOPY:u32=0x00CC0020; const BLACKNESS:u32=0x00000042; const DIB_RGB_COLORS:u32=0; const BI_RGB:u32=0; const HALFTONE:i32=4; const WA_INACTIVE:usize=0; const SWP_NOZORDER:u32=0x0004; const SWP_NOACTIVATE:u32=0x0010; const DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2:isize=-4;
-type HWND=*mut c_void; type HINSTANCE=*mut c_void; type HICON=*mut c_void; type HCURSOR=*mut c_void; type HBRUSH=*mut c_void; type HDC=*mut c_void; type WPARAM=usize; type LPARAM=isize; type LRESULT=isize;
-#[repr(C)]struct POINT{x:i32,y:i32} #[repr(C)]struct RECT{left:i32,top:i32,right:i32,bottom:i32}
+type HMONITOR=*mut c_void; type HWND=*mut c_void; type HINSTANCE=*mut c_void; type HICON=*mut c_void; type HCURSOR=*mut c_void; type HBRUSH=*mut c_void; type HDC=*mut c_void; type WPARAM=usize; type LPARAM=isize; type LRESULT=isize;
+#[repr(C)]#[derive(Clone,Copy)]struct POINT{x:i32,y:i32} #[repr(C)]#[derive(Clone,Copy)]struct RECT{left:i32,top:i32,right:i32,bottom:i32}
+#[repr(C)]struct MONITORINFO{cbSize:u32,rcMonitor:RECT,rcWork:RECT,dwFlags:u32}
+#[repr(C)]struct WINDOWPLACEMENT{length:u32,flags:u32,showCmd:u32,ptMinPosition:POINT,ptMaxPosition:POINT,rcNormalPosition:RECT}
 #[repr(C)]struct MSG{hwnd:HWND,message:u32,wParam:WPARAM,lParam:LPARAM,time:u32,pt:POINT,lPrivate:u32}
 #[repr(C)]struct PAINTSTRUCT{hdc:HDC,fErase:i32,rcPaint:RECT,fRestore:i32,fIncUpdate:i32,rgbReserved:[u8;32]}
 #[repr(C)]struct WNDCLASSW{style:u32,lpfnWndProc:Option<unsafe extern "system" fn(HWND,u32,WPARAM,LPARAM)->LRESULT>,cbClsExtra:i32,cbWndExtra:i32,hInstance:HINSTANCE,hIcon:HICON,hCursor:HCURSOR,hbrBackground:HBRUSH,lpszMenuName:*const u16,lpszClassName:*const u16}
@@ -28,6 +31,9 @@ type HWND=*mut c_void; type HINSTANCE=*mut c_void; type HICON=*mut c_void; type 
  fn ShowWindow(hwnd:HWND,cmd:i32)->i32; fn UpdateWindow(hwnd:HWND)->i32; fn GetMessageW(msg:*mut MSG,hwnd:HWND,min:u32,max:u32)->i32; fn TranslateMessage(msg:*const MSG)->i32; fn DispatchMessageW(msg:*const MSG)->LRESULT; fn PostQuitMessage(code:i32);
  fn BeginPaint(hwnd:HWND,ps:*mut PAINTSTRUCT)->HDC; fn EndPaint(hwnd:HWND,ps:*const PAINTSTRUCT)->i32; fn GetClientRect(hwnd:HWND,r:*mut RECT)->i32; fn InvalidateRect(hwnd:HWND,r:*const RECT,erase:i32)->i32; fn LoadCursorW(inst:HINSTANCE,name:*const u16)->HCURSOR;
  fn SetTimer(hwnd:HWND,id:usize,ms:u32,proc_:*const c_void)->usize; fn KillTimer(hwnd:HWND,id:usize)->i32; fn DestroyWindow(hwnd:HWND)->i32; fn SetProcessDPIAware()->i32; fn SetWindowPos(hwnd:HWND,after:HWND,x:i32,y:i32,cx:i32,cy:i32,flags:u32)->i32;
+ fn GetWindowLongPtrW(hwnd:HWND,index:i32)->isize; fn SetWindowLongPtrW(hwnd:HWND,index:i32,value:isize)->isize;
+ fn MonitorFromWindow(hwnd:HWND,flags:u32)->HMONITOR; fn GetMonitorInfoW(monitor:HMONITOR,info:*mut MONITORINFO)->i32;
+ fn GetWindowPlacement(hwnd:HWND,placement:*mut WINDOWPLACEMENT)->i32; fn SetWindowPlacement(hwnd:HWND,placement:*const WINDOWPLACEMENT)->i32;
  fn SetForegroundWindow(hwnd:HWND)->i32; fn SetActiveWindow(hwnd:HWND)->HWND; fn SetFocus(hwnd:HWND)->HWND; fn GetForegroundWindow()->HWND; fn GetAsyncKeyState(vkey:i32)->i16;
 }
 #[link(name="gdi32")]extern "system"{fn StretchDIBits(hdc:HDC,x:i32,y:i32,dw:i32,dh:i32,sx:i32,sy:i32,sw:i32,sh:i32,bits:*const c_void,bmi:*const BITMAPINFO,usage:u32,rop:u32)->i32;fn PatBlt(hdc:HDC,x:i32,y:i32,w:i32,h:i32,rop:u32)->i32;fn SetStretchBltMode(hdc:HDC,mode:i32)->i32;fn SetBrushOrgEx(hdc:HDC,x:i32,y:i32,prev:*mut POINT)->i32;}
@@ -54,9 +60,27 @@ impl TitleStartGate{
  }
 }
 
-struct App{base_fb:RenderSurface,fb:RenderSurface,assets:Assets,audio:Audio,ground:CollisionMask,game:Game,input:InputState,last:Instant,acc:f32,active:bool,intro_skip_armed:bool,qa_navigation:bool,qa_keys_were_down:[bool;4],qa_hud_next:usize,title_start_gate:TitleStartGate}
+#[derive(Debug,PartialEq,Eq)]
+enum FullscreenCommand{None,Enter,Exit}
+#[derive(Default)]
+struct FullscreenHotkeys{f_released:bool,escape_released:bool}
+impl FullscreenHotkeys{
+ fn reset_on_focus_loss(&mut self){self.f_released=false;self.escape_released=false;}
+ fn sample(&mut self,f_down:bool,escape_down:bool,is_fullscreen:bool)->FullscreenCommand{
+  let cmd=if is_fullscreen && escape_down && self.escape_released{FullscreenCommand::Exit}
+   else if !is_fullscreen && f_down && self.f_released{FullscreenCommand::Enter}
+   else{FullscreenCommand::None};
+  self.f_released=!f_down;
+  self.escape_released=!escape_down;
+  cmd
+ }
+}
+// Preserve the OS window's original style and restored/maximized placement.
+// Unlike WS_POPUP monitor sizing, WINDOWPLACEMENT also remembers maximization.
+struct WindowedState{style:isize,placement:WINDOWPLACEMENT}
+struct App{fullscreen_windowed:Option<WindowedState>,fullscreen_hotkeys:FullscreenHotkeys,fullscreen_escape_consumed:bool,base_fb:RenderSurface,fb:RenderSurface,assets:Assets,audio:Audio,ground:CollisionMask,game:Game,input:InputState,last:Instant,acc:f32,active:bool,intro_skip_armed:bool,qa_navigation:bool,qa_keys_were_down:[bool;4],qa_hud_next:usize,title_start_gate:TitleStartGate}
 impl App{
- fn new(qa_navigation:bool)->Self{Self{base_fb:RenderSurface::new(LOGICAL_W,LOGICAL_H),fb:RenderSurface::new(render::HQ_W,render::HQ_H),assets:Assets::load(),audio:Audio::new(),ground:CollisionMask::level1a(),game:Game::new(),input:InputState::default(),last:Instant::now(),acc:0.0,active:true,intro_skip_armed:false,qa_navigation,qa_keys_were_down:[false;4],qa_hud_next:0,title_start_gate:TitleStartGate::default()}}
+ fn new(qa_navigation:bool)->Self{Self{fullscreen_windowed:None,fullscreen_hotkeys:FullscreenHotkeys::default(),fullscreen_escape_consumed:false,base_fb:RenderSurface::new(LOGICAL_W,LOGICAL_H),fb:RenderSurface::new(render::HQ_W,render::HQ_H),assets:Assets::load(),audio:Audio::new(),ground:CollisionMask::level1a(),game:Game::new(),input:InputState::default(),last:Instant::now(),acc:0.0,active:true,intro_skip_armed:false,qa_navigation,qa_keys_were_down:[false;4],qa_hud_next:0,title_start_gate:TitleStartGate::default()}}
  unsafe fn poll_keyboard(&mut self,hwnd:HWND){
   // WM_ACTIVATE / WM_SETFOCUS are authoritative. GetForegroundWindow is
   // allowed to promote us to active, but a transient mismatch must not undo
@@ -74,12 +98,78 @@ impl App{
   let allow_start=if self.game.screen==AppScreen::Title{
    self.title_start_gate.allow(enter_down,space_down)
   }else{true};
+  let escape_down=(GetAsyncKeyState(VK_ESCAPE as i32) as u16&0x8000)!=0;
+  if !escape_down{self.fullscreen_escape_consumed=false;}
   for &k in KEYS.iter().chain(EXTRA_KEYS.iter()){
    let down=if k==VK_ENTER{enter_down}
+     else if k==VK_ESCAPE{escape_down && self.fullscreen_windowed.is_none() && !self.fullscreen_escape_consumed}
      else if k==VK_SPACE{space_down}
      else{(GetAsyncKeyState(k as i32) as u16&0x8000)!=0};
    self.input.set(k,down && (allow_start || (k!=VK_ENTER && k!=VK_SPACE)));
   }
+ }
+ // Alt-tab and focus regain must not turn a pre-held F or Esc into an action.
+ unsafe fn poll_fullscreen_hotkeys(&mut self,hwnd:HWND)->bool{
+  if !self.active{self.fullscreen_hotkeys.reset_on_focus_loss();return false;}
+  let f_down=(GetAsyncKeyState(0x46) as u16&0x8000)!=0; // VK_F
+  let escape_down=(GetAsyncKeyState(VK_ESCAPE as i32) as u16&0x8000)!=0;
+  match self.fullscreen_hotkeys.sample(f_down,escape_down,self.fullscreen_windowed.is_some()){
+   FullscreenCommand::Enter=>self.enter_borderless_fullscreen(hwnd),
+   FullscreenCommand::Exit=>{
+    if self.restore_windowed(hwnd){
+     // This same Esc press must NOT skip Intro or exit Instructions after restore.
+     self.fullscreen_escape_consumed=true;
+     self.input.set(VK_ESCAPE,false);
+     self.input.clear_pressed();
+     true
+    }else{false}
+   },
+   FullscreenCommand::None=>false,
+  }
+ }
+ unsafe fn enter_borderless_fullscreen(&mut self,hwnd:HWND)->bool{
+  if self.fullscreen_windowed.is_some(){return false;}
+  let style=GetWindowLongPtrW(hwnd,GWL_STYLE);
+  if style==0{return false;}
+  let mut saved:WINDOWPLACEMENT=zeroed();
+  saved.length=size_of::<WINDOWPLACEMENT>() as u32;
+  if GetWindowPlacement(hwnd,&mut saved)==0{return false;}
+  let monitor=MonitorFromWindow(hwnd,MONITOR_DEFAULTTONEAREST);
+  if monitor.is_null(){return false;}
+  let mut info:MONITORINFO=zeroed();
+  info.cbSize=size_of::<MONITORINFO>() as u32;
+  if GetMonitorInfoW(monitor,&mut info)==0{return false;}
+  let bounds=info.rcMonitor;
+  if bounds.right<=bounds.left || bounds.bottom<=bounds.top{return false;}
+  let borderless=(style & !(WS_OVERLAPPEDWINDOW as isize)) | (WS_POPUP as isize);
+  if SetWindowLongPtrW(hwnd,GWL_STYLE,borderless)==0{return false;}
+  // Mark fullscreen before resizing: synchronous DPI notifications must not
+  // apply a windowed suggested rectangle over the monitor bounds.
+  self.fullscreen_windowed=Some(WindowedState{style,placement:saved});
+  if SetWindowPos(hwnd,null_mut(),bounds.left,bounds.top,bounds.right-bounds.left,
+                  bounds.bottom-bounds.top,
+                  SWP_NOZORDER|SWP_NOOWNERZORDER|SWP_NOACTIVATE|SWP_FRAMECHANGED)==0{
+   if let Some(previous)=self.fullscreen_windowed.take(){
+    SetWindowLongPtrW(hwnd,GWL_STYLE,previous.style);
+    SetWindowPlacement(hwnd,&previous.placement);
+    SetWindowPos(hwnd,null_mut(),0,0,0,0,SWP_NOMOVE|SWP_NOSIZE|
+                 SWP_NOZORDER|SWP_NOOWNERZORDER|SWP_NOACTIVATE|SWP_FRAMECHANGED);
+   }
+   return false;
+  }
+  InvalidateRect(hwnd,null(),0);
+  true
+ }
+ unsafe fn restore_windowed(&mut self,hwnd:HWND)->bool{
+  let Some(previous)=self.fullscreen_windowed.as_ref() else{return false;};
+  if SetWindowLongPtrW(hwnd,GWL_STYLE,previous.style)==0{return false;}
+  let placement_ok=SetWindowPlacement(hwnd,&previous.placement)!=0;
+  let frame_ok=SetWindowPos(hwnd,null_mut(),0,0,0,0,SWP_NOMOVE|SWP_NOSIZE|
+                  SWP_NOZORDER|SWP_NOOWNERZORDER|SWP_NOACTIVATE|SWP_FRAMECHANGED)!=0;
+  if !placement_ok || !frame_ok{return false;}
+  self.fullscreen_windowed=None;
+  InvalidateRect(hwnd,null(),0);
+  true
  }
  /// Opt-in QA-only jumps: never mutate normal gameplay unless the developer
  /// explicitly launched the EXE with --qa-navigation. Return true if jumped.
@@ -131,6 +221,10 @@ impl App{
  }
  fn timer(&mut self,hwnd:HWND)->bool{
    unsafe{self.poll_keyboard(hwnd);}
+   if unsafe{self.poll_fullscreen_hotkeys(hwnd)} {
+    self.last=Instant::now();
+    return true;
+   }
    if unsafe{self.poll_qa_navigation()} {return true;}
    let now=Instant::now();let dt=(now-self.last).as_secs_f32().min(0.2);self.last=now;
    if !self.active{return false;}
@@ -195,8 +289,8 @@ unsafe extern "system" fn wndproc(hwnd:HWND,msg:u32,w:WPARAM,l:LPARAM)->LRESULT{
  WM_PAINT=>{let mut ps:PAINTSTRUCT=zeroed();let hdc=BeginPaint(hwnd,&mut ps);if !APP.is_null(){let app=&mut*APP;app.render();let mut r:RECT=zeroed();GetClientRect(hwnd,&mut r);let cw=(r.right-r.left).max(1);let ch=(r.bottom-r.top).max(1);let(vx,vy,vw,vh)=viewport(hwnd);if vy>0{PatBlt(hdc,0,0,cw,vy,BLACKNESS);PatBlt(hdc,0,vy+vh,cw,ch-vy-vh,BLACKNESS);}if vx>0{PatBlt(hdc,0,vy,vx,vh,BLACKNESS);PatBlt(hdc,vx+vw,vy,cw-vx-vw,vh,BLACKNESS);}let bmi=BITMAPINFO{bmiHeader:BITMAPINFOHEADER{biSize:size_of::<BITMAPINFOHEADER>()as u32,biWidth:app.fb.w as i32,biHeight:-(app.fb.h as i32),biPlanes:1,biBitCount:32,biCompression:BI_RGB,biSizeImage:app.fb.byte_len() as u32,biXPelsPerMeter:0,biYPelsPerMeter:0,biClrUsed:0,biClrImportant:0},bmiColors:[RGBQUAD{rgbBlue:0,rgbGreen:0,rgbRed:0,rgbReserved:0}]};/* Phase 1 HQ proof retained: high-quality final GDI presentation. Phase 2 makes source dimensions explicit without changing them yet. */SetStretchBltMode(hdc,HALFTONE);SetBrushOrgEx(hdc,0,0,null_mut());StretchDIBits(hdc,vx,vy,vw,vh,0,0,app.fb.w as i32,app.fb.h as i32,app.fb.pixels.as_ptr()as*const c_void,&bmi,DIB_RGB_COLORS,SRCCOPY);}EndPaint(hwnd,&ps);0},
  WM_TIMER=>{if !APP.is_null()&&(&mut*APP).timer(hwnd){InvalidateRect(hwnd,null(),0);}0},
  WM_SETFOCUS=>{if !APP.is_null(){(&mut*APP).active=true;}0},
- WM_KILLFOCUS=>{if !APP.is_null(){let app=&mut*APP;app.active=false;app.intro_skip_armed=false;app.input.release_all();app.title_start_gate.reset();}0},
- WM_ACTIVATE=>{if !APP.is_null(){let active=(w&0xffff)!=WA_INACTIVE;let app=&mut*APP;app.active=active;if !active{app.intro_skip_armed=false;app.input.release_all();app.title_start_gate.reset();}}0},
+ WM_KILLFOCUS=>{if !APP.is_null(){let app=&mut*APP;app.active=false;app.intro_skip_armed=false;app.input.release_all();app.title_start_gate.reset();app.fullscreen_hotkeys.reset_on_focus_loss();}0},
+ WM_ACTIVATE=>{if !APP.is_null(){let active=(w&0xffff)!=WA_INACTIVE;let app=&mut*APP;app.active=active;if !active{app.intro_skip_armed=false;app.input.release_all();app.title_start_gate.reset();app.fullscreen_hotkeys.reset_on_focus_loss();}}0},
  WM_LBUTTONDOWN=>{
     SetActiveWindow(hwnd);SetFocus(hwnd);
     if !APP.is_null(){
@@ -228,14 +322,14 @@ unsafe extern "system" fn wndproc(hwnd:HWND,msg:u32,w:WPARAM,l:LPARAM)->LRESULT{
     }
     0
   },
-  WM_DPICHANGED=>{if l!=0{let r=&*(l as *const RECT);let width=(r.right-r.left).max(1);let height=(r.bottom-r.top).max(1);SetWindowPos(hwnd,null_mut(),r.left,r.top,width,height,SWP_NOZORDER|SWP_NOACTIVATE);}InvalidateRect(hwnd,null(),0);0},
+  WM_DPICHANGED=>{if !APP.is_null()&&(&*APP).fullscreen_windowed.is_some(){InvalidateRect(hwnd,null(),0);return 0;}if l!=0{let r=&*(l as *const RECT);let width=(r.right-r.left).max(1);let height=(r.bottom-r.top).max(1);SetWindowPos(hwnd,null_mut(),r.left,r.top,width,height,SWP_NOZORDER|SWP_NOACTIVATE);}InvalidateRect(hwnd,null(),0);0},
  WM_CLOSE=>{DestroyWindow(hwnd);0}, WM_DESTROY=>{KillTimer(hwnd,1);PostQuitMessage(0);0}, _=>DefWindowProcW(hwnd,msg,w,l)}}
 
 pub fn run(qa_navigation:bool){unsafe{let _dpi_aware=enable_best_dpi_awareness();APP=Box::into_raw(Box::new(App::new(qa_navigation)));let inst=GetModuleHandleW(null());let cls=wide("BatmanCobbleBotLevel1AFidelity");let title=wide("The Batman - CobbleBot Caper - Level 1A Fidelity Slice");let wc=WNDCLASSW{style:CS_HREDRAW|CS_VREDRAW,lpfnWndProc:Some(wndproc),cbClsExtra:0,cbWndExtra:0,hInstance:inst,hIcon:null_mut(),hCursor:LoadCursorW(null_mut(),IDC_ARROW),hbrBackground:null_mut(),lpszMenuName:null(),lpszClassName:cls.as_ptr()};if RegisterClassW(&wc)==0{return;}let hwnd=CreateWindowExW(0,cls.as_ptr(),title.as_ptr(),WS_OVERLAPPEDWINDOW|WS_VISIBLE,CW_USEDEFAULT,CW_USEDEFAULT,930,660,null_mut(),null_mut(),inst,null_mut());if hwnd.is_null(){return;}ShowWindow(hwnd,SW_SHOW);SetActiveWindow(hwnd);SetForegroundWindow(hwnd);SetFocus(hwnd);UpdateWindow(hwnd);SetTimer(hwnd,1,8,null());let mut msg:MSG=zeroed();while GetMessageW(&mut msg,null_mut(),0,0)>0{TranslateMessage(&msg);DispatchMessageW(&msg);}let _=Box::from_raw(APP);APP=null_mut();}}
 
 #[cfg(test)]
 mod tests{
-  use super::{viewport_for_client,client_to_stage,hit_intro_skip,INTRO_SKIP_RECT,QA_HUD_CASES,QA_SCENE_KEYS,TitleStartGate};
+  use super::{viewport_for_client,client_to_stage,hit_intro_skip,INTRO_SKIP_RECT,QA_HUD_CASES,QA_SCENE_KEYS,TitleStartGate,FullscreenHotkeys,FullscreenCommand};
   use crate::game::{AppScreen,Game,InputState,VK_ENTER,VK_SPACE};
   use crate::collision::CollisionMask;
 
@@ -263,6 +357,35 @@ mod tests{
     assert_eq!(game.screen,AppScreen::Intro);
     gate.reset();
     assert!(!gate.allow(key==VK_ENTER,key==VK_SPACE));
+   }
+  }
+
+  #[test]
+  fn fullscreen_f_and_escape_are_fresh_edges_with_focus_safety(){
+   let mut gate=FullscreenHotkeys::default();
+   // Neither launch- nor focus-inherited keys may toggle a mode.
+   assert_eq!(gate.sample(true,true,false),FullscreenCommand::None);
+   assert_eq!(gate.sample(false,false,false),FullscreenCommand::None);
+   assert_eq!(gate.sample(true,false,false),FullscreenCommand::Enter);
+   assert_eq!(gate.sample(true,false,true),FullscreenCommand::None);
+   assert_eq!(gate.sample(false,false,true),FullscreenCommand::None);
+   assert_eq!(gate.sample(true,false,true),FullscreenCommand::None); // F cannot exit
+   assert_eq!(gate.sample(false,true,true),FullscreenCommand::Exit);
+   assert_eq!(gate.sample(false,true,false),FullscreenCommand::None);
+   gate.reset_on_focus_loss();
+   assert_eq!(gate.sample(true,true,false),FullscreenCommand::None);
+   assert_eq!(gate.sample(false,false,false),FullscreenCommand::None);
+   assert_eq!(gate.sample(true,false,false),FullscreenCommand::Enter);
+  }
+
+  #[test]
+  fn fullscreen_letterbox_keeps_logical_aspect_for_widescreen_and_portrait(){
+   for &(w,h) in &[(1920,1080),(2560,1440),(3440,1440),(1080,1920)]{
+    let(x,y,dw,dh)=viewport_for_client(w,h);
+    assert!(x>=0&&y>=0&&dw<=w&&dh<=h);
+    assert!((dw as i64*2-dh as i64*3).abs()<=1);
+    assert!((w-dw-2*x).abs()<=1);
+    assert!((h-dh-2*y).abs()<=1);
    }
   }
 
