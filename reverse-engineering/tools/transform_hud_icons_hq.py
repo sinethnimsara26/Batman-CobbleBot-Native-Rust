@@ -4,7 +4,7 @@
 Adjust four proven Flash display-list placements in a throwaway symbols
 metadata copy. Original symbols.json and the 1x source oracle are untouched.
 Nested blue Batarang #693 must NOT move sibling text fields #700/#702.
-Yellow Health is the composite of root placements #698/#705/#709; scale
+Yellow Health uses root placements #705/#709; scale
 their individual original vectors together around one source-space center.
 """
 import argparse
@@ -46,7 +46,7 @@ def transform_symbols(source,layout):
         raise ValueError("HQ-only icon scale must be 92..98%")
     if set(b["blue"])!={ "parent","child","center"} or b["blue"]["parent"]!=703 or b["blue"]["child"]!=693:
         raise ValueError("Blue icon source ID changed")
-    if b["yellow"]["parent"]!=716 or b["yellow"]["children"]!=[698,705,709]:
+    if b["yellow"]["parent"]!=716 or b["yellow"]["children"]!=[705,709]:
         raise ValueError("Yellow icon composite source IDs changed")
     blue_changed=scale_matrix(exact_target(blue,693),factor,b["blue"]["center"])
     yellow_changed=[
@@ -55,7 +55,7 @@ def transform_symbols(source,layout):
     ]
     return symbols,{"SWF_sprite":716,"style":"HQ only","scale_percent":b["scale_percent"],
                     "blue":blue_changed,"yellow":yellow_changed,
-                    "preserved":[697,700,702,706,707,708,710,711,713,714,715]}
+                    "preserved":[697,698,700,702,706,707,708,710,711,713,714,715]}
 
 def main():
     p=argparse.ArgumentParser()

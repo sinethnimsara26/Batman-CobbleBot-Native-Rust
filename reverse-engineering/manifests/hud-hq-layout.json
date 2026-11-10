@@ -5,7 +5,7 @@
     600,
     400
   ],
-  "notes": "Themed HQ only: original SWF-716 blue #693 and yellow #698/#705/#709 icon vectors shrunk to 94% in copied symbol metadata; labels and translucent panel untouched, original 1x source unchanged. Batarang-specific digit ink 121% tall (from 115%), y 59→58; lives/small-score stay 115%; batarang pitch 9, lives pitch 10, SCORE width 92.",
+  "notes": "Themed HQ only: original SWF-716 blue #693 and yellow #705/#709 icon vectors (keep #698 translucent backing exactly intact) shrunk to 94% in copied symbol metadata; labels and translucent panel untouched, original 1x source unchanged. Batarang-specific digit ink 121% tall (from 115%), y 59→58; lives/small-score stay 115%; batarang pitch 9, lives pitch 10, SCORE width 92.",
   "static_offsets_logical": {
     "700": [
       0,
@@ -64,7 +64,6 @@
     "yellow": {
       "parent": 716,
       "children": [
-        698,
         705,
         709
       ],
