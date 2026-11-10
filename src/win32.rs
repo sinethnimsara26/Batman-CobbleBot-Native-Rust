@@ -88,7 +88,7 @@ impl AudioFocusQaLog{
   let name=std::env::var_os("BCB_FOCUS_QA_LOG")?;
   let path=std::path::PathBuf::from(name);
   let mut file=std::fs::File::create(path).ok()?;
-  let _=writeln!(file,"elapsed_ms\treason\tactive\tscreen\tintro_tick\tintro_fade_tick\tmci_mode\tmci_position\tmci_time_format\tmode_error\tposition_error\tformat_error\ttransport");
+  let _=writeln!(file,"elapsed_ms\treason\tactive\tscreen\tintro_tick\tintro_fade_tick\tmci_mode\tmci_position\tmci_time_format\tmode_error\tposition_error\tformat_error\ttransport\topen_error\topen_message\tfile_written");
   let now=Instant::now();
   Some(Self{file,started:now,last:now})
  }
@@ -102,11 +102,12 @@ impl App{
  fn trace_qa_audio(&mut self,reason:&str){
   let Some(log)=self.qa_audio_focus.as_mut() else{return;};
   let (mode,position,format,em,ep,ef)=self.audio.qa_intro_mci_status();
+  let (open_error,open_message,file_written)=self.audio.qa_intro_open_diagnostics();
   let fade=self.game.intro_fadeout_tick.map(|f|f as i32).unwrap_or(-1);
-  let _=writeln!(log.file,"{}\t{}\t{}\t{:?}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+  let _=writeln!(log.file,"{}\t{}\t{}\t{:?}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
    log.started.elapsed().as_millis(),reason,if self.active {1}else{0},
    self.game.screen,self.game.intro_tick,fade,mode,position,format,em,ep,ef,
-   self.audio.qa_intro_transport());
+   self.audio.qa_intro_transport(),open_error,open_message,if file_written{1}else{0});
   let _=log.file.flush();
   log.last=Instant::now();
  }

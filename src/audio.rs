@@ -11,6 +11,7 @@ extern "system" {
         return_length: u32,
         callback: *mut c_void,
     ) -> u32;
+    fn mciGetErrorStringW(error:u32,buffer:*mut u16,length:u32)->i32;
 }
 
 fn wide(s:&str)->Vec<u16>{s.encode_utf16().chain(Some(0)).collect()}
@@ -61,6 +62,8 @@ impl IntroTransport {
 pub struct Audio {
     dir:PathBuf,
     intro:bool,
+    intro_open_error:u32,
+    intro_file_written:bool,
     intro_transport:IntroTransport,
     music:bool,
     jump:bool,
@@ -76,8 +79,12 @@ impl Audio {
         let music_path=dir.join("level1a.mp3");
         let jump_path=dir.join("jump.mp3");
         let item_path=dir.join("item.mp3");
-        let intro=fs::write(&intro_path,include_bytes!("../assets/intro_sound.mp3")).is_ok()
-            && command(&format!("open \"{}\" type mpegvideo alias bcb_intro",intro_path.display()));
+        let intro_file_written=fs::write(&intro_path,include_bytes!("../assets/intro_sound.mp3")).is_ok();
+        let intro_open_error=if intro_file_written {
+            let line=format!("open \"{}\" type mpegvideo alias bcb_intro",intro_path.display());
+            unsafe{mciSendStringW(wide(&line).as_ptr(),std::ptr::null_mut(),0,std::ptr::null_mut())}
+        }else{u32::MAX};
+        let intro=intro_file_written && intro_open_error==0;
         let music=fs::write(&music_path,include_bytes!("../assets/level1a_music.mp3")).is_ok()
             && command(&format!("open \"{}\" type mpegvideo alias bcb_music",music_path.display()));
         let jump=fs::write(&jump_path,include_bytes!("../assets/jump.mp3")).is_ok()
@@ -85,7 +92,7 @@ impl Audio {
         let item=fs::write(&item_path,include_bytes!("../assets/item.mp3")).is_ok()
             && command(&format!("open \"{}\" type mpegvideo alias bcb_item",item_path.display()));
 
-        Self{dir,intro,intro_transport:IntroTransport::Stopped,music,jump,item}
+        Self{dir,intro,intro_open_error,intro_file_written,intro_transport:IntroTransport::Stopped,music,jump,item}
     }
 
     /// While Win32 stops the 25Hz simulation off-focus, the original intro
@@ -100,6 +107,15 @@ impl Audio {
 
     /// Read the real Windows MCI driver's mode, position and time format.
     /// Called solely by the opt-in offline QA trace; never on a normal run.
+    pub fn qa_intro_open_diagnostics(&self)->(u32,String,bool){
+        let mut buf=[0u16;256];
+        let ok=unsafe{mciGetErrorStringW(self.intro_open_error,buf.as_mut_ptr(),buf.len() as u32)}!=0;
+        let end=buf.iter().position(|&u|u==0).unwrap_or(buf.len());
+        let message=if ok{String::from_utf16_lossy(&buf[..end])}
+          else{"mciGetErrorStringW unavailable for code".into()};
+        (self.intro_open_error,message.replace('\t'," ").replace('\r'," ").replace('\n'," "),self.intro_file_written)
+    }
+
     pub fn qa_intro_mci_status(&self)->(String,String,String,u32,u32,u32){
         if !self.intro {
             return ("not_open".into(),"".into(),"".into(),1,1,1);
