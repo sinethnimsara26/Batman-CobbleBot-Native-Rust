@@ -1,5 +1,11 @@
 # AI agent operating guide — Batman: The CobbleBot Caper
 
+## 2026-11-11 Batch09 current CI evidence and next dependency-lock gate
+
+The completed [Batch09 Windows run #42894745206](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42894745206) succeeded **77/77**, tests21/21 and original 1× hashes15/15, real Windows Shell HICON artwork 16px/32px source gold pixels 27/27 and 208/208, new actual OS icon PNG artifact #13800383546. This **adds OS icon pixel proof, not user pinned taskbar/Explorer acceptance**; audio-speaker/MCI remains blocked by hosted no endpoint. Authoritative details are the *topmost* [handoff](docs/AI_HANDOFF.md), [tasks](docs/AI_TASKS.md), [audit](docs/PROJECT_WIDE_AUDIT_2026-11-11.md), RE-20261111-006 / AUD-20261111-006. The next bounded engineering improvement is to investigate and commit a real generated Cargo.lock (not currently tracked) and use --locked in CI; do not guess a dependency tree or alter game logic. PR18 stays DRAFT, issue17 OPEN, main/Level1B untouched.
+
+
+
 ## Current documentation entry point — project-wide recovery audit (2026-11-11)
 
 Before reading historical repeated "CURRENT" checkpoint sections, start with [the consolidated project-wide audit](docs/PROJECT_WIDE_AUDIT_2026-11-11.md), then the topmost current [AI_HANDOFF](docs/AI_HANDOFF.md) and [AI_TASKS](docs/AI_TASKS.md). Do NOT treat old 2026-11-09 PR/issue candidate links, QA ZIP hashes or older next-batch instructions as live delivery. CI builds after Batch08: code-run #42888932281 and prior doc-run #42891451043 both COMPLETED/SUCCESS 75/75. User acceptance remains issue17 OPEN; PR18 remains DRAFT; newest planned work is a **single icon Shell HICON visual evidence batch**, never automatic merge or Level1B. Documentation-only project audit RE-20261111-005 / AUD-20261111-005; **no implementation changed**.

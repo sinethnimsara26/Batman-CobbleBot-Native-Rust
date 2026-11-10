@@ -1,5 +1,11 @@
 # Persistent development tasks — Batman Rust port
 
+## 2026-11-11 — ICON-SHELL-PIXEL-QA-09 VERIFIED, followed by BUILD-LOCK-10 TODO
+
+**Batch09 VERIFIED:** Actual Windows [#42894745206](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42894745206) success 77/77; 21 Rust tests, 15 original hashes, actual OS HICON pixels 16px gold 27/27 and 32px 208/208; screenshot artifact #13800383546 downloaded and inspected. Only CI-only Python probe and workflow changed. HQ p95 22.3815ms; scenery p95 22.2735ms <40ms. No physical Windows user taskbar icon/real speaker approval. **Next BUILD-LOCK-10 TODO:** No tracked Cargo.lock; obtain actual Cargo-generated lockfile from Windows CI artifact rather than hand-authoring dependencies, add to repo and enforce --locked test/build, verify full Windows CI, original hashes and six-file records. Preserve PR18 draft, issue17 open. RE-20261111-006 and AUD-20261111-006.
+
+
+
 ## 2026-11-11 — AUDIT-RECONCILE-09 project-wide recovery and documentation maintenance (documentation-only)
 
 **STATE: VERIFIED REPOSITORY/DOCUMENT AUDIT; NO RUST/GAME IMPLEMENTATION CHANGES.** [Full evidence and limits](PROJECT_WIDE_AUDIT_2026-11-11.md). Initial dev branch SHA `86b81fac31aa52805a1ab636c6dc077db1e901f9`; full source-code run #42888932281 and docs-follow-up run #42891451043 both SUCCESS 75/75. 43 RE records, 40 AUD records, all six mandatory documents, no numbered gaps within individual ledgers. RE-20261109-013/014/015 without same-number AUD are appropriately verification-only/preimplementation/CI-failure research, not proof of undocumented Rust. Updated stale README, revival diary, QA package/navigation, and issue/PR current summaries while preserving historical records. **NEXT new scoped batch:** ICON-SHELL-PIXEL-QA-09: gather actual Windows Shell-extracted HICON image pixels at 16/32, validate gold-bat content and save real PNG evidence. **No merge/Level1B.** RE-20261111-005, AUD-20261111-005 (documentation-only/no implementation audit).

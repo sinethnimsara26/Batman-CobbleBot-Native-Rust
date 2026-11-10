@@ -1,5 +1,13 @@
 # AI handoff — current recovery checkpoint
 
+## CURRENT — 2026-11-11 ICON-SHELL-PIXEL-QA-09 actual Windows gold-bat screenshots VERIFIED
+
+**Head (code):** 8ae565570f2012d7658b1fce918cc96375fca211 on `revive/level1a-intro-hud-fidelity-2026-11-09`, PR18 DRAFT/UNMERGED, issue17 OPEN. [CI #42894745206](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42894745206) COMPLETED SUCCESS **77/77**, MSVC tests21/21, original 1× hashes15/15, normal HWND+OS Shell icon, 20 relocated HQ hashes, F/Esc and F8 GUI, p95 HQ22.3815/scenery22.2735ms <40. Actual Win32 Shell HICON pixels verified gold counts 27/27 at16 and 208/208 at32. Source-vs-HICON PNGs + JSON in downloaded [artifact #13800383546](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42894745206/artifacts/13800383546). Original art matches OS icon; user pinned taskbar/Explorer icon cache NOT YET OBSERVED. Physical MCI hardware status BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT, not a pass. Nothing merged or Level1B changed.
+
+**Record status:** Read [project audit](PROJECT_WIDE_AUDIT_2026-11-11.md), research RE-20261111-006, engineering audit AUD-20261111-006, task/worklog. New docs-only checkpoint SHA is next remote branch commit. **NEXT strictly bounded batch BUILD-LOCK-10:** Cargo.lock absent from tracked repository though Cargo.toml specifies `png = "0.17.16"`; collect true Windows-generated lockfile through CI artifact, commit it, enforce --locked, rerun strict Windows gates. Do not invent lock content or combine with gameplay. Audit link scan 37 Markdown files / 914 relative links, no missing tracked paths; no claim all external URL/heading anchors valid. Old prior "CURRENT" headings superseded by this top one.
+
+
+
 ## CURRENT — 2026-11-11 project-wide audit checkpoint (documentation only)
 
 **Read FIRST:** [Full project-wide evidence inventory and corrections](PROJECT_WIDE_AUDIT_2026-11-11.md). At audit start the development branch was `86b81fac31aa52805a1ab636c6dc077db1e901f9` on draft PR18, issue17 OPEN, main/Level1B not touched by this work. Both the last code run #42888932281 and subsequent six-file documentation-run #42891451043 were independently rechecked **COMPLETED SUCCESS 75/75**. Code SHA 62c4159840a82303af123759577bfd4549f33366; separate docs SHA 86b81fac31aa52805a1ab636c6dc077db1e901f9. This audit creates a new docs commit (final SHA must be read from GitHub after push), updates README and historical navigation without deleting earlier evidence, and fixes old PR/issue current summaries. No runtime changes.

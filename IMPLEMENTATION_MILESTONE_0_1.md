@@ -1,5 +1,8 @@
 # Native implementation milestone 0.1
 
+> **Historical milestone, not current build or acceptance status.** This record belongs to the earlier native prototype. For current Rust Level1A, icon, CI, and QA acceptance use [2026-11-11 audit](docs/PROJECT_WIDE_AUDIT_2026-11-11.md) and [current handoff](docs/AI_HANDOFF.md). Preserve historical commit/run/hashes below as originally reported.
+
+
 Status: **BUILDS SUCCESSFULLY ON WINDOWS**
 
 Validated source head:
