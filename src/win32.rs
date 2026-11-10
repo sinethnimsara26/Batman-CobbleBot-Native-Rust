@@ -81,6 +81,18 @@ impl FullscreenHotkeys{
 // Unlike WS_POPUP monitor sizing, WINDOWPLACEMENT also remembers maximization.
 struct WindowedState{style:isize,placement:WINDOWPLACEMENT}
 
+// A synchronous WinMM resume can block the UI thread. Never charge that
+// media-driver delay to the next 25Hz animation update on regaining focus.
+fn resume_media_then_reset_visual_clock(
+    resume_media: impl FnOnce(),
+    last: &mut Instant,
+    acc: &mut f32,
+){
+    resume_media();
+    *last=Instant::now();
+    *acc=0.0;
+}
+
 // Only with BCB_FOCUS_QA_LOG set. Never creates output for an ordinary user.
 struct AudioFocusQaLog{file:std::fs::File,started:Instant,last:Instant}
 impl AudioFocusQaLog{
@@ -123,10 +135,13 @@ impl App{
   if self.active==active{return;}
   self.active=active;
   if active{
-   // Never catch up the stopped visual timeline in one burst on return.
-   self.last=Instant::now();
-   self.acc=0.0;
-   self.audio.on_focus_changed(true);
+   // WinMM can take time to resume; frame clock begins AFTER it returns.
+   // Otherwise a slow driver call causes a visible burst of stale ticks.
+   resume_media_then_reset_visual_clock(
+    || self.audio.on_focus_changed(true),
+    &mut self.last,
+    &mut self.acc,
+   );
   }else{
    self.audio.on_focus_changed(false);
    self.intro_skip_armed=false;
@@ -390,9 +405,30 @@ pub fn run(qa_navigation:bool){unsafe{let _dpi_aware=enable_best_dpi_awareness()
 
 #[cfg(test)]
 mod tests{
-  use super::{viewport_for_client,client_to_stage,hit_intro_skip,INTRO_SKIP_RECT,QA_HUD_CASES,QA_SCENE_KEYS,TitleStartGate,FullscreenHotkeys,FullscreenCommand};
+  use super::{viewport_for_client,client_to_stage,hit_intro_skip,INTRO_SKIP_RECT,QA_HUD_CASES,QA_SCENE_KEYS,TitleStartGate,FullscreenHotkeys,FullscreenCommand,resume_media_then_reset_visual_clock};
+  use std::time::{Duration,Instant};
   use crate::game::{AppScreen,Game,InputState,VK_ENTER,VK_SPACE};
   use crate::collision::CollisionMask;
+
+  #[test]
+  fn focus_resume_discards_media_driver_delay_and_old_visual_accumulator(){
+   // Mock a slow MCI resume. The clock must be sampled AFTER completion,
+   // not before the media driver starts running.
+   let mut last=Instant::now()-Duration::from_millis(300);
+   let mut acc=0.039_f32;
+   let mut media_finished=None;
+   resume_media_then_reset_visual_clock(
+    || {
+     std::thread::sleep(Duration::from_millis(65));
+     media_finished=Some(Instant::now());
+    },
+    &mut last,
+    &mut acc,
+   );
+   assert!(last>=media_finished.expect("mock media callback ran"));
+   assert_eq!(acc,0.0);
+   assert!(last.elapsed()<Duration::from_millis(500));
+  }
 
   #[test]
   fn title_start_ignores_inherited_key_until_release_and_fresh_press(){
