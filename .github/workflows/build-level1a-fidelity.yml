@@ -1663,6 +1663,31 @@ jobs:
       - name: Build Level 1A fidelity slice
         run: cargo build --release --target x86_64-pc-windows-msvc
 
+      # BUILD-LOCK-10 stage1: collect the ACTUAL Cargo-resolved dependency
+      # lockfile created by native Windows MSVC test/build. Do not invent it.
+      # After this artifact is inspected, commit Cargo.lock and require --locked.
+      - name: Capture generated Cargo.lock provenance (Batch10 stage1)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (!(Test-Path -LiteralPath "Cargo.lock")) {
+              throw "Cargo.lock missing after native MSVC build"
+          }
+          $data = Get-Content Cargo.lock -Raw
+          if ($data -notmatch '\[\[package\]\]' -or $data -notmatch 'name = "png"') {
+              throw "Generated Cargo.lock lacks expected dependency records"
+          }
+          Get-FileHash Cargo.lock -Algorithm SHA256
+          cargo metadata --format-version 1 --no-deps --locked --offline | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw "Current generated lockfile failed offline metadata validation" }
+          Write-Host "BUILD-LOCK-10 STAGE1 PASS: actual Cargo lockfile generated and validated"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Batman-CobbleBot-CargoLock-Actual-Windows-Snapshot
+          path: Cargo.lock
+          if-no-files-found: error
+
       # ICON-EXE-07: actual built PE resource table, Windows Shell icon
       # extraction, and the NORMAL game HWND's registered class icon.
       # This is not a claim that a user's pinned taskbar has refreshed its cache.
