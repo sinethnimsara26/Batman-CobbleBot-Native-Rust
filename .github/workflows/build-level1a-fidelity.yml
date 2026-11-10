@@ -844,6 +844,11 @@ jobs:
           assert "stroke_width=outline,stroke_fill=(2,2,5,255))" in baker
           print("Round 6 HUD contract PASS: one HQ layout manifest emits Rust constants; source HUD/icons preserved, stronger near-black outline, no duplicate band.")
 
+      - name: Validate HUD-REAL-05C true-3x multi-value ink clearance
+        shell: pwsh
+        run: |
+          python reverse-engineering/tools/check_hud_multivalue_ink.py
+
       - name: Validate Round 7 true-3x foreground timelines
         shell: python
         run: |
@@ -1592,6 +1597,22 @@ jobs:
         continue-on-error: true
         run: |
           python reverse-engineering/tools/windows_gui_pilot.py --exe target/x86_64-pc-windows-msvc/release/batman_cobblebot_native.exe --out .generated/windows-gui-pilot
+
+      - name: Require three real Windows F8 HUD captures
+        shell: python
+        run: |
+          import json
+          from pathlib import Path
+          out=Path(".generated/windows-gui-pilot")
+          report=json.loads((out/"pilot-report.json").read_text())
+          qa=report.get("qa_navigation",{})
+          cases=qa.get("hud_fixtures",[])
+          assert qa.get("hud_test_status")=="THREE_OS_F8_CAPTURES_WITH_CHANGED_HUD",qa
+          assert len(cases)==3,cases
+          assert all(c["changed_from_prior"] for c in cases),cases
+          assert all((out/c["file"]).is_file() for c in cases),cases
+          assert not report["errors"],report["errors"]
+          print("HUD-REAL-05C genuine Win32 keyboard F8 and screenshots PASS")
 
       - name: Verify Round 2 legacy pixels against renderer-repair baseline
         shell: python
