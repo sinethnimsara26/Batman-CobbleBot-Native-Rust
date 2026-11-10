@@ -413,8 +413,18 @@ def main():
         # HUD sprite 716 is placed at source root stage (159,-11).
         x=round((mx-159)*temp_scale+temp_anchor[0]-x_glyph.width/2)
         y=round((my+11)*temp_scale+temp_anchor[1]-x_glyph.height/2)
+        # An atlas CELL contains intentional transparent padding. Its bottom
+        # can extend a few 6x pixels past sprite 716's canvas even when every
+        # actual anti-aliased X pixel fits. Crop ONLY transparent margins;
+        # never clip visible ink or enlarge/reposition the source HUD shell.
+        ink_box=x_glyph.getchannel("A").getbbox()
+        if ink_box is None:
+            raise ValueError("Lives X glyph unexpectedly has no visible pixels")
+        x+=ink_box[0]
+        y+=ink_box[1]
+        x_glyph=x_glyph.crop(ink_box)
         if x<0 or y<0 or x+x_glyph.width>image.width or y+x_glyph.height>image.height:
-            raise ValueError("Lives X is outside the original HUD shell canvas")
+            raise ValueError("Visible Lives X ink is outside the original HUD shell canvas")
         old_alpha=image.crop((x,y,x+x_glyph.width,y+x_glyph.height)).getchannel("A")
         old_opaque=old_alpha.point(lambda v:255 if v>=208 else 0)
         x_ink=x_glyph.getchannel("A").point(lambda v:255 if v>=32 else 0)
