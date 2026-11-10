@@ -822,6 +822,7 @@ jobs:
           assert layout["counters"]["batarangs"]["digit_advance"]==9
           assert layout["counters"]["lives"]["digit_advance"]==10
           assert layout["counters"]["batarangs"]["center"]==[211,59]
+          assert layout["counters"]["score"]["max_width"]==92
           generated=Path("assets/hud_hq_layout.rs").read_text()
           for symbol in ("BATARANG_CENTER","BATARANG_MAX_WIDTH",
                          "SCORE_CENTER","SCORE_MAX_WIDTH","LIVES_VALUE_LEFT",

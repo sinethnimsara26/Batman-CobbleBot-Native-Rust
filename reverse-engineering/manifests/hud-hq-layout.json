@@ -5,7 +5,7 @@
     600,
     400
   ],
-  "notes": "Themed HQ only: 600x400 logical coordinates, 9px Batarang and 10px lives digit advances; small atlas glyph ink stretched +15% vertically at build time. 1x Flash source remains unchanged.",
+  "notes": "Themed HQ only: 600x400 logical coordinates, 9px Batarang and 10px lives digit advances; small atlas glyph ink stretched +15% vertically at build time; SCORE width allowance 92 logical px avoids maximum-i32 adjacent digit ink overlap. 1x Flash source remains unchanged.",
   "static_offsets_logical": {
     "700": [
       0,
@@ -40,7 +40,7 @@
         387,
         35
       ],
-      "max_width": 90
+      "max_width": 92
     },
     "lives": {
       "field_id": 714,

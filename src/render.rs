@@ -891,6 +891,11 @@ mod tests{
         assert_eq!(hud_digit_step_width(42,3,180,42),(42,126));
         let (step,width)=hud_digit_step_width(42,10,270,42);
         assert!(step<42 && step>=1 && width<=270);
+        // HUD-REAL-05C: the real 3x Impact small atlas has 42px cells;
+        // at ten score digits, 26px pitch clears glyph ink while 25px
+        // overlaps neighboring outlines. HQ-only 92 logical px fits 276px.
+        assert_eq!(hud_hq_layout::SCORE_MAX_WIDTH,92);
+        assert_eq!(hud_digit_step_width(42,10,92*HQ_SCALE as i32,0),(26,276));
     }
 
     #[test]
