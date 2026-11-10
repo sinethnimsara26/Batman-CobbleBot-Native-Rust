@@ -36,13 +36,15 @@ type HWND=*mut c_void; type HINSTANCE=*mut c_void; type HICON=*mut c_void; type 
 const KEYS:[usize;10]=[VK_LEFT,VK_RIGHT,VK_UP,VK_DOWN,VK_SPACE,VK_ENTER,VK_ESCAPE,VK_I,VK_A,VK_D];
 const EXTRA_KEYS:[usize;1]=[VK_S];
 // Developer navigation keys only exist with --qa-navigation.
-// F5 = Title, F6 = first Intro frame, F7 = active Level 1A HUD.
+// F5 = Title, F6 = Intro, F7 = natural-level QA, F8 = next HUD fixture.
 // Their rising edges are polled independently of normal game controls.
-const QA_SCENE_KEYS:[i32;3]=[0x74,0x75,0x76];
+const QA_SCENE_KEYS:[i32;4]=[0x74,0x75,0x76,0x77];
+// QA-only: (Batarangs, Lives, Score), never normal-game initial values.
+const QA_HUD_CASES:[(i32,i32,i32);3]=[(20,10,1234),(99,12,123456),(20,99,i32::MAX)];
 
-struct App{base_fb:RenderSurface,fb:RenderSurface,assets:Assets,audio:Audio,ground:CollisionMask,game:Game,input:InputState,last:Instant,acc:f32,active:bool,intro_skip_armed:bool,qa_navigation:bool,qa_keys_were_down:[bool;3]}
+struct App{base_fb:RenderSurface,fb:RenderSurface,assets:Assets,audio:Audio,ground:CollisionMask,game:Game,input:InputState,last:Instant,acc:f32,active:bool,intro_skip_armed:bool,qa_navigation:bool,qa_keys_were_down:[bool;4],qa_hud_next:usize}
 impl App{
- fn new(qa_navigation:bool)->Self{Self{base_fb:RenderSurface::new(LOGICAL_W,LOGICAL_H),fb:RenderSurface::new(render::HQ_W,render::HQ_H),assets:Assets::load(),audio:Audio::new(),ground:CollisionMask::level1a(),game:Game::new(),input:InputState::default(),last:Instant::now(),acc:0.0,active:true,intro_skip_armed:false,qa_navigation,qa_keys_were_down:[false;3]}}
+ fn new(qa_navigation:bool)->Self{Self{base_fb:RenderSurface::new(LOGICAL_W,LOGICAL_H),fb:RenderSurface::new(render::HQ_W,render::HQ_H),assets:Assets::load(),audio:Audio::new(),ground:CollisionMask::level1a(),game:Game::new(),input:InputState::default(),last:Instant::now(),acc:0.0,active:true,intro_skip_armed:false,qa_navigation,qa_keys_were_down:[false;4],qa_hud_next:0}}
  unsafe fn poll_keyboard(&mut self,hwnd:HWND){
   // WM_ACTIVATE / WM_SETFOCUS are authoritative. GetForegroundWindow is
   // allowed to promote us to active, but a transient mismatch must not undo
@@ -57,7 +59,7 @@ impl App{
  /// explicitly launched the EXE with --qa-navigation. Return true if jumped.
  unsafe fn poll_qa_navigation(&mut self)->bool{
    if !self.qa_navigation || !self.active {
-     self.qa_keys_were_down=[false;3];
+     self.qa_keys_were_down=[false;4];
      return false;
    }
    let mut jump=None;
@@ -67,6 +69,7 @@ impl App{
      self.qa_keys_were_down[i]=down;
    }
    if let Some(scene)=jump{
+     if scene!=3 {self.qa_hud_next=0;}
      self.game=Game::new();
      self.input.release_all();
      self.intro_skip_armed=false;
@@ -82,11 +85,15 @@ impl App{
          self.game.screen=AppScreen::Intro;
          self.audio.handle(AudioEvent::IntroStart);
        },
-       2=>{  // F7: visible gameplay/HQ HUD after real neutral simulation.
-         // Normal level entry establishes audio/camera, then 150 actual
-         // fixed-step physics updates settle the original high player spawn.
-         // This remains an opt-in development shortcut, not Flash fidelity.
+       2|3=>{ // F7 ordinary QA; F8 QA-only deterministic multi-value HUD.
          self.game.prepare_level1a_for_qa(&self.ground);
+         if scene==3 {
+           let (batarangs,lives,score)=QA_HUD_CASES[self.qa_hud_next];
+           self.game.batarangs=batarangs;
+           self.game.lives=lives;
+           self.game.score=score;
+           self.qa_hud_next=(self.qa_hud_next+1)%QA_HUD_CASES.len();
+         }
          for event in self.game.take_audio_events(){self.audio.handle(event);}
        },
        _=>unreachable!(),
@@ -201,7 +208,13 @@ pub fn run(qa_navigation:bool){unsafe{let _dpi_aware=enable_best_dpi_awareness()
 
 #[cfg(test)]
 mod tests{
- use super::{viewport_for_client,client_to_stage,hit_intro_skip,INTRO_SKIP_RECT};
+  use super::{viewport_for_client,client_to_stage,hit_intro_skip,INTRO_SKIP_RECT,QA_HUD_CASES,QA_SCENE_KEYS};
+  #[test]
+  fn qa_hud_fixtures_cover_multidigit_and_max_score(){
+    assert_eq!(QA_SCENE_KEYS,[0x74,0x75,0x76,0x77]);
+    assert_eq!(QA_HUD_CASES,[(20,10,1234),(99,12,123456),(20,99,i32::MAX)]);
+    assert_eq!(QA_HUD_CASES[2].2.to_string().len(),10);
+  }
 
  #[test]
  fn intro_skip_click_uses_source_bounds_and_letterbox_mapping(){
