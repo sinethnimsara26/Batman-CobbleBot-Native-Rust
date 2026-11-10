@@ -20,7 +20,7 @@ import json
 import math
 import struct
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageChops, ImageDraw, ImageFont
 
 from swf_re import Bits, read_rect, tags
 from render_collision_masks import affine, compose, point
@@ -144,12 +144,17 @@ def draw_field(image,info,transform,anchor,font_path,style="source",hq_layout=No
         dx,dy=hq_layout["static_offsets_logical"][str(info["id"])]
         xy=(xy[0]+dx*scale,xy[1]+dy*scale)
         if info["id"]==715:
-            text="LIVES X"
+            # Draw the caption alone. Measure its previous full "LIVES X"
+            # length so this label does not grow or move when X is promoted.
+            text="LIVES"
+            fit_text="LIVES X"
+        else:
+            fit_text=text
         size=max(1,round(info.get("font_height",12.0)*scale*
                          (0.73 if info["id"]==715 else 0.94)))
         while size>1:
             font=ImageFont.truetype(str(font_path),size=size)
-            tb=draw.textbbox((0,0),text,font=font,anchor=anchor_type)
+            tb=draw.textbbox((0,0),fit_text,font=font,anchor=anchor_type)
             if tb[2]-tb[0]<=max_width and tb[3]-tb[1]<=max_height:
                 break
             size-=1
@@ -178,7 +183,7 @@ def resize_premultiplied(image:Image.Image,size:tuple[int,int],method:str):
     return image.convert("RGBa").resize(size,Image.Resampling.LANCZOS).convert("RGBA")
 
 
-def digit_atlas(font_path:Path,base_size:int,pixel_scale:float,style="source",vertical_percent:int=100):
+def digit_atlas(font_path:Path,base_size:int,pixel_scale:float,style="source",vertical_percent:int=100,extra_glyph=None):
     # Legacy atlases remain unchanged. The HQ atlas uses the exact same
     # condensed typeface as the HQ labels, with distinct number sizes.
     size=max(1,round(base_size*pixel_scale*
@@ -201,27 +206,28 @@ def digit_atlas(font_path:Path,base_size:int,pixel_scale:float,style="source",ve
         source_cell=(15,20) if base_size==16 else (24,31)
         cell_w=max(cell_w,math.ceil(source_cell[0]*pixel_scale*0.92))
         cell_h=max(cell_h,math.ceil(source_cell[1]*pixel_scale*0.92))
-    atlas=Image.new("RGBA",(cell_w*10,cell_h),(0,0,0,0))
+    glyphs=[str(i) for i in range(10)] + ([extra_glyph] if extra_glyph else [])
+    atlas=Image.new("RGBA",(cell_w*len(glyphs),cell_h),(0,0,0,0))
     draw=ImageDraw.Draw(atlas)
-    for i in range(10):
+    for i,glyph in enumerate(glyphs):
         xy=(i*cell_w+cell_w/2.0,cell_h/2.0)
         if style=="themed":
             color=(255,241,153,255) if base_size>16 else (255,250,226,255)
             outline=max(2,round(0.89*pixel_scale))
             draw.text((xy[0]+0.60*pixel_scale,xy[1]+0.60*pixel_scale),
-                      str(i),font=font,fill=(5,5,8,255),anchor="mm",
+                      glyph,font=font,fill=(5,5,8,255),anchor="mm",
                       stroke_width=outline+1,stroke_fill=(5,5,8,255))
-            draw.text(xy,str(i),font=font,fill=color,anchor="mm",
+            draw.text(xy,glyph,font=font,fill=color,anchor="mm",
                       stroke_width=outline,stroke_fill=(2,2,5,255))
         else:
-            draw.text(xy,str(i),font=font,fill=(255,255,255,255),anchor="mm")
+            draw.text(xy,glyph,font=font,fill=(255,255,255,255),anchor="mm")
     if style=="themed" and base_size==16 and vertical_percent>100:
         # Enlarge ONLY the visible small-digit ink in the offline 6x bake.
         # Keep atlas cell dimensions and the revised HQ palette intact.
         # The native game still blits already-baked 3x pixels at exact 1:1.
         stretched_atlas=Image.new("RGBA",atlas.size,(0,0,0,0))
         margin=max(1,round(0.5*pixel_scale))
-        for i in range(10):
+        for i in range(len(glyphs)):
             cell=atlas.crop((i*cell_w,0,(i+1)*cell_w,cell_h))
             bounds=cell.getbbox()
             if bounds is None:
@@ -287,7 +293,8 @@ def read_hq_layout(path:Path):
     l=ctr["lives"]
     if not (type(l["left"]) is int and type(l["center_y"]) is int and
             0<l["left"]<600 and 0<l["center_y"]<400 and
-            type(l["max_width"]) is int and 20<=l["max_width"]<=150):
+            type(l["max_width"]) is int and 20<=l["max_width"]<=150 and
+            l.get("multiplier_center")==[l["left"]-7,l["center_y"]]):
         raise ValueError("Invalid HQ lives anchor or width")
     return cfg
 
@@ -391,8 +398,29 @@ def main():
     temp_scale=ns.output_scale*ns.supersample
     small_image,small_meta=digit_atlas(
         ns.font,16,temp_scale,ns.style,
-        hq_layout["small_counter_height_percent"] if hq_layout is not None else 100
+        hq_layout["small_counter_height_percent"] if hq_layout is not None else 100,
+        extra_glyph="X" if ns.style=="themed" else None
     )
+    # Build X from exactly the same rasterized numeric atlas, using the
+    # existing 115%-stretched Impact glyph appearance. The ten number cells
+    # are cropped back before output, leaving the numeric runtime unmodified.
+    if ns.style=="themed":
+        cell_w=small_meta["cell_w"]
+        assert small_image.width==11*cell_w
+        x_glyph=small_image.crop((10*cell_w,0,11*cell_w,small_image.height))
+        small_image=small_image.crop((0,0,10*cell_w,small_image.height))
+        mx,my=hq_layout["counters"]["lives"]["multiplier_center"]
+        # HUD sprite 716 is placed at source root stage (159,-11).
+        x=round((mx-159)*temp_scale+temp_anchor[0]-x_glyph.width/2)
+        y=round((my+11)*temp_scale+temp_anchor[1]-x_glyph.height/2)
+        if x<0 or y<0 or x+x_glyph.width>image.width or y+x_glyph.height>image.height:
+            raise ValueError("Lives X is outside the original HUD shell canvas")
+        old_alpha=image.crop((x,y,x+x_glyph.width,y+x_glyph.height)).getchannel("A")
+        old_opaque=old_alpha.point(lambda v:255 if v>=208 else 0)
+        x_ink=x_glyph.getchannel("A").point(lambda v:255 if v>=32 else 0)
+        if ImageChops.multiply(old_opaque,x_ink).getbbox() is not None:
+            raise ValueError("Lives X overlaps existing opaque label or icon ink")
+        image.alpha_composite(x_glyph,(x,y))
     large_image,large_meta=digit_atlas(ns.font,32,temp_scale,ns.style)
     # HUD-REAL-06B: separate, taller Batarang-only HQ atlas. Health/Lives
     # and any narrow-score fallback keep the same original 115% small atlas.
@@ -456,6 +484,7 @@ def main():
         "small_digits":small_meta,
         "large_digits":large_meta,
         "batarang_digits":batarang_meta,
+        "hq_lives_multiplier":({"text":"X","logical_center":hq_layout["counters"]["lives"]["multiplier_center"],"atlas":"small"} if hq_layout is not None else None),
         "variables":{str(cid):edit[cid].get("variable","") for cid in sorted(DYNAMIC_IDS)},
         "static_text":{str(cid):edit[cid].get("initial_text","").replace("\r","") for cid in sorted(STATIC_IDS)},
         "output_scale":ns.output_scale,

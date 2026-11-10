@@ -5,7 +5,7 @@
     600,
     400
   ],
-  "notes": "Themed HQ only: original SWF-716 blue #693 and yellow #705/#709 icon vectors (keep #698 translucent backing exactly intact) shrunk to 94% in copied symbol metadata; labels and translucent panel untouched, original 1x source unchanged. Batarang-specific digit ink 121% tall (from 115%), y 59→58; lives/small-score stay 115%; batarang pitch 9, lives pitch 10, SCORE width 92. HUD-REAL-06C: large SCORE atlas cells retain full 3x pixels; HQ large-digit pitch 16 logical px (48 at 3x) instead of full 66px cell. Long-score small-atlas fallback unchanged.",
+  "notes": "Themed HQ only: original SWF-716 blue #693 and yellow #705/#709 icon vectors (keep #698 translucent backing exactly intact) shrunk to 94% in copied symbol metadata; labels and translucent panel untouched, original 1x source unchanged. Batarang-specific digit ink 121% tall (from 115%), y 59→58; lives/small-score stay 115%; batarang pitch 9, lives pitch 10, SCORE width 92. HUD-REAL-06C: large SCORE atlas cells retain full 3x pixels; HQ large-digit pitch 16 logical px (48 at 3x) instead of full 66px cell. Long-score small-atlas fallback unchanged. HUD-REAL-07A: styled HQ LIVES X now retains the original-size LIVES caption and bakes X from the 115%-height small numeric atlas at (306,63) logical stage coordinates. Original 1x untouched.",
   "static_offsets_logical": {
     "700": [
       0,
@@ -48,7 +48,11 @@
       "left": 313,
       "center_y": 63,
       "max_width": 54,
-      "digit_advance": 10
+      "digit_advance": 10,
+      "multiplier_center": [
+        306,
+        63
+      ]
     }
   },
   "small_counter_height_percent": 115,

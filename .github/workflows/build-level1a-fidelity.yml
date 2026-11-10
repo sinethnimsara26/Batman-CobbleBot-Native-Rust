@@ -851,6 +851,8 @@ jobs:
           layout=json.loads(Path("reverse-engineering/manifests/hud-hq-layout.json").read_text())
           assert hq["hq_layout_schema"]==layout["schema"]==1
           assert hq["small_digits"]["vertical_percent"]==layout["small_counter_height_percent"]==115
+          assert hq["hq_lives_multiplier"]=={"text":"X","logical_center":[306,63],"atlas":"small"}
+          assert layout["counters"]["lives"]["multiplier_center"]==[306,63]
           assert hq["batarang_digits"]["vertical_percent"]==layout["batarang_ink_height_percent"]==121
           assert layout["hq_icon_resize"]["scale_percent"]==94
           assert layout["counters"]["batarangs"]["center"]==[211,58]
