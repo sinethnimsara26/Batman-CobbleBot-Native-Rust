@@ -242,8 +242,43 @@ def probe(exe,out):
                         time.sleep(0.16)
                         qa["keyup"]=send_key(user32,0x76,True)
                         time.sleep(0.28)
-                        screenshot(user32,hwnd,out/"qa_f7_direct_gameplay.png",result)
+                        reference=screenshot(user32,hwnd,out/"qa_f7_direct_gameplay.png",result)
                         qa["classification"]="CAPTURED_NEEDS_VISUAL_INSPECTION"
+                        # HUD-REAL-05C: three actual F8 OS keypresses. F8 works
+                        # only with the explicit opt-in --qa-navigation flag.
+                        cases=[
+                            ("qa_f8_batarangs20_lives10_score1234.png",[20,10,1234]),
+                            ("qa_f8_batarangs99_lives12_score123456.png",[99,12,123456]),
+                            ("qa_f8_batarangs20_lives99_score2147483647.png",[20,99,2147483647]),
+                        ]
+                        qa["hud_fixtures"]=[]
+                        for filename,values in cases:
+                            down=send_key(user32,0x77,False)
+                            time.sleep(0.16)
+                            up=send_key(user32,0x77,True)
+                            time.sleep(0.30)
+                            img=screenshot(user32,hwnd,out/filename,result)
+                            if down["sent"]!=1 or up["sent"]!=1:
+                                raise RuntimeError("QA F8 SendInput rejected for "+filename)
+                            if img.size!=reference.size:
+                                raise RuntimeError("QA HUD capture dimensions changed")
+                            # Check only for a changed region, not digit identity.
+                            # Real human/asset inspection must verify the values.
+                            region=(int(img.width*0.27),int(img.height*0.04),
+                                    int(img.width*0.74),int(img.height*0.23))
+                            changed=ImageChops.difference(
+                                reference.crop(region),img.crop(region)).getbbox() is not None
+                            qa["hud_fixtures"].append({
+                                "file":filename,"expected_values":values,
+                                "keydown":down,"keyup":up,
+                                "hud_region":list(region),
+                                "changed_from_prior":changed,
+                                "classification":"OS_CAPTURE_NEEDS_NUMERIC_VISUAL_REVIEW",
+                            })
+                            if not changed:
+                                raise RuntimeError("QA F8 HUD region unchanged: "+filename)
+                            reference=img
+                        qa["hud_test_status"]="THREE_OS_F8_CAPTURES_WITH_CHANGED_HUD"
                     else:
                         qa["classification"]="GAME_NOT_FOREGROUND"
                     mouse["recorded_images"] = [
