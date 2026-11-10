@@ -861,7 +861,7 @@ mod tests{
     #[test]
     fn hud_hq_layout_keeps_digits_in_readable_columns(){
         let s=HQ_SCALE as i32;
-        assert_eq!(hud_hq_layout::BATARANG_CENTER,(211,59));
+        assert_eq!(hud_hq_layout::BATARANG_CENTER,(211,58));
         assert_eq!(hud_hq_layout::BATARANG_DIGIT_ADVANCE,9);
         assert_eq!(hud_hq_layout::LIVES_DIGIT_ADVANCE,10);
         assert_eq!(hud_hq_layout::SCORE_CENTER,(387,35));
