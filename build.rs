@@ -35,8 +35,9 @@ fn find_rc() -> PathBuf {
 fn compile_icon(out: &Path, icon: &Path) {
     let rc_file = out.join("batman_icon.rc");
     let res_file = out.join("batman_icon.res");
-    let icon_path = icon.canonicalize().expect("cannot canonicalize ICO");
-    let path_for_rc = icon_path.to_string_lossy().replace('\\', "/");
+    // Keep the normal absolute manifest path: canonicalize() on Windows can
+    // introduce a \\?\ verbatim prefix that rc.exe does not understand.
+    let path_for_rc = icon.to_string_lossy().replace('\\', "/");
     fs::write(&rc_file, format!("101 ICON \"{}\"\n", path_for_rc))
         .expect("cannot write build-time resource script");
     let result = Command::new(find_rc())
