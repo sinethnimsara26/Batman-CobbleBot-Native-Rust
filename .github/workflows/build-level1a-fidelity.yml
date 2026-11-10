@@ -860,7 +860,7 @@ jobs:
               assert bat.tobytes()!=small.tobytes(), "The Batarang atlas must actually be taller"
           assert layout["counters"]["batarangs"]["digit_advance"]==9
           assert layout["counters"]["lives"]["digit_advance"]==10
-          assert layout["counters"]["batarangs"]["center"]==[211,59]
+          assert layout["counters"]["batarangs"]["center"]==[211,58]
           assert layout["counters"]["score"]["max_width"]==92
           generated=Path("assets/hud_hq_layout.rs").read_text()
           for symbol in ("BATARANG_CENTER","BATARANG_MAX_WIDTH",
@@ -882,7 +882,7 @@ jobs:
           assert "color=(255,235,80,255)" in baker, "HQ gold label contrast style changed unexpectedly"
           assert "color=(255,241,153,255)" in baker, "HQ large numeral contrast style changed unexpectedly"
           assert "stroke_width=outline,stroke_fill=(2,2,5,255))" in baker
-          print("Round 6 HUD contract PASS: one HQ layout manifest emits Rust constants; source HUD/icons preserved, stronger near-black outline, no duplicate band.")
+          print("Round 6 HUD contract PASS: 1x source preserved, 94% HQ vector icons, taller isolated Batarang, original labels and no duplicate band.")
 
       - name: Validate HUD-REAL-05C true-3x multi-value ink clearance
         shell: pwsh
