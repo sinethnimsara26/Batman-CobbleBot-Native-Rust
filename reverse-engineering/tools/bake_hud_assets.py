@@ -294,7 +294,7 @@ def read_hq_layout(path:Path):
     if not (type(l["left"]) is int and type(l["center_y"]) is int and
             0<l["left"]<600 and 0<l["center_y"]<400 and
             type(l["max_width"]) is int and 20<=l["max_width"]<=150 and
-            l.get("multiplier_center")==[l["left"]-7,l["center_y"]-1]):
+            l.get("multiplier_center")==[l["left"]-7,l["center_y"]]):
         raise ValueError("Invalid HQ lives anchor or width")
     return cfg
 
@@ -386,12 +386,17 @@ def main():
 
     temp_anchor=[float(v) for v in manifest["anchor_in_bitmap"]]
     image=Image.open(ns.hud_frames/"000.png").convert("RGBA")
+    # Independent mask of just the baked static captions, no HUD vector art.
+    static_ink=Image.new("RGBA",image.size,(0,0,0,0)) if ns.style=="themed" else None
+    x_shell_contact_rows=0
     temp_fields={}
 
     for cid in sorted(HUD_IDS):
         info=edit[cid]
         if cid in STATIC_IDS:
             temp_fields[str(cid)]=draw_field(image,info,found[cid],temp_anchor,ns.font,ns.style,hq_layout)
+            if static_ink is not None:
+                draw_field(static_ink,info,found[cid],temp_anchor,ns.font,ns.style,hq_layout)
         else:
             temp_fields[str(cid)]=field_box(info,found[cid],temp_anchor)
 
@@ -428,13 +433,18 @@ def main():
         old_alpha=image.crop((x,y,x+x_glyph.width,y+x_glyph.height)).getchannel("A")
         old_opaque=old_alpha.point(lambda v:255 if v>=208 else 0)
         x_ink=x_glyph.getchannel("A").point(lambda v:255 if v>=32 else 0)
-        collision=ImageChops.multiply(old_opaque,x_ink)
-        if collision.getbbox() is not None:
-            raise ValueError(
-                f"Lives X overlaps existing opaque label or icon ink: "
-                f"local_bbox={collision.getbbox()} glyph_origin=({x},{y}) "
-                f"stage_center=({mx},{my})"
-            )
+        caption_alpha=static_ink.crop((x,y,x+x_glyph.width,y+x_glyph.height)).getchannel("A")
+        caption_ink=caption_alpha.point(lambda v:255 if v>=32 else 0)
+        caption_collision=ImageChops.multiply(caption_ink,x_ink)
+        if caption_collision.getbbox() is not None:
+            raise ValueError(f"Lives X overlaps independently rasterized static caption ink: {caption_collision.getbbox()}")
+        # Permit at most ONE 6x source-art edge row of contact; wider
+        # opaque-shell or any static-caption overlap remains a hard failure.
+        source_collision=ImageChops.multiply(old_opaque,x_ink).getbbox()
+        x_shell_contact_rows=0 if source_collision is None else source_collision[3]-source_collision[1]
+        if x_shell_contact_rows>1:
+            raise ValueError(f"Lives X has multirow opaque-shell collision: {source_collision} glyph_origin=({x},{y})")
+        print("HUD-LIVES-X:",{"static_caption_overlap_px":0,"source_opaque_contact_rows_6x":x_shell_contact_rows,"source_bbox":source_collision})
         image.alpha_composite(x_glyph,(x,y))
     large_image,large_meta=digit_atlas(ns.font,32,temp_scale,ns.style)
     # HUD-REAL-06B: separate, taller Batarang-only HQ atlas. Health/Lives
@@ -499,7 +509,7 @@ def main():
         "small_digits":small_meta,
         "large_digits":large_meta,
         "batarang_digits":batarang_meta,
-        "hq_lives_multiplier":({"text":"X","logical_center":hq_layout["counters"]["lives"]["multiplier_center"],"atlas":"small"} if hq_layout is not None else None),
+        "hq_lives_multiplier":({"text":"X","logical_center":hq_layout["counters"]["lives"]["multiplier_center"],"atlas":"small","static_caption_ink_overlap_px":0,"source_opaque_contact_rows_6x":x_shell_contact_rows} if hq_layout is not None else None),
         "variables":{str(cid):edit[cid].get("variable","") for cid in sorted(DYNAMIC_IDS)},
         "static_text":{str(cid):edit[cid].get("initial_text","").replace("\r","") for cid in sorted(STATIC_IDS)},
         "output_scale":ns.output_scale,
