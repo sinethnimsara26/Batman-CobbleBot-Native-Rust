@@ -2162,11 +2162,15 @@ jobs:
 
       # INTRO-AUDIO-QA-05: real OS foreground switch plus in-process WinMM
       # MCI status position, pause/resume and 25 Hz Intro tick comparisons.
-      - name: Verify actual Win32 focus pauses and resumes Intro MCI soundtrack
+      # The hosted runner has zero audio endpoints and MCI open error 277;
+      # allow *only that infrastructure state* to be reported BLOCKED without
+      # implying sound passed. A real audio-equipped Windows PC must pass
+      # strict MCI playback-position tests without this explicit flag.
+      - name: Verify real Win32 intro focus (MCI hardware proof separately classified)
         shell: pwsh
         timeout-minutes: 3
         run: |
-          python reverse-engineering/tools/windows_intro_audio_focus_probe.py --exe target/x86_64-pc-windows-msvc/release/batman_cobblebot_native.exe --out .generated/windows-intro-audio-qa
+          python reverse-engineering/tools/windows_intro_audio_focus_probe.py --exe target/x86_64-pc-windows-msvc/release/batman_cobblebot_native.exe --out .generated/windows-intro-audio-qa --allow-hosted-no-audio
 
       # Always retain actual MCI status TSV and OS screenshots on failure.
       - uses: actions/upload-artifact@v4
