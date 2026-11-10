@@ -155,14 +155,24 @@ def probe(exe,out):
         proc=subprocess.Popen([str(exe.resolve()),"--qa-navigation"],cwd=str(Path.cwd()),
             stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
         result["process"]["pid"]=proc.pid
+        # Native startup can exceed the former 8s GUI discovery budget on
+        # a cold hosted Windows VM. The separate ordinary-EXE FS-QA probe
+        # successfully found the SAME app after the preceding 8s pilot timed
+        # out in CI #42836412666. Do not weaken downstream F8 assertions:
+        # allow a bounded 30s discovery, record actual startup latency,
+        # and preserve genuine exit/no-window as explicit failures.
+        started_wait=time.monotonic()
+        result["process"]["window_discovery_budget_seconds"]=30.0
         found=None
-        for _ in range(32):
+        for _ in range(120):
             if proc.poll() is not None:
                 result["process"]["early_exit"]=proc.returncode
+                result["process"]["window_discovery_elapsed_seconds"]=round(time.monotonic()-started_wait,3)
                 result["classification"]="APP_EXITED_BEFORE_WINDOW_UNDETERMINED"; return result
             found=find_window(user32,proc.pid)
             if found: break
             time.sleep(0.25)
+        result["process"]["window_discovery_elapsed_seconds"]=round(time.monotonic()-started_wait,3)
         if not found:
             result["classification"]="NO_VISIBLE_GAME_WINDOW_UNDETERMINED"; return result
         hwnd,title=found
