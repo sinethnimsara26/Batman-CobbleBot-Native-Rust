@@ -65,6 +65,35 @@ jobs:
           New-Item -ItemType Directory -Force -Path "$work/reports","$work/bitmaps","$work/sounds","$work/batman-frames","$work/batman-frames-hq","$work/pickup-frames","$work/pickup-frames-hq-super","$work/pickup-frames-hq","$work/batarang-frames","$work/batarang-frames-hq-super","$work/batarang-frames-hq","$work/level-title","$work/level-title-hq-super","$work/level-title-hq","$work/fadein","$work/fadein-hq-super","$work/fadein-hq","$work/fadeout","$work/fadeout-hq-super","$work/fadeout-hq","$work/tutorial-overlay","$work/tutorial-overlay-hq-super","$work/tutorial-overlay-hq","$work/hud","$work/hud-hq-super","$work/hud-hq-final","$work/level1a-tiles","$work/level1a-tiles-hq-base","$work/level1a-detail-tiles-1x","$work/level1a-detail-tiles-hq","$work/scenery-probes","$work/root-moon-hq-super","$work/root-moon-hq","$work/intro","assets","reverse-engineering/generated/collision_masks" | Out-Null
 
           python "$tools/swf_re.py" "$swf" "$work/reports"
+          # HUD-REAL-06B source-only probe: recover actual child placements
+          # before changing the scaled HQ icons. No source assets are edited.
+          @'
+          import json
+          from pathlib import Path
+          import sys
+          sys.path.insert(0,"reverse-engineering/tools")
+          from bake_sprite_frames import display_list
+          symbols=json.loads(Path(".generated/reports/symbols.json").read_text())
+          def nodes(sid,limit=2,seen=None):
+              if seen is None: seen=set()
+              if sid in seen or limit<0: return []
+              seen=seen|{sid}
+              symbol=symbols.get(str(sid))
+              if not symbol: return []
+              result=[]
+              for item in sorted(display_list(symbol,0).values(),key=lambda q:q.get("depth",0)):
+                  cid=item.get("character_id")
+                  entry={"parent":sid,"child":cid,"depth":item.get("depth"),
+                         "matrix":item.get("matrix",{}),"frame":item.get("frame",0)}
+                  result.append(entry)
+                  if cid is not None and limit>0: result+=nodes(cid,limit-1,seen)
+              return result
+          report={"sprite":716,"placements":nodes(716,2)}
+          out=Path(".generated/hud-06b-icon-source-hierarchy.json")
+          out.write_text(json.dumps(report,indent=2)+"\\n")
+          print("HUD-06B-HIERARCHY",json.dumps(report))
+          '@ | python -
+
           python "$tools/inspect_intro_hud.py" "$swf" "$work/reports/symbols.json" "$work/reports/root_placements.json" "$work/intro-hud-source-report.json"
           @'
           import json
