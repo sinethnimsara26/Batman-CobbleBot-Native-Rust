@@ -877,7 +877,8 @@ mod tests{
         assert_eq!(hud_hq_layout::LIVES_DIGIT_ADVANCE,10);
         assert_eq!(hud_hq_layout::SCORE_CENTER,(387,35));
         assert_eq!(hud_hq_layout::SCORE_LARGE_DIGIT_ADVANCE,16);
-        assert_eq!(hud_hq_layout::LIVES_VALUE_LEFT,313);
+        // The X remains baked at (306,63); move ONLY the live number closer.
+        assert_eq!(hud_hq_layout::LIVES_VALUE_LEFT,309);
         assert_eq!(hud_hq_layout::LIVES_CENTER_Y,63);
         for &(len,budget,cell,preferred) in &[
             (1,hud_hq_layout::BATARANG_MAX_WIDTH*s,42,27),

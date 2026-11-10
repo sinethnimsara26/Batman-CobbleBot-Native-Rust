@@ -291,11 +291,13 @@ def read_hq_layout(path:Path):
     if type(bat_height) is not int or not percent<bat_height<=125:
         raise ValueError("Dedicated Batarang digit ink must be taller but fit in the same small cell")
     l=ctr["lives"]
+    multiplier=l.get("multiplier_center")
     if not (type(l["left"]) is int and type(l["center_y"]) is int and
             0<l["left"]<600 and 0<l["center_y"]<400 and
             type(l["max_width"]) is int and 20<=l["max_width"]<=150 and
-            l.get("multiplier_center")==[l["left"]-7,l["center_y"]]):
-        raise ValueError("Invalid HQ lives anchor or width")
+            multiplier==[306,l["center_y"]] and
+            2<=l["left"]-multiplier[0]<=7):
+        raise ValueError("Invalid HQ lives anchor, multiplier position, or spacing")
     return cfg
 
 
@@ -444,7 +446,27 @@ def main():
         x_shell_contact_rows=0 if source_collision is None else source_collision[3]-source_collision[1]
         if x_shell_contact_rows>1:
             raise ValueError(f"Lives X has multirow opaque-shell collision: {source_collision} glyph_origin=({x},{y})")
-        print("HUD-LIVES-X:",{"static_caption_overlap_px":0,"source_opaque_contact_rows_6x":x_shell_contact_rows,"source_bbox":source_collision})
+        # HUD-LIVES-GAP-01: prove that all ten dynamic digit glyphs sit
+        # close to (but never on top of) the baked X. Measure the ACTUAL
+        # 6x alpha ink, not padded atlas cells or approximate text metrics.
+        number_left=hq_layout["counters"]["lives"]["left"]
+        first_digit_x=round((number_left-159)*temp_scale+temp_anchor[0])
+        first_ink_left=min(
+            small_image.crop((i*cell_w,0,(i+1)*cell_w,small_image.height))
+            .getchannel("A").point(lambda v:255 if v>=32 else 0)
+            .getbbox()[0]
+            for i in range(10)
+        )
+        rightmost_x_ink=x+x_ink.getbbox()[2]-1
+        min_gap_6x=first_digit_x+first_ink_left-rightmost_x_ink-1
+        if not (0<=min_gap_6x<=4*temp_scale):
+            raise ValueError(f"Lives X-to-digit ink clearance out of range: {min_gap_6x}px at {temp_scale}x")
+        print("HUD-LIVES-X:",{
+            "static_caption_overlap_px":0,
+            "source_opaque_contact_rows_6x":x_shell_contact_rows,
+            "source_bbox":source_collision,
+            "minimum_X_to_digit_alpha_ink_gap_6x":min_gap_6x
+        })
         image.alpha_composite(x_glyph,(x,y))
     large_image,large_meta=digit_atlas(ns.font,32,temp_scale,ns.style)
     # HUD-REAL-06B: separate, taller Batarang-only HQ atlas. Health/Lives
