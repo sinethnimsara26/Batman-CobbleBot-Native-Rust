@@ -1,5 +1,11 @@
 # AI agent operating guide — Batman: The CobbleBot Caper
 
+## Current documentation entry point — project-wide recovery audit (2026-11-11)
+
+Before reading historical repeated "CURRENT" checkpoint sections, start with [the consolidated project-wide audit](docs/PROJECT_WIDE_AUDIT_2026-11-11.md), then the topmost current [AI_HANDOFF](docs/AI_HANDOFF.md) and [AI_TASKS](docs/AI_TASKS.md). Do NOT treat old 2026-11-09 PR/issue candidate links, QA ZIP hashes or older next-batch instructions as live delivery. CI builds after Batch08: code-run #42888932281 and prior doc-run #42891451043 both COMPLETED/SUCCESS 75/75. User acceptance remains issue17 OPEN; PR18 remains DRAFT; newest planned work is a **single icon Shell HICON visual evidence batch**, never automatic merge or Level1B. Documentation-only project audit RE-20261111-005 / AUD-20261111-005; **no implementation changed**.
+
+
+
 ## ICON-EXE-07 + FINAL-INTEGRATION-08 — verified native Windows build (2026-11-11)
 
 **Authority and scope:** The user explicitly authorized finishing the pending icon batch AND the immediately following final integration batch in one request. This is an exception to the default one-next-batch-per-"continue" rule because two batches were expressly requested, not permission to start Level1B, merge, or close issue17. The two bounded implementation changes are separately identified and separately checked.

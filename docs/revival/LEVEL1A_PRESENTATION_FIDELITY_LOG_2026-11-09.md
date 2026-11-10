@@ -1,4 +1,6 @@
 # Level 1A revival — intro story and HUD presentation engineering log
+> **Historical document only (2026-11-09).** This is not the current installed-game candidate or latest Windows CI. Use the [2026-11-11 project-wide recovery audit](../PROJECT_WIDE_AUDIT_2026-11-11.md), [current handoff](../AI_HANDOFF.md) and [draft PR #18](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/18) for modern status. Old failures/measurements below remain true for their dated historical runs and are not silently overwritten.
+
 
 Status: **implementation candidate / manual fidelity review required**  
 Working branch: `revive/level1a-intro-hud-fidelity-2026-11-09`  

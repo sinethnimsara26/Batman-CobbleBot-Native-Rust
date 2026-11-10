@@ -4,7 +4,17 @@ Unofficial high-fidelity native Rust reimplementation of **The Batman: The Cobbl
 
 The goal is not a loose remake. The project aims to preserve the original game's **visuals, animation timing, controls, camera behavior, collision, UI flow, and feel** while replacing the Flash runtime and ActionScript execution with native Rust wherever practical.
 
-## Current status
+## Latest project checkpoint (2026-11-11)
+
+**Active development:** [Draft PR #18](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/18) on `revive/level1a-intro-hud-fidelity-2026-11-09`; **Level 1A remains the only playable scope.** The game now has source-derived story intro/skip, a deliberately styled HQ HUD, native F/Esc fullscreen, audio-focus pause/resume, and a Batman emblem embedded into the native Windows EXE. These are original-source reconstruction candidates and user-requested usability additions, not proof of perfect Flash fidelity.
+
+**Verified:** [75/75-step native Windows build #42888932281](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42888932281) and [documentation follow-up build #42891451043](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42891451043), both successful; 21 Rust tests, 15 original 1× screenshot regression hashes, real Win32 fullscreen/UI/EXE icon resource checks and a relocated standalone EXE smoke test. **Not verified:** physical speaker MCI audio (the hosted runner has zero audio endpoints and reports MCI277), human Explorer/taskbar cache display, original Flash side-by-side equivalence and multi-monitor physical DPI testing. Keep [acceptance issue #17](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/issues/17) open; do not merge PR #18 or start Level 1B.
+
+**Start here:** [Current handoff](docs/AI_HANDOFF.md), [tasks](docs/AI_TASKS.md), [project-wide recovery audit](docs/PROJECT_WIDE_AUDIT_2026-11-11.md), [agent rules](AGENTS.md), [RE research ledger](docs/REVERSE_ENGINEERING_RESEARCH_LEDGER.md), and [Rust audit](docs/RUST_PURITY_AND_ENGINEERING_AUDIT.md). Use the permanent GitHub CLI installation command in AGENTS.md rather than historical artifact links.
+
+**Build note:** the Windows CI fetches/validates the proprietary SWF and generates embedded game assets plus the ICO *before* running Cargo. A fresh checkout cannot run a standalone `cargo build` without that offline asset/resource-generation prerequisite. The playable released EXE requires neither Python nor Flash Player.
+
+## Historical project scope and status
 
 Development is deliberately frozen to **Level 1A** until the first playable area passes a strict fidelity gate.
 

@@ -1,5 +1,13 @@
 # AI handoff — current recovery checkpoint
 
+## CURRENT — 2026-11-11 project-wide audit checkpoint (documentation only)
+
+**Read FIRST:** [Full project-wide evidence inventory and corrections](PROJECT_WIDE_AUDIT_2026-11-11.md). At audit start the development branch was `86b81fac31aa52805a1ab636c6dc077db1e901f9` on draft PR18, issue17 OPEN, main/Level1B not touched by this work. Both the last code run #42888932281 and subsequent six-file documentation-run #42891451043 were independently rechecked **COMPLETED SUCCESS 75/75**. Code SHA 62c4159840a82303af123759577bfd4549f33366; separate docs SHA 86b81fac31aa52805a1ab636c6dc077db1e901f9. This audit creates a new docs commit (final SHA must be read from GitHub after push), updates README and historical navigation without deleting earlier evidence, and fixes old PR/issue current summaries. No runtime changes.
+
+**VERIFIED work:** original-source extraction pipeline, Level1A Rust gameplay/intro and 25Hz, HQ rendering plus 15 historical 1x hashes, Win32 F/Esc + HUD + title GUI, audio-focus logic, embedded PE bat icon, 20/20 relocated HQ pixel hashes; see audit and RE/AUD. **NOT VERIFIED:** audio endpoint physical speaker position (MCI277/no endpoint on runner), pinned user taskbar/Explorer cache, source Flash side-by-side signoff, mixed-DPI/multimonitor. **NEXT ONE batch:** ICON-SHELL-PIXEL-QA-09 true Windows Shell HICON pixel capture and content check; if that shows an icon mismatch, repair it before another scope. Preserve PR18 draft, issue17 OPEN, main and Level1B untouched. Latest completed artifact choice must be queried live before delivering installer; do not use historical static links. New RE-20261111-005 and AUD-20261111-005 explicitly documentation-only.
+
+
+
 ## CURRENT — 2026-11-11 Batch07 + Batch08 verified code and integration gate
 
 **Read this FIRST, above superseded older "Batch07 next" instructions.** User expressly authorized BOTH icon EXE embedding and immediately following integration batch. Development branch `revive/level1a-intro-hud-fidelity-2026-11-09`, code SHA [`62c415984`](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/commit/62c4159840a82303af123759577bfd4549f33366); PR #18 OPEN/DRAFT/UNMERGED; issue17 OPEN. No main/Level1B writes. `build.rs`, `src/win32.rs`, `build_windows_ico.py`, `windows_icon_resource_probe.py`, `windows_final_integration_probe.py`, existing Windows workflow updated. Source PNG generator and original 1× sources unchanged. Python/Windows SDK resource compiler used only in build/CI, no shipped interpreter.

@@ -1,4 +1,6 @@
 # WIN-01 — Native Rust Windows QA package and evidence manifest
+> **Historical QA package, not latest game (2026-11-09).** Its SHA256 and binary links refer to earlier build(s), not the current verified build. New players should follow the GitHub CLI installation contract in [AGENTS.md](../AGENTS.md), and check [latest project-wide audit](PROJECT_WIDE_AUDIT_2026-11-11.md) and [current handoff](AI_HANDOFF.md). Preserve historical values below as originally measured.
+
 
 **Batch date:** 2026-11-09. **Task:** prepare a usable on-PC test bundle from the last successful Rust Windows CI artifact for the still-open manual Level1A acceptance gate. **No game code, Rust dependencies, workflow, original SWF or gameplay source modified in this batch.** This report describes the independent ChatGPT conversation ZIP; it is **not** a binary committed to GitHub and has no guaranteed permanent Git URL. The original CI artifact is the canonical durable retrieval path until GitHub's artifact retention expires.
 

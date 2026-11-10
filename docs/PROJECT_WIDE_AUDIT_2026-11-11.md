@@ -1,0 +1,53 @@
+# Project-wide recovery and documentation audit — 2026-11-11
+
+**Repository:** [sinethnimsara26/Batman-CobbleBot-Native-Rust](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust)  
+**Audit class:** Read-only project recovery, documentation reconciliation and prioritization. **No executable/Rust/source-game changes in this audit checkpoint.**  
+**Audited development-branch SHA:** `86b81fac31aa52805a1ab636c6dc077db1e901f9` (the current six-file Batch07/08 documentation head at audit start).  
+**Working branch:** `revive/level1a-intro-hud-fidelity-2026-11-09`; draft PR [#18](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/18), issue [#17](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/issues/17).  
+**Protection:** no merge, force-push, Level1B work or write to `main`. The audit commit's SHA is recorded by GitHub after the commit; it cannot cite itself.
+
+## 1. Scope and evidence hierarchy
+
+This is a broad **repo inventory, implementation-architecture checkpoint, historical milestone/document cross-check and current CI verification**, NOT a dishonest claim that all historical PR commits have been manually retested or every individual SWF action has been reproduced. The development branch had **109 Git tree entries**, a PR with **138 commits/36 changed files** as returned by the PR metadata at the initial scan; the protected `main` tree had **64 entries**, and current PR base `revive/round11-ci-baseline-2026-11-09` had **82**. Counts describe the retrieved snapshot, not a guarantee that no other agent commits later. Source files include 9 Rust runtime modules plus `build.rs`, `Cargo.toml`, original SWF unpack/bake scripts, manifests, Python test-only probes, one Windows workflow and substantial Markdown history.
+
+Original game bits are intentionally NOT committed; the canonical SWF is fetched and FWS-verified during CI with SHA256 `3d9e1992404313bc2e2652d46a5838160ef721e2ad559fdd7455f3c54f8ac1ed`. This audit did not execute original Flash side-by-side or inspect physically installed player audio. Windows GitHub Actions runs are independent executable/GUI evidence, but are not a real user's laptop acceptance.
+
+## 2. Technical development streams reconstructed
+
+| Stream | Concrete repository evidence | Verified scope / remaining limitation |
+|---|---|---|
+| Original game reverse-engineering | `reverse-engineering/` source manifests, SWF extracts, timeline/placement/collision and render tools; `reverse-engineering/RE_COMPLETE.md` | Source-backed 600×400/25Hz, many mapped symbols and states; not proof of full game AVM1 semantic equivalence |
+| Native Rust Level1A engine | `src/main.rs`, `src/game.rs`, `src/collision.rs`, `src/assets.rs`, `src/headless.rs` | Rust-only gameplay/state machine; original packed assets built offline, no Flash VM |
+| Rendering and HQ rounds 1–11 | `src/render.rs`, `src/surface.rs`, `docs/rendering/HQ_ROUND*.md`; SWF sprite/surface tiles | 1× historical regression oracle plus 3× higher-quality assets; actual original-Flash side-by-side is still separate |
+| Intro/story and SKIP | `docs/revival/LEVEL1A_PRESENTATION_FIDELITY_LOG_2026-11-09.md`, `src/game.rs`, `src/win32.rs`, `bake_root_intro.py` | Original root frame18 and intro sound #130, 180 sampled frames, 41-frame skip fade, source mouse button #129; new native auto-advance is a user-approved fallback and not claimed original AVM1 behavior |
+| HUD presentation | Original sprite716 icons and source/Impact-style HQ rework, `hud-hq-layout.json`, `bake_hud_assets.py`, F8 Win32 screenshots and collision tests | Custom style candidate, user-reported spacing fixes, 15 historical 1× hashes protected; not source-original font equivalence |
+| Fullscreen/focus | Native Win32 `F` borderless / `Esc` restore in `src/win32.rs`, `windows_fullscreen_probe.py`, `src/audio.rs` | Real hosted Windows HWND geometry/keyboard screenshots; mixed-DPI/multi-monitor and real speaker/volume flyout not fully proved |
+| Intro audio-focus QA | WinMM MCI transport and `windows_intro_audio_focus_probe.py`; opt-in `BCB_FOCUS_QA_LOG` | Hosted visual/focus transitions checked; **MCI 277 / zero AudioEndpoints = BLOCKED**, not a physical audio PASS; user previously reported that sound and image stopped on focus loss |
+| EXE icon / install | `bake_windows_icon_art.py`, `build_windows_ico.py`, `build.rs`, `windows_icon_resource_probe.py`, `windows_final_integration_probe.py` | Seven 16–256px embedded icons; OS Shell and normal HWND icon API checks; 20/20 relocated HQ PNG hash parity; user's Explorer/taskbar cache and icon appearance not yet independently captured |
+
+The complete historical reasoning and failed attempts are retained in the existing research ledger and audit. This table is a **navigational summary**, not a new attribution of old work or replacement for original evidence.
+
+## 3. CI provenance and current delivery
+
+- [Changed-code Windows run #42888932281](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42888932281), code commit `62c4159840a82303af123759577bfd4549f33366`, **completed SUCCESS, 75/75 steps**, 21/21 native MSVC release Rust tests, 15/15 original 1× regression hashes, 20/20 relocated HQ screenshot byte hashes, genuine Win32/F8/fullscreen, native PE resource and shell icon verification. HQ p95 **17.3336 ms**, scenery-scroll p95 **23.0418 ms** vs strict <40ms.
+- [Six-document checkpoint Windows run #42891451043](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42891451043), doc commit `86b81fac31aa52805a1ab636c6dc077db1e901f9`, independently rechecked **completed SUCCESS, 75/75 steps**. It rebuilds the EXE and is a separate artifact source, not the code commit itself.
+- Current delivery contract is **always** latest confirmed successful development-branch workflow artifact `Batman-CobbleBot-Level1A-Fidelity-Windows-x64`, via authenticated `gh run list` / `gh run download`, SHA256 verified, local backup and `%LOCALAPPDATA%\BatmanCobbleBot`, as set out in AGENTS.md. Do NOT pin a historical run accidentally or suggest CI proved physical sound.
+- Icon-only design and .ico QA artifacts remain separate; original proprietary game assets are reproducibly prepared by CI but are not checked in. The newest documentation checkpoint's own Windows run was green when this audit was written.
+
+## 4. Documentation integrity inspection / detected discrepancies
+
+**Six mandatory records present:** `AGENTS.md`, `docs/AI_TASKS.md`, `docs/AI_HANDOFF.md`, `docs/AI_WORKLOG.md`, `docs/REVERSE_ENGINEERING_RESEARCH_LEDGER.md`, `docs/RUST_PURITY_AND_ENGINEERING_AUDIT.md`. Both development and automated Windows-testing protocols exist. Audit enumerated numbered Markdown headings: **43 RE entries**, **40 AUD entries**, chronologically contiguous numbering within each day (no gap from 001 to the day's maximum). AI_WORKLOG references no unknown RE/AUD IDs in its checked snapshot.
+
+**Three apparent pair differences — NOT missing code audits by default:** `RE-20261109-013` is a **verification-only** native GUI artifact review with explicit no implementation changes; `RE-20261109-014` is a research/preimplementation source investigation connected to existing `AUD-20261109-012`, not a one-to-one ID requirement; `RE-20261109-015` is a diagnosis of GitHub Actions having no job (no new implementation). Do not fabricate `AUD-...-013/014/015` solely to make numeric counts equal. Audit numbering and research numbering are separate chronological namespaces.
+
+**Real stale surfaces corrected in this checkpoint:** `README.md` omitted story/HUD/fullscreen/audio/icon latest state and did not point to authoritative latest QA. The November 9 Level1A revival diary and Windows QA package are **historical artifacts**, not up-to-date current-run handoffs; they now link to this audit and current handoff instead of being silently rewritten. GitHub PR #18 body and issue #17 originally foregrounded 2026-11-09 pre-fix/pending CI instructions, making a new agent likely to pick an obsolete executable; an up-to-date top-of-page summary should be added while preserving historical body text. Existing handoff contains older sections titled CURRENT; the very first topmost CURRENT section supersedes those explicitly. Tracked old failures and actions concurrency cancellations must be retained, not relabeled as successful.
+
+**Verification boundary:** File *presence, section IDs, audited source module inventory, declared test gates, current PR/issue status, CI run/jobs/artifact facts and manifest architecture* were directly checked. This is not a full license/security vulnerability scan, exhaustive static-analysis finding, or blind claim that 138 individual PR commits were independently rerun. The original game SWF has no newly discovered evidence beyond existing extraction, and user audio-device state is not accessible from GitHub hosted CI.
+
+## 5. Unresolved acceptance and explicitly prioritized next task
+
+1. **High-priority evidence quality:** prior Win32 Shell icon test verifies handles and resource IDs, not that Shell actually rasterized the gold source bat rather than a fallback/cached generic icon. A next **one-purpose Batch09 ICON-SHELL-PIXEL-QA** should capture HICON pixels at real 16/32 sizes using the actual Windows Shell output, compare readable bat-color/alpha evidence against the generated originals, and archive **actual captured PNG evidence**. Do not fabricate Explorer/taskbar screenshots or pretend these prove the user's pinned shortcut.
+2. **Human acceptance blocker:** user-visible Explorer/taskbar icon after installation (Windows icon caches/pins can differ from shell API), original-Flash Level1A compared to native game, real speaker / MCI playback position on an audio-equipped Windows PC, and multi-monitor/mixed-DPI physical testing. These are still **UNVERIFIED**; remain in issue17 and MUST precede merging PR18 or Level1B.
+3. Do not re-open already-passing 1× original screenshot hashes, crash fixes, HUD kerning or fullscreen changes speculatively. If new CI detects an actual defect, stop at the defect and fix before unrelated work.
+
+**Audit result:** historical work is not missing wholesale: major streams are documented with real CI provenance and a complete six-file checkpoint. The main correction is *outdated navigation/acceptance text and an icon-pixel evidence gap*, not a found Rust gameplay regression. Detailed new record `RE-20261111-005`; documentation-only audit `AUD-20261111-005` (not an invented implementation audit). Next mini-batch remains separate with fresh CI and audit.
