@@ -153,16 +153,17 @@ def draw_field(image,info,transform,anchor,font_path,style="source",hq_layout=No
             if tb[2]-tb[0]<=max_width and tb[3]-tb[1]<=max_height:
                 break
             size-=1
-        color=(255,220,95,255) if info["id"]!=715 else (255,238,185,255)
-        outline=max(2,round(0.74*scale))
-        # Crisp black stroke AND offset shadow are baked at 6x, then
-        # downsampled at 3x; the former 0.26*scale border was too thin.
-        shadow=(xy[0]+0.54*scale,xy[1]+0.54*scale)
+        color=(255,235,80,255) if info["id"]!=715 else (255,248,205,255)
+        outline=max(2,round(0.90*scale))
+        # HUD-REAL-05B: slightly wider near-black edge and darker offset
+        # shadow improve contrast on bright scenery without changing the
+        # stage geometry, font face, or legacy source-rendered captions.
+        shadow=(xy[0]+0.62*scale,xy[1]+0.62*scale)
         draw.text(shadow,text,font=font,fill=(5,5,8,255),anchor=anchor_type,
-                  stroke_width=outline+max(1,round(0.20*scale)),
+                  stroke_width=outline+max(1,round(0.24*scale)),
                   stroke_fill=(5,5,8,255))
         draw.text(xy,text,font=font,fill=color,anchor=anchor_type,
-                  stroke_width=outline,stroke_fill=(9,7,10,255))
+                  stroke_width=outline,stroke_fill=(2,2,5,255))
     else:
         draw.text(xy,text,font=font,fill=color,anchor=anchor_type)
     return box
@@ -205,18 +206,18 @@ def digit_atlas(font_path:Path,base_size:int,pixel_scale:float,style="source",ve
     for i in range(10):
         xy=(i*cell_w+cell_w/2.0,cell_h/2.0)
         if style=="themed":
-            color=(255,235,166,255) if base_size>16 else (255,246,211,255)
-            outline=max(2,round(0.72*pixel_scale))
-            draw.text((xy[0]+0.48*pixel_scale,xy[1]+0.48*pixel_scale),
+            color=(255,241,153,255) if base_size>16 else (255,250,226,255)
+            outline=max(2,round(0.89*pixel_scale))
+            draw.text((xy[0]+0.60*pixel_scale,xy[1]+0.60*pixel_scale),
                       str(i),font=font,fill=(5,5,8,255),anchor="mm",
                       stroke_width=outline+1,stroke_fill=(5,5,8,255))
             draw.text(xy,str(i),font=font,fill=color,anchor="mm",
-                      stroke_width=outline,stroke_fill=(9,7,10,255))
+                      stroke_width=outline,stroke_fill=(2,2,5,255))
         else:
             draw.text(xy,str(i),font=font,fill=(255,255,255,255),anchor="mm")
     if style=="themed" and base_size==16 and vertical_percent>100:
         # Enlarge ONLY the visible small-digit ink in the offline 6x bake.
-        # Keep atlas cell dimensions and original fill/stroke colors intact.
+        # Keep atlas cell dimensions and the revised HQ palette intact.
         # The native game still blits already-baked 3x pixels at exact 1:1.
         stretched_atlas=Image.new("RGBA",atlas.size,(0,0,0,0))
         margin=max(1,round(0.5*pixel_scale))

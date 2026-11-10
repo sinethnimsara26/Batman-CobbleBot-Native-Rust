@@ -837,9 +837,12 @@ jobs:
           assert "stretched_atlas.alpha_composite(" in baker
           assert "hud_digit_step_width" in render
           assert "preferred_advance" in render
-          assert "outline=max(2,round(0.74*scale))" in baker
-          assert "outline=max(2,round(0.72*pixel_scale))" in baker
-          print("Round 6 HUD contract PASS: one HQ layout manifest emits Rust constants; source HUD/icons preserved, no duplicate band.")
+          assert "outline=max(2,round(0.90*scale))" in baker
+          assert "outline=max(2,round(0.89*pixel_scale))" in baker
+          assert "color=(255,235,80,255)" in baker, "HQ gold label contrast style changed unexpectedly"
+          assert "color=(255,241,153,255)" in baker, "HQ large numeral contrast style changed unexpectedly"
+          assert "stroke_width=outline,stroke_fill=(2,2,5,255))" in baker
+          print("Round 6 HUD contract PASS: one HQ layout manifest emits Rust constants; source HUD/icons preserved, stronger near-black outline, no duplicate band.")
 
       - name: Validate Round 7 true-3x foreground timelines
         shell: python
