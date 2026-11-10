@@ -245,7 +245,7 @@ jobs:
           # Round 6: rasterize HUD vector/device-font content at 6x, then
           # premultiplied-alpha Lanczos downsample to the final true 3x assets.
           python "$tools/transform_hud_icons_hq.py" "$work/reports/symbols.json" "reverse-engineering/manifests/hud-hq-layout.json" "$work/reports/hud-icons-hq-symbols.json" "$work/hud-06b-icon-source-report.json"
-          python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/hud-icons-hq-symbols.json" "$work/hud-hq-super" --bitmaps "$work/bitmaps" --symbol 716 --scale 6.0 --all-frames
+          python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/hud-icons-hq-symbols.json" "$work/hud-hq-super" --bitmaps "$work/bitmaps" --symbol 716 --scale 6.0 --all-frames --bounds-symbols-json "$work/reports/symbols.json"
           # The new HUD is intentionally visually matched to the game's bold
           # condensed gold tutorial prompts, not asserted as the original _sans.
           if (!(Test-Path "C:/Windows/Fonts/impact.ttf")) { throw "Impact display font unavailable on Windows runner" }
