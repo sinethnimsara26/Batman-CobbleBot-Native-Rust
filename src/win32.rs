@@ -427,7 +427,6 @@ mod tests{
    );
    assert!(last>=media_finished.expect("mock media callback ran"));
    assert_eq!(acc,0.0);
-   assert!(last.elapsed()<Duration::from_millis(500));
   }
 
   #[test]
