@@ -428,8 +428,13 @@ def main():
         old_alpha=image.crop((x,y,x+x_glyph.width,y+x_glyph.height)).getchannel("A")
         old_opaque=old_alpha.point(lambda v:255 if v>=208 else 0)
         x_ink=x_glyph.getchannel("A").point(lambda v:255 if v>=32 else 0)
-        if ImageChops.multiply(old_opaque,x_ink).getbbox() is not None:
-            raise ValueError("Lives X overlaps existing opaque label or icon ink")
+        collision=ImageChops.multiply(old_opaque,x_ink)
+        if collision.getbbox() is not None:
+            raise ValueError(
+                f"Lives X overlaps existing opaque label or icon ink: "
+                f"local_bbox={collision.getbbox()} glyph_origin=({x},{y}) "
+                f"stage_center=({mx},{my})"
+            )
         image.alpha_composite(x_glyph,(x,y))
     large_image,large_meta=digit_atlas(ns.font,32,temp_scale,ns.style)
     # HUD-REAL-06B: separate, taller Batarang-only HQ atlas. Health/Lives
