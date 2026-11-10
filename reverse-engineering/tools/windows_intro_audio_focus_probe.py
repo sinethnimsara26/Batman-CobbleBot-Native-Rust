@@ -128,23 +128,34 @@ def load_trace(path):
         return list(csv.DictReader(f, delimiter="\t"))
 
 
-def status(row, key):
+def status(row, key, require_mci=True):
+    """Real native intro tick/focus evidence independently of MCI hardware.
+
+    An unavailable driver is NOT considered a passing audio test. We still
+    finish the genuine OS-focus visual checks and keep the CI step red.
+    """
     if row is None:
-        raise AssertionError("Missing native MCI telemetry")
+        raise AssertionError("Missing native game telemetry at " + key)
     if row.get("screen") != "Intro":
         raise AssertionError("Native window left Intro during focus experiment: " + str(row))
-    for field in ("mode_error", "position_error"):
-        if row.get(field) != "0":
-            raise AssertionError("MCI driver rejected status " + field + ": " + str(row))
-    try:
-        pos = int(row["mci_position"])
-        tick = int(row["intro_tick"])
-    except (ValueError, KeyError) as exc:
-        raise AssertionError("MCI playback position unavailable: " + str(row)) from exc
+    for field in ("elapsed_ms", "intro_tick"):
+        if not str(row.get(field, "")).isdigit():
+            raise AssertionError("Malformed native focus/intro telemetry: " + str(row))
+    pos = None
+    if require_mci:
+        for field in ("mode_error", "position_error"):
+            if row.get(field) != "0":
+                raise AssertionError("MCI driver rejected status " + field + ": " + str(row))
+        try:
+            pos = int(row["mci_position"])
+        except (ValueError, KeyError) as exc:
+            raise AssertionError("MCI playback position unavailable: " + str(row)) from exc
     return {"time_ms": int(row["elapsed_ms"]), "position": pos,
-            "intro_tick": tick, "mode": row["mci_mode"].strip().lower(),
-            "transport": row["transport"], "active": row["active"] == "1",
-            "reason": row["reason"], "format": row["mci_time_format"]}
+            "intro_tick": int(row["intro_tick"]), "mode": row.get("mci_mode", "").strip().lower(),
+            "transport": row.get("transport"), "active": row.get("active") == "1",
+            "reason": row.get("reason"), "format": row.get("mci_time_format"),
+            "open_error": row.get("open_error"), "open_message": row.get("open_message"),
+            "file_written": row.get("file_written")}
 
 
 def last_intro(rows, active=None, reason=None):
@@ -313,62 +324,100 @@ def run(exe, out):
             raise AssertionError("Enter did not start real native intro")
         before_rows = load_trace(trace_path)
         before_row = last_intro(before_rows, active=True)
-        before_status = status(before_row, "before")
+        if before_row is None:
+            raise AssertionError("Real native Intro telemetry was not recorded")
+        mci_available = before_row.get("open_error") == "0"
+        report["measurements"]["mci_audio_initialized"] = mci_available
+        before_status = status(before_row, "before", require_mci=mci_available)
         report["measurements"]["active_before"] = before_status
-        if "play" not in before_status["mode"]:
-            raise AssertionError("Original intro soundtrack is not MCI playing before focus switch: " + str(before_status))
-        if before_status["transport"] != "playing":
-            raise AssertionError("Rust Intro transport did not enter playing state")
-        # Create a distinct, real top-level Windows HWND and activate it.
+        if mci_available:
+            if "play" not in before_status["mode"]:
+                raise AssertionError("MCI driver is not playing original intro: " + str(before_status))
+            if before_status["transport"] != "playing":
+                raise AssertionError("Rust intro transport did not enter playing state")
+        else:
+            report["measurements"]["mci_initialization_blocker"] = {
+                "open_error": before_status["open_error"],
+                "open_message": before_status["open_message"],
+                "file_written": before_status["file_written"],
+                "audio_service_preflight": report.get("audio_service_preflight"),
+            }
+        # Exercise real foreground loss even on CI hosts without an MCI output
+        # endpoint, providing independent OS/visual evidence in all cases.
         sink, callback = build_focus_sink(user32, kernel32)
         require_foreground(user32, sink, "focus sink")
         pump(user32, 0.38)
         paused_early_rows = load_trace(trace_path)
-        paused_early = status(last_intro(paused_early_rows, active=False), "paused_early")
-        dark = capture(user32, hwnd, out / "qa05_03_intro_defocused.png", report, "intro-while-other-window-foreground")
+        paused_early = status(last_intro(paused_early_rows, active=False),
+                              "paused_early", require_mci=mci_available)
+        capture(user32, hwnd, out / "qa05_03_intro_defocused.png", report,
+                "intro-while-other-window-foreground")
         pump(user32, 0.95)
         paused_late_rows = load_trace(trace_path)
-        paused_late = status(last_intro(paused_late_rows, active=False), "paused_late")
+        paused_late = status(last_intro(paused_late_rows, active=False),
+                             "paused_late", require_mci=mci_available)
         report["measurements"]["paused_early"] = paused_early
         report["measurements"]["paused_late"] = paused_late
-        report["events"]["focus_loss_count"] = sum(r["reason"] == "focus_loss" for r in paused_late_rows)
+        report["events"]["focus_loss_count"] = sum(
+            r["reason"] == "focus_loss" for r in paused_late_rows)
         if report["events"]["focus_loss_count"] < 1:
-            raise AssertionError("No actual native focus-loss message was recorded")
-        if paused_early["transport"] != "paused_for_focus" or paused_late["transport"] != "paused_for_focus":
-            raise AssertionError("Rust transport not paused after real Win32 activation loss")
-        if "pause" not in paused_early["mode"] or "pause" not in paused_late["mode"]:
-            raise AssertionError("WinMM driver mode was not paused: " + str((paused_early, paused_late)))
+            raise AssertionError("No real game Win32 focus-loss message recorded")
+        if paused_early["active"] or paused_late["active"]:
+            raise AssertionError("Native game did not actually deactivate")
         if paused_early["intro_tick"] != paused_late["intro_tick"]:
-            raise AssertionError("Intro animation continued while game lost focus")
-        pos_change = paused_late["position"] - paused_early["position"]
-        report["measurements"]["paused_position_change_units"] = pos_change
-        if not (-50 <= pos_change <= 75):
-            raise AssertionError("WinMM MCI position advanced during paused interval: " + str(pos_change))
+            raise AssertionError("Original intro visuals continued while defocused")
         if paused_late["time_ms"] - paused_early["time_ms"] < 500:
-            raise AssertionError("Insufficient pause observation window")
-        # Resume actual foreground focus to game and measure MCI progression.
+            raise AssertionError("Insufficient real-focus-loss observation interval")
+        report["measurements"]["visual_intro_paused_by_real_os_focus"] = True
+        if mci_available:
+            if (paused_early["transport"] != "paused_for_focus"
+                    or paused_late["transport"] != "paused_for_focus"):
+                raise AssertionError("Rust audio transport did not enter focus pause")
+            if "pause" not in paused_early["mode"] or "pause" not in paused_late["mode"]:
+                raise AssertionError("WinMM did not report paused mode")
+            pos_change = paused_late["position"] - paused_early["position"]
+            report["measurements"]["paused_position_change_units"] = pos_change
+            if not (-50 <= pos_change <= 75):
+                raise AssertionError("MCI position advanced during pause: " + str(pos_change))
+        # Return focus to the same ordinary Rust game window.
         require_foreground(user32, hwnd, "game regain")
         pump(user32, 0.35)
         regain_rows = load_trace(trace_path)
-        regained = status(last_intro(regain_rows, active=True), "regained")
+        regained = status(last_intro(regain_rows, active=True),
+                          "regained", require_mci=mci_available)
         pump(user32, 0.6)
         final_rows = load_trace(trace_path)
-        final_status = status(last_intro(final_rows, active=True), "after-resume")
+        final_status = status(last_intro(final_rows, active=True),
+                              "after-resume", require_mci=mci_available)
         report["measurements"]["regained"] = regained
         report["measurements"]["after_resume"] = final_status
-        report["events"]["focus_gain_count"] = sum(r["reason"] == "focus_gain" for r in final_rows)
+        report["events"]["focus_gain_count"] = sum(
+            r["reason"] == "focus_gain" for r in final_rows)
         if report["events"]["focus_gain_count"] < 1:
-            raise AssertionError("No actual native focus-gain message recorded")
-        if "play" not in regained["mode"] or "play" not in final_status["mode"]:
-            raise AssertionError("WinMM did not actually resume playing: " + str((regained, final_status)))
-        if final_status["position"] - regained["position"] < 150:
-            raise AssertionError("MCI soundtrack position did not advance after real focus regain")
+            raise AssertionError("No real game Win32 focus-gain message recorded")
+        if not regained["active"] or not final_status["active"]:
+            raise AssertionError("Native game did not become active again")
         if final_status["intro_tick"] - regained["intro_tick"] < 7:
-            raise AssertionError("25Hz visual Intro did not resume after real Win32 focus regain")
-        after_dark = capture(user32, hwnd, out / "qa05_04_intro_resumed.png", report, "intro-after-focus")
+            raise AssertionError("25Hz intro visuals did not resume after Win32 focus gain")
+        report["measurements"]["visual_intro_resumed_by_real_os_focus"] = True
+        if mci_available:
+            if "play" not in regained["mode"] or "play" not in final_status["mode"]:
+                raise AssertionError("WinMM did not report resumed playback")
+            if final_status["position"] - regained["position"] < 150:
+                raise AssertionError("MCI position did not advance after focus regain")
+        after_dark = capture(user32, hwnd, out / "qa05_04_intro_resumed.png",
+                             report, "intro-after-focus")
         if after_dark < 0.70:
-            raise AssertionError("Native game unexpectedly left Intro after focus restore")
-        report["status"] = "PASS_REAL_WIN32_FOCUS_MCI_PAUSE_POSITION_RESUME"
+            raise AssertionError("The actual game left its intro unexpectedly")
+        if not mci_available:
+            report["status"] = "BLOCKED_HOSTED_RUNNER_MCI_INITIALIZATION"
+            report["errors"].append(
+                "Real OS focus/visual freeze/resume verified, but WinMM MCI audio "
+                "initialization failed (error " + str(before_status["open_error"]) +
+                ": " + str(before_status["open_message"]) +
+                "); actual playback position remains UNVERIFIED")
+        else:
+            report["status"] = "PASS_REAL_WIN32_FOCUS_MCI_PAUSE_POSITION_RESUME"
     except Exception as exc:
         report["status"] = "FAIL"
         report["errors"].append(type(exc).__name__ + ": " + str(exc))
