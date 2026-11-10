@@ -5,7 +5,7 @@
     600,
     400
   ],
-  "notes": "Themed HQ only: 600x400 logical coordinates, 9px Batarang and 10px lives digit advances; small atlas glyph ink stretched +15% vertically at build time; SCORE width allowance 92 logical px avoids maximum-i32 adjacent digit ink overlap. 1x Flash source remains unchanged.",
+  "notes": "Themed HQ only: original SWF-716 blue #693 and yellow #698/#705/#709 icon vectors shrunk to 94% in copied symbol metadata; labels and translucent panel untouched, original 1x source unchanged. Batarang-specific digit ink 121% tall (from 115%), y 59→58; lives/small-score stay 115%; batarang pitch 9, lives pitch 10, SCORE width 92.",
   "static_offsets_logical": {
     "700": [
       0,
@@ -29,7 +29,7 @@
       "field_id": 702,
       "center": [
         211,
-        59
+        58
       ],
       "max_width": 60,
       "digit_advance": 9
@@ -50,5 +50,29 @@
       "digit_advance": 10
     }
   },
-  "small_counter_height_percent": 115
+  "small_counter_height_percent": 115,
+  "hq_icon_resize": {
+    "scale_percent": 94,
+    "blue": {
+      "parent": 703,
+      "child": 693,
+      "center": [
+        0.2,
+        0.8
+      ]
+    },
+    "yellow": {
+      "parent": 716,
+      "children": [
+        698,
+        705,
+        709
+      ],
+      "center": [
+        141.25,
+        46
+      ]
+    }
+  },
+  "batarang_ink_height_percent": 121
 }
