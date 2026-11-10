@@ -310,6 +310,24 @@ jobs:
           path: .generated/windows-icon-art/
           if-no-files-found: error
 
+      # ICON-EXE-07: use the Batch06 PNGs (already uploaded separately),
+      # package all Windows ICO-supported sizes and fail if any are missing.
+      - name: Package source-derived multi-resolution Windows ICO (Batch07)
+        shell: pwsh
+        run: |
+          python reverse-engineering/tools/build_windows_ico.py --art .generated/windows-icon-art --out .generated/windows-icon-art/batman-cobblebot.ico
+          if ($LASTEXITCODE -ne 0) { throw "Batch07 ICO generation/verification failed" }
+          if (!(Test-Path .generated/windows-icon-art/batman-cobblebot.ico)) { throw "ICO not generated" }
+
+      - name: Upload Batch07 reproducible ICO and source report
+        uses: actions/upload-artifact@v4
+        with:
+          name: Batman-CobbleBot-Embedded-ICO-Source
+          path: |
+            .generated/windows-icon-art/batman-cobblebot.ico
+            .generated/windows-icon-art/ico-resource-report.json
+          if-no-files-found: error
+
       - name: Validate recovered assets and reject leaked control geometry
         shell: python
         run: |
@@ -1644,6 +1662,23 @@ jobs:
 
       - name: Build Level 1A fidelity slice
         run: cargo build --release --target x86_64-pc-windows-msvc
+
+      # ICON-EXE-07: actual built PE resource table, Windows Shell icon
+      # extraction, and the NORMAL game HWND's registered class icon.
+      # This is not a claim that a user's pinned taskbar has refreshed its cache.
+      - name: Verify native Windows EXE / Shell / window icon (Batch07)
+        shell: pwsh
+        timeout-minutes: 3
+        run: |
+          python reverse-engineering/tools/windows_icon_resource_probe.py --exe target/x86_64-pc-windows-msvc/release/batman_cobblebot_native.exe --out .generated/windows-icon-resource-qa
+          if ($LASTEXITCODE -ne 0) { throw "Batch07 actual PE/Win32 icon QA failed" }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Batman-CobbleBot-Real-Windows-Icon-Resource-QA
+          path: .generated/windows-icon-resource-qa/
+          if-no-files-found: warn
 
       - name: Smoke-check executable, legacy pixels, HQ output and render timing
         shell: pwsh
