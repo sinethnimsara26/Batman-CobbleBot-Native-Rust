@@ -294,7 +294,7 @@ def read_hq_layout(path:Path):
     if not (type(l["left"]) is int and type(l["center_y"]) is int and
             0<l["left"]<600 and 0<l["center_y"]<400 and
             type(l["max_width"]) is int and 20<=l["max_width"]<=150 and
-            l.get("multiplier_center")==[l["left"]-7,l["center_y"]]):
+            l.get("multiplier_center")==[l["left"]-7,l["center_y"]-1]):
         raise ValueError("Invalid HQ lives anchor or width")
     return cfg
 
