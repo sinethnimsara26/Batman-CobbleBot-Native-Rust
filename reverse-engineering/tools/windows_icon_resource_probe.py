@@ -74,7 +74,7 @@ def inspect_resource(exe: Path) -> dict:
             if (w or 256, h or 256) != (size,size):
                 raise AssertionError(f"PE icon entry {index} unexpected size {w}x{h}")
             payload = resource(ident, RT_ICON)
-            if len(payload) != length or not payload.startswith(b"\\x89PNG\\r\\n\\x1a\\n"):
+            if len(payload) != length or not payload.startswith(b"\x89PNG\r\n\x1a\n"):
                 raise AssertionError(f"Invalid RT_ICON bytes for {size}px")
             entries.append({"size":size,"id":ident,"byte_length":length,"png":True})
         return {"group_resource_id":ICON_RESOURCE_ID,"resource_type":"RT_GROUP_ICON",
