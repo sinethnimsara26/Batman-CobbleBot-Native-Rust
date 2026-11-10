@@ -173,6 +173,75 @@ def capture(user32, hwnd, path, report, label):
     return near_black_top_fraction(img)
 
 
+
+def audio_services_preflight():
+    """Report hosted-VM audio availability; attempt benign service starts.
+
+    This is strictly CI-only, never used or needed by normal game users.
+    A missing driver/device does NOT turn the strict real MCI test into a pass.
+    """
+    script = r'''
+$ErrorActionPreference = 'Continue'
+$result = [ordered]@{
+    os = [System.Environment]::OSVersion.VersionString
+    services = [ordered]@{}
+    audio_endpoints = @()
+    mci_mpegvideo = ''
+    diagnostics = @()
+}
+foreach ($n in @('AudioEndpointBuilder', 'Audiosrv')) {
+    try {
+        $svc = Get-Service -Name $n -ErrorAction Stop
+        $before = $svc.Status.ToString()
+        if ($svc.Status -ne 'Running') {
+            try {
+                Start-Service -Name $n -ErrorAction Stop
+                Start-Sleep -Milliseconds 250
+            } catch {
+                $result.diagnostics += ('Start-Service ' + $n + ': ' + $_.Exception.Message)
+            }
+        }
+        $after = (Get-Service -Name $n -ErrorAction Stop).Status.ToString()
+        $result.services[$n] = [ordered]@{
+            before = $before
+            after = $after
+            start_type = $svc.StartType.ToString()
+        }
+    } catch {
+        $result.services[$n] = [ordered]@{ error = $_.Exception.Message }
+    }
+}
+try {
+    $endpoints = @(Get-PnpDevice -Class AudioEndpoint -PresentOnly -ErrorAction Stop)
+    $result.audio_endpoints = @($endpoints | ForEach-Object {
+        [ordered]@{ name = $_.FriendlyName; status = $_.Status }
+    })
+} catch {
+    $result.diagnostics += ('AudioEndpoint enumeration: ' + $_.Exception.Message)
+}
+try {
+    $reg = Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\MCI32' -ErrorAction Stop
+    $result.mci_mpegvideo = [string]$reg.mpegvideo
+} catch {
+    $result.diagnostics += ('MCI32 registry: ' + $_.Exception.Message)
+}
+$result | ConvertTo-Json -Compress -Depth 5
+'''
+    try:
+        result = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script],
+            capture_output=True, text=True, timeout=35, check=False,
+        )
+        return {
+            "exit_code": result.returncode,
+            "values": json.loads(result.stdout.strip()) if result.stdout.strip().startswith("{") else None,
+            "stdout_tail": result.stdout[-1000:],
+            "stderr_tail": result.stderr[-2000:],
+        }
+    except Exception as exc:
+        return {"error": type(exc).__name__ + ": " + str(exc)}
+
+
 def run(exe, out):
     out.mkdir(parents=True, exist_ok=True)
     trace_path = out / "intro-audio-mci.tsv"
@@ -203,6 +272,8 @@ def run(exe, out):
         user32 = ctypes.WinDLL("user32", use_last_error=True)
         kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
         prepare_user32(user32, kernel32)
+        report["audio_service_preflight"] = audio_services_preflight()
+        print("Audio service/device preflight:", json.dumps(report["audio_service_preflight"], indent=2))
         # Neutralize leftover injected keyboard state from existing GUI tests.
         send_key(user32, VK_RETURN, True)
         env = dict(os.environ)
