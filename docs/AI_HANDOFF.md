@@ -1,5 +1,29 @@
 # AI handoff — current recovery checkpoint
 
+## CURRENT 2026-11-10 — INTRO-AUDIO-QA-05 recovered, hosted CI VERIFIED, actual audio BLOCKED
+
+**Branch:** `revive/level1a-intro-hud-fidelity-2026-11-09`. **Last changed-code SHA:** [46a6ac1513696aeb523ca4dcddd8f0b1f5180bd0](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/commit/46a6ac1513696aeb523ca4dcddd8f0b1f5180bd0). This handoff's documentation SHA is the subsequent six-file checkpoint; resolve it from GitHub after push. [PR #18](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/18) OPEN/DRAFT/UNMERGED, [issue #17](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/issues/17) OPEN, `main` and Level1B untouched.
+
+**Verified run:** [Windows Actions #42862935371](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42862935371), status **COMPLETED/SUCCESS** at exact changed-code SHA `46a6ac1513696aeb523ca4dcddd8f0b1f5180bd0`, 67/67 workflow steps; native MSVC release tests20/20; 15/15 old 1x hashes; original 9 Win32 GUI images + F8 HUD, 8 fullscreen, native focus/audio QA four real 930x660 screenshots, 23 TSV records, errors=[]. Benchmarks HQ p95=19.7599ms, scenery p95=22.9616ms versus strict 40ms caps. [Download Windows EXE #13787355858](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42862935371/artifacts/13787355858); [focus QA evidence #13785598750](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42862935371/artifacts/13785598750); [GUI #13786707437](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42862935371/artifacts/13786707437); [fullscreen #13787535335](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42862935371/artifacts/13787535335). The latest QA ZIP was independently downloaded; SHA256 `51587331da652dc915524114fc3f67fd2cb0b848317a1785f2db880ff07e1b7e`. Visual intro tick18 held at t2547..3678ms during genuine Win32 focus loss; after regain tick22 advanced to41. One loss, one gain.
+
+**Why AUDIO remains BLOCKED despite green build:** Host AudioEndpointBuilder and Audiosrv both Running but `Get-PnpDevice -Class AudioEndpoint -PresentOnly` enumerated no endpoints; original MP3 file was written, MCI `open` returned **277 / 'A problem occurred in initializing MCI.'**, status `not_open`, position=null. QA status is EXACTLY `BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT`, errors=[] and warning stating audio UNVERIFIED; **no MCI pause/position/resume proof**. Do not treat the green workflow or Rust state-machine tests as physical audio verification. The earlier strict attempts [#42851592248](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42851592248), [#42853618239](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42853618239), [#42856571435](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42856571435) and [#42858774660](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42858774660) FAILED their audio gate, and are recorded, not erased. The limited `--allow-hosted-no-audio` is restricted to the observed GitHub Actions lack of output endpoints, not available on a normal user's strict probe. The alternate test foreground window is NOT a direct volume-flyout test.
+
+**EXACT next action within THIS unfinished audio acceptance gate:** Ask for a real audio-equipped Windows environment or the user's native telemetry TSV. With the latest native executable and game CLOSED initially, the user may avoid Python completely by running the following in PowerShell; press Enter at title, while the intro plays switch focus to the Windows taskbar volume control (or another application), return focus and then close the game. Upload the resulting TSV for exact MCI/tick analysis:
+
+```powershell
+$exe = Join-Path $env:LOCALAPPDATA 'BatmanCobbleBot\batman_cobblebot_native.exe'
+if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { throw "Install the latest successful development-branch build first." }
+$log = Join-Path ([Environment]::GetFolderPath('Desktop')) ("Batman-IntroAudio-" + (Get-Date -Format 'yyyyMMdd-HHmmss') + ".tsv")
+$env:BCB_FOCUS_QA_LOG = $log
+try { Start-Process -FilePath $exe -WorkingDirectory (Split-Path $exe) -Wait } finally { Remove-Item Env:BCB_FOCUS_QA_LOG -ErrorAction SilentlyContinue }
+Write-Host "Focus/audio report: $log"
+```
+
+For a **fully automated strict** local proof, clone/check out the same repository branch on Windows with an available sound device; install `Pillow` into Python for the existing CI-only screenshot helper, then invoke `python reverse-engineering/tools/windows_intro_audio_focus_probe.py --exe <actual-exe> --out <report-dir>` **without** `--allow-hosted-no-audio`. On real-device MCI failure it MUST fail. The manual TSV itself is observational evidence, not proof of speaker audibility or original Flash sync until interpreted. No code here ships Python with the playable EXE.
+
+**No next roadmap batch permitted inside this continuation.** Keep exact 05 blocker highest priority; only once audio proof is obtained or the user separately accepts the limitation should future 06 icon-art work be considered. Six-file audit: RE-20261110-023 and AUD-20261110-023.
+
+
 ## 2026-11-10 — INTRO-AUDIO-04 batch04/08 precise recovery
 
 **Remote source code:** [b5570d2](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/commit/b5570d220bb40bc2ff18dc98fface4832d2b9b38) on branch `revive/level1a-intro-hud-fidelity-2026-11-09`; parent prior six-file FS-QA checkpoint 04bc2c9. PR #18 open DRAFT/unmerged; issue #17 open; main and Level1B untouched. This documentation's final SHA is the subsequent remote commit.
