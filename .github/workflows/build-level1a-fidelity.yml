@@ -1599,6 +1599,15 @@ jobs:
         run: |
           python reverse-engineering/tools/windows_gui_pilot.py --exe target/x86_64-pc-windows-msvc/release/batman_cobblebot_native.exe --out .generated/windows-gui-pilot
 
+      # HUD-REAL-06A: launch the standard native Windows EXE while Enter is
+      # already held, then require release + a genuinely new Enter press.
+      # Old color-art title vs intro upper-black panel are checked in OS captures.
+      - name: Verify real Windows startup ignores inherited Enter
+        shell: pwsh
+        timeout-minutes: 2
+        run: |
+          python reverse-engineering/tools/windows_title_startup_probe.py --exe target/x86_64-pc-windows-msvc/release/batman_cobblebot_native.exe --out .generated/windows-gui-pilot
+
       - name: Require three real Windows F8 HUD captures
         shell: python
         run: |
