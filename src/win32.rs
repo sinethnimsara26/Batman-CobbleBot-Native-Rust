@@ -42,17 +42,43 @@ const QA_SCENE_KEYS:[i32;4]=[0x74,0x75,0x76,0x77];
 // QA-only: (Batarangs, Lives, Score), never normal-game initial values.
 const QA_HUD_CASES:[(i32,i32,i32);3]=[(20,10,1234),(99,12,123456),(20,99,i32::MAX)];
 
-struct App{base_fb:RenderSurface,fb:RenderSurface,assets:Assets,audio:Audio,ground:CollisionMask,game:Game,input:InputState,last:Instant,acc:f32,active:bool,intro_skip_armed:bool,qa_navigation:bool,qa_keys_were_down:[bool;4],qa_hud_next:usize}
+// The launcher's Enter/Space key can remain physically down at the first
+// Win32 keyboard poll. A release must be seen before accepting a fresh press.
+#[derive(Default)]
+struct TitleStartGate{armed:bool}
+impl TitleStartGate{
+ fn reset(&mut self){self.armed=false;}
+ fn allow(&mut self,enter_down:bool,space_down:bool)->bool{
+  if !self.armed && !enter_down && !space_down{self.armed=true;}
+  self.armed
+ }
+}
+
+struct App{base_fb:RenderSurface,fb:RenderSurface,assets:Assets,audio:Audio,ground:CollisionMask,game:Game,input:InputState,last:Instant,acc:f32,active:bool,intro_skip_armed:bool,qa_navigation:bool,qa_keys_were_down:[bool;4],qa_hud_next:usize,title_start_gate:TitleStartGate}
 impl App{
- fn new(qa_navigation:bool)->Self{Self{base_fb:RenderSurface::new(LOGICAL_W,LOGICAL_H),fb:RenderSurface::new(render::HQ_W,render::HQ_H),assets:Assets::load(),audio:Audio::new(),ground:CollisionMask::level1a(),game:Game::new(),input:InputState::default(),last:Instant::now(),acc:0.0,active:true,intro_skip_armed:false,qa_navigation,qa_keys_were_down:[false;4],qa_hud_next:0}}
+ fn new(qa_navigation:bool)->Self{Self{base_fb:RenderSurface::new(LOGICAL_W,LOGICAL_H),fb:RenderSurface::new(render::HQ_W,render::HQ_H),assets:Assets::load(),audio:Audio::new(),ground:CollisionMask::level1a(),game:Game::new(),input:InputState::default(),last:Instant::now(),acc:0.0,active:true,intro_skip_armed:false,qa_navigation,qa_keys_were_down:[false;4],qa_hud_next:0,title_start_gate:TitleStartGate::default()}}
  unsafe fn poll_keyboard(&mut self,hwnd:HWND){
   // WM_ACTIVATE / WM_SETFOCUS are authoritative. GetForegroundWindow is
   // allowed to promote us to active, but a transient mismatch must not undo
   // a focus message and recreate the old "click around before keys work" bug.
   if GetForegroundWindow()==hwnd{self.active=true;}
-  if !self.active{self.input.release_all();return;}
+  if !self.active{
+   self.input.release_all();
+   self.title_start_gate.reset();
+   return;
+  }
+  // Capture both start-key levels once to avoid a race between reads.
+  // In particular, Enter may still be held from a PowerShell launch.
+  let enter_down=(GetAsyncKeyState(VK_ENTER as i32) as u16&0x8000)!=0;
+  let space_down=(GetAsyncKeyState(VK_SPACE as i32) as u16&0x8000)!=0;
+  let allow_start=if self.game.screen==AppScreen::Title{
+   self.title_start_gate.allow(enter_down,space_down)
+  }else{true};
   for &k in KEYS.iter().chain(EXTRA_KEYS.iter()){
-   self.input.set(k,(GetAsyncKeyState(k as i32) as u16&0x8000)!=0);
+   let down=if k==VK_ENTER{enter_down}
+     else if k==VK_SPACE{space_down}
+     else{(GetAsyncKeyState(k as i32) as u16&0x8000)!=0};
+   self.input.set(k,down && (allow_start || (k!=VK_ENTER && k!=VK_SPACE)));
   }
  }
  /// Opt-in QA-only jumps: never mutate normal gameplay unless the developer
@@ -70,6 +96,7 @@ impl App{
    }
    if let Some(scene)=jump{
      if scene!=3 {self.qa_hud_next=0;}
+     if scene==0 {self.title_start_gate.reset();}
      self.game=Game::new();
      self.input.release_all();
      self.intro_skip_armed=false;
@@ -168,8 +195,8 @@ unsafe extern "system" fn wndproc(hwnd:HWND,msg:u32,w:WPARAM,l:LPARAM)->LRESULT{
  WM_PAINT=>{let mut ps:PAINTSTRUCT=zeroed();let hdc=BeginPaint(hwnd,&mut ps);if !APP.is_null(){let app=&mut*APP;app.render();let mut r:RECT=zeroed();GetClientRect(hwnd,&mut r);let cw=(r.right-r.left).max(1);let ch=(r.bottom-r.top).max(1);let(vx,vy,vw,vh)=viewport(hwnd);if vy>0{PatBlt(hdc,0,0,cw,vy,BLACKNESS);PatBlt(hdc,0,vy+vh,cw,ch-vy-vh,BLACKNESS);}if vx>0{PatBlt(hdc,0,vy,vx,vh,BLACKNESS);PatBlt(hdc,vx+vw,vy,cw-vx-vw,vh,BLACKNESS);}let bmi=BITMAPINFO{bmiHeader:BITMAPINFOHEADER{biSize:size_of::<BITMAPINFOHEADER>()as u32,biWidth:app.fb.w as i32,biHeight:-(app.fb.h as i32),biPlanes:1,biBitCount:32,biCompression:BI_RGB,biSizeImage:app.fb.byte_len() as u32,biXPelsPerMeter:0,biYPelsPerMeter:0,biClrUsed:0,biClrImportant:0},bmiColors:[RGBQUAD{rgbBlue:0,rgbGreen:0,rgbRed:0,rgbReserved:0}]};/* Phase 1 HQ proof retained: high-quality final GDI presentation. Phase 2 makes source dimensions explicit without changing them yet. */SetStretchBltMode(hdc,HALFTONE);SetBrushOrgEx(hdc,0,0,null_mut());StretchDIBits(hdc,vx,vy,vw,vh,0,0,app.fb.w as i32,app.fb.h as i32,app.fb.pixels.as_ptr()as*const c_void,&bmi,DIB_RGB_COLORS,SRCCOPY);}EndPaint(hwnd,&ps);0},
  WM_TIMER=>{if !APP.is_null()&&(&mut*APP).timer(hwnd){InvalidateRect(hwnd,null(),0);}0},
  WM_SETFOCUS=>{if !APP.is_null(){(&mut*APP).active=true;}0},
- WM_KILLFOCUS=>{if !APP.is_null(){let app=&mut*APP;app.active=false;app.intro_skip_armed=false;app.input.release_all();}0},
- WM_ACTIVATE=>{if !APP.is_null(){let active=(w&0xffff)!=WA_INACTIVE;let app=&mut*APP;app.active=active;if !active{app.intro_skip_armed=false;app.input.release_all();}}0},
+ WM_KILLFOCUS=>{if !APP.is_null(){let app=&mut*APP;app.active=false;app.intro_skip_armed=false;app.input.release_all();app.title_start_gate.reset();}0},
+ WM_ACTIVATE=>{if !APP.is_null(){let active=(w&0xffff)!=WA_INACTIVE;let app=&mut*APP;app.active=active;if !active{app.intro_skip_armed=false;app.input.release_all();app.title_start_gate.reset();}}0},
  WM_LBUTTONDOWN=>{
     SetActiveWindow(hwnd);SetFocus(hwnd);
     if !APP.is_null(){
@@ -208,7 +235,37 @@ pub fn run(qa_navigation:bool){unsafe{let _dpi_aware=enable_best_dpi_awareness()
 
 #[cfg(test)]
 mod tests{
-  use super::{viewport_for_client,client_to_stage,hit_intro_skip,INTRO_SKIP_RECT,QA_HUD_CASES,QA_SCENE_KEYS};
+  use super::{viewport_for_client,client_to_stage,hit_intro_skip,INTRO_SKIP_RECT,QA_HUD_CASES,QA_SCENE_KEYS,TitleStartGate};
+  use crate::game::{AppScreen,Game,InputState,VK_ENTER,VK_SPACE};
+  use crate::collision::CollisionMask;
+
+  #[test]
+  fn title_start_ignores_inherited_key_until_release_and_fresh_press(){
+   let ground=CollisionMask::level1a();
+   for key in [VK_ENTER,VK_SPACE]{
+    let mut gate=TitleStartGate::default();
+    let mut input=InputState::default();
+    let mut game=Game::new();
+    for _ in 0..8 {
+     let (e,s)=(key==VK_ENTER,key==VK_SPACE);
+     let accepted=gate.allow(e,s);
+     assert!(!accepted);
+     input.set(key,accepted);
+     game.tick(&mut input,&ground);
+     assert_eq!(game.screen,AppScreen::Title);
+    }
+    assert!(gate.allow(false,false));
+    input.set(key,false);
+    game.tick(&mut input,&ground);
+    assert_eq!(game.screen,AppScreen::Title);
+    input.set(key,gate.allow(key==VK_ENTER,key==VK_SPACE));
+    game.tick(&mut input,&ground);
+    assert_eq!(game.screen,AppScreen::Intro);
+    gate.reset();
+    assert!(!gate.allow(key==VK_ENTER,key==VK_SPACE));
+   }
+  }
+
   #[test]
   fn qa_hud_fixtures_cover_multidigit_and_max_score(){
     assert_eq!(QA_SCENE_KEYS,[0x74,0x75,0x76,0x77]);
