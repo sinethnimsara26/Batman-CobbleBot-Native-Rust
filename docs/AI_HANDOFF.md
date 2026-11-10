@@ -2,6 +2,18 @@
 
 **READ THIS FIRST.** This is a provider-neutral, evidence-based snapshot for an agent that has never seen the original chat. Follow `AGENTS.md`; consult `docs/AI_TASKS.md` and `docs/AI_WORKLOG.md`. **Always verify current remote GitHub state before trusting this snapshot.**
 
+## 2026-11-10 — HUD-REAL-05B implemented, Windows CI IN PROGRESS
+
+**Live recovered basis:** Branch `revive/level1a-intro-hud-fidelity-2026-11-09`, open DRAFT PR #18, previous code/docs head `278ca8b9270b945194668c6c338c841c1e80beed`. Latest code change [`ba40b30`](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/commit/ba40b3023953029835619380d3c3c68b4d9d610f) updates **only** offline themed HUD `bake_hud_assets.py` contrast colors, stroke thickness/ink edge and shadow offsets, and the matching Round-6 assertions in the existing Actions workflow. It does not touch native Rust renderer, game state, source 1× HUD, 9/10 logical digit pitch, 115% small glyph stretch, screenshot baseline, original icon art or panel location. This checkpoint documents the implemented contrast-only second mini-batch, not the later multi-value test.
+
+**Evidence status (do not confuse run revisions):** [Current-source Windows run #42754638801](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42754638801) observed IN PROGRESS at asset rebuild. Results, artifact IDs, MSVC compilation, Rust tests, native Win32 screenshots, pixel hashes, and performance for this code are **PENDING**, not proven by old successful [run #42749049296](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42749049296). No new end-user screenshot or Flash-source-original match yet; original Flash's white font must not be falsely conflated with the intentionally gold themed HQ candidate.
+
+**Technical record:** RE-20261110-013 and AUD-20261110-013; code SHA `ba40b3023953029835619380d3c3c68b4d9d610f`; handoff documentation SHA is later and must be read from Git history. All SIX required files reviewed: AGENTS.md unchanged because no durable rule changed; roadmap, current handoff, worklog, research, engineering audit synchronized. The existing two permanent protocols remain in force. No PR merge, branch force update or Level1B change.
+
+**EXACT FIRST NEXT ACTION:** fetch actual outcome of Windows #42754638801 and its steps/artifacts. On failure, diagnose same-batch defect, correct and rerun before moving on. On success, inspect independent GUI mouse SKIP vs opt-in F7 screenshot and the stronger outlines, record actual numerics and mark only measured scopes VERIFIED. **Do not start HUD-REAL-05C without a new user instruction.**
+
+
+
 
 ## 2026-11-10 — HUD-REAL-05A recovery, FULL WINDOWS GREEN, screenshot gap recorded
 
