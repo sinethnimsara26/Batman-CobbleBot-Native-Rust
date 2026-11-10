@@ -1658,15 +1658,14 @@ jobs:
           targets: x86_64-pc-windows-msvc
 
       - name: Run sprite-pack compatibility tests
-        run: cargo test --release --target x86_64-pc-windows-msvc
+        run: cargo test --release --locked --target x86_64-pc-windows-msvc
 
       - name: Build Level 1A fidelity slice
-        run: cargo build --release --target x86_64-pc-windows-msvc
+        run: cargo build --release --locked --target x86_64-pc-windows-msvc
 
-      # BUILD-LOCK-10 stage1: collect the ACTUAL Cargo-resolved dependency
-      # lockfile created by native Windows MSVC test/build. Do not invent it.
-      # After this artifact is inspected, commit Cargo.lock and require --locked.
-      - name: Capture generated Cargo.lock provenance (Batch10 stage1)
+      # BUILD-LOCK-10 final: require committed Cargo.lock and --locked MSVC
+      # test/build, then verify Cargo did not alter its tracked bytes.
+      - name: Verify committed Cargo.lock resolution (Batch10 final)
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
@@ -1677,10 +1676,15 @@ jobs:
           if ($data -notmatch '\[\[package\]\]' -or $data -notmatch 'name = "png"') {
               throw "Generated Cargo.lock lacks expected dependency records"
           }
+          $committed = (git rev-parse "HEAD:Cargo.lock").Trim()
+          $working = (git hash-object Cargo.lock).Trim()
+          if ($LASTEXITCODE -ne 0 -or $working -ne $committed) {
+              throw "Cargo modified the checked-in Cargo.lock"
+          }
           Get-FileHash Cargo.lock -Algorithm SHA256
           cargo metadata --format-version 1 --no-deps --locked --offline | Out-Null
           if ($LASTEXITCODE -ne 0) { throw "Current generated lockfile failed offline metadata validation" }
-          Write-Host "BUILD-LOCK-10 STAGE1 PASS: actual Cargo lockfile generated and validated"
+          Write-Host "BUILD-LOCK-10 PASS: tracked Windows Cargo.lock unchanged under --locked test and build"
 
       - uses: actions/upload-artifact@v4
         with:
