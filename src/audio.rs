@@ -29,7 +29,7 @@ fn mci_status(query:&str)->(String,u32){
         std::ptr::null_mut()
     )};
     let end=reply.iter().position(|&u|u==0).unwrap_or(reply.len());
-    (String::from_utf16_lossy(&reply[..end]).replace(['\t','\r','\n']," "),status)
+    (String::from_utf16_lossy(&reply[..end]).replace('\t'," ").replace('\r'," ").replace('\n'," "),status)
 }
 
 // The paused soundtrack must follow the fixed-step Intro animation.
