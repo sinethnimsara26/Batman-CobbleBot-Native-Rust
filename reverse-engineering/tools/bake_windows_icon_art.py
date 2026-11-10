@@ -90,6 +90,10 @@ def main():
               "files":{}}
     for size in SIZES:
         img = master if size==512 else master.resize((size,size),Image.Resampling.LANCZOS)
+        # Lanczos can spread a 1-3 alpha fringe into corner pixels at
+        # small sizes (notably 24px). Keep all four taskbar corners clear.
+        for corner in ((0,0),(0,size-1),(size-1,0),(size-1,size-1)):
+            img.putpixel(corner,(0,0,0,0))
         file = args.out/f"batman-cobblebot-{size}.png"
         img.save(file,optimize=True)
         bbox = img.getchannel("A").getbbox()
