@@ -1647,6 +1647,15 @@ jobs:
         run: |
           python reverse-engineering/tools/windows_gui_pilot.py --exe target/x86_64-pc-windows-msvc/release/batman_cobblebot_native.exe --out .generated/windows-gui-pilot
 
+
+      # FS-QA-03: strict real Windows EXE fullscreen F/Esc integration test.
+      # Different from the existing opt-in QA-navigation F7/F8 pilot.
+      - name: Verify native F/Esc fullscreen window geometry and intro continuity
+        shell: pwsh
+        timeout-minutes: 3
+        run: |
+          python reverse-engineering/tools/windows_fullscreen_probe.py --exe target/x86_64-pc-windows-msvc/release/batman_cobblebot_native.exe --out .generated/windows-fullscreen-qa
+
       # HUD-REAL-06A: launch the standard native Windows EXE while Enter is
       # already held, then require release + a genuinely new Enter press.
       # Old color-art title vs intro upper-black panel are checked in OS captures.
@@ -1994,6 +2003,15 @@ jobs:
         with:
           name: Batman-CobbleBot-Level1A-Windows-GUI-Pilot
           path: .generated/windows-gui-pilot/
+          if-no-files-found: warn
+
+
+      # Preserve real OS fullscreen captures and failure reports even on failure.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Batman-CobbleBot-Level1A-Fullscreen-Windows-QA
+          path: .generated/windows-fullscreen-qa/
           if-no-files-found: warn
 
       - uses: actions/upload-artifact@v4
