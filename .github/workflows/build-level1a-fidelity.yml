@@ -2251,3 +2251,20 @@ jobs:
           path: .generated/windows-intro-audio-qa/
           if-no-files-found: warn
 
+      # Batch08 real installed-copy integration. Prior strict build/GUI/HUD/
+      # fullscreen/legacy hash/performance/audio-focus checks must have run.
+      # Copy the ACTUAL EXE into a fresh LOCALAPPDATA folder and independently
+      # recheck its linked icon, Windows Shell icon and all 20 HQ PNG hashes.
+      - name: Verify standalone installed-copy native game integration (Batch08)
+        shell: pwsh
+        timeout-minutes: 4
+        run: |
+          python reverse-engineering/tools/windows_final_integration_probe.py --exe target/x86_64-pc-windows-msvc/release/batman_cobblebot_native.exe --generated .generated --out .generated/windows-integration-qa
+          if ($LASTEXITCODE -ne 0) { throw "Batch08 installed-copy integration failed" }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Batman-CobbleBot-Level1A-Installed-EXE-Integration-QA
+          path: .generated/windows-integration-qa/
+          if-no-files-found: warn
