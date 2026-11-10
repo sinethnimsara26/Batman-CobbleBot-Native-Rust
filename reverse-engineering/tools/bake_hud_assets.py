@@ -278,6 +278,9 @@ def read_hq_layout(path:Path):
     percent=cfg.get("small_counter_height_percent")
     if type(percent) is not int or not 100<=percent<=125:
         raise ValueError("Small digit vertical stretch must be 100..125 percent")
+    bat_height=cfg.get("batarang_ink_height_percent")
+    if type(bat_height) is not int or not percent<bat_height<=125:
+        raise ValueError("Dedicated Batarang digit ink must be taller but fit in the same small cell")
     l=ctr["lives"]
     if not (type(l["left"]) is int and type(l["center_y"]) is int and
             0<l["left"]<600 and 0<l["center_y"]<400 and
@@ -387,6 +390,16 @@ def main():
         hq_layout["small_counter_height_percent"] if hq_layout is not None else 100
     )
     large_image,large_meta=digit_atlas(ns.font,32,temp_scale,ns.style)
+    # HUD-REAL-06B: separate, taller Batarang-only HQ atlas. Health/Lives
+    # and any narrow-score fallback keep the same original 115% small atlas.
+    batarang_image=batarang_meta=None
+    if ns.style=="themed":
+        batarang_image,batarang_meta=digit_atlas(
+            ns.font,16,temp_scale,ns.style,
+            hq_layout["batarang_ink_height_percent"]
+        )
+        if batarang_meta["cell_w"]!=small_meta["cell_w"] or batarang_meta["cell_h"]!=small_meta["cell_h"]:
+            raise ValueError("Dedicated Batarang atlas must retain small digit geometry")
 
     factor=float(ns.supersample)
     if ns.supersample>1:
@@ -412,6 +425,8 @@ def main():
 
         small_image,small_meta=finish_atlas(small_image,small_meta)
         large_image,large_meta=finish_atlas(large_image,large_meta)
+        if batarang_image is not None:
+            batarang_image,batarang_meta=finish_atlas(batarang_image,batarang_meta)
 
     final_anchor=[value/factor for value in temp_anchor]
     fields={key:scale_box(box,factor) for key,box in temp_fields.items()}
@@ -424,6 +439,8 @@ def main():
     image.save(ns.outdir/base_name)
     small_image.save(ns.outdir/small_name)
     large_image.save(ns.outdir/large_name)
+    if batarang_image is not None:
+        batarang_image.save(ns.outdir/f"hud_digits_batarang{ns.suffix}.png")
 
     meta={
         "hud_size":list(image.size),
@@ -434,6 +451,7 @@ def main():
         "fields":fields,
         "small_digits":small_meta,
         "large_digits":large_meta,
+        "batarang_digits":batarang_meta,
         "variables":{str(cid):edit[cid].get("variable","") for cid in sorted(DYNAMIC_IDS)},
         "static_text":{str(cid):edit[cid].get("initial_text","").replace("\r","") for cid in sorted(STATIC_IDS)},
         "output_scale":ns.output_scale,

@@ -48,6 +48,8 @@ def run():
     layout = json.loads(Path("reverse-engineering/manifests/hud-hq-layout.json").read_text())
     meta = json.loads(Path("assets/hud_hq.json").read_text())
     small = Image.open("assets/hud_digits_small_hq.png").convert("RGBA")
+    batarang = Image.open("assets/hud_digits_batarang_hq.png").convert("RGBA")
+    assert batarang.size==small.size, "Batarang-specific ink must keep original small atlas cell geometry"
     large = Image.open("assets/hud_digits_large_hq.png").convert("RGBA")
     shell = Image.open("assets/hud_base_hq.png").convert("RGBA")
     anchor = meta["anchor_in_bitmap"]
@@ -64,7 +66,7 @@ def run():
     }
     for name, b_count, l_count, score in CASES:
         b, l, sc = (layout["counters"][n] for n in ("batarangs", "lives", "score"))
-        bm, bd = glyph_masks(small, b_count, b["center"][0]*S, b["center"][1]*S,
+        bm, bd = glyph_masks(batarang, b_count, b["center"][0]*S, b["center"][1]*S,
                              b["max_width"]*S, b["digit_advance"]*S, True)
         lm, ld = glyph_masks(small, l_count, l["left"]*S, l["center_y"]*S,
                              l["max_width"]*S, l["digit_advance"]*S, False)

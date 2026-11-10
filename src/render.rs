@@ -446,7 +446,7 @@ fn draw_hud_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     let s=HQ_SCALE as i32;
     let (bx,by)=hud_hq_layout::BATARANG_CENTER;
     draw_number_centered_hq_1to1(
-        fb,&assets.hud_digits_small_hq,bx*s,by*s,game.batarangs.max(0),
+        fb,&assets.hud_digits_batarang_hq,bx*s,by*s,game.batarangs.max(0),
         hud_hq_layout::BATARANG_MAX_WIDTH*s,
         hud_hq_layout::BATARANG_DIGIT_ADVANCE*s
     );
@@ -895,6 +895,9 @@ mod tests{
         // at ten score digits, 26px pitch clears glyph ink while 25px
         // overlaps neighboring outlines. HQ-only 92 logical px fits 276px.
         assert_eq!(hud_hq_layout::SCORE_MAX_WIDTH,92);
+        // HQ-only 06B: Batarang counter moves up 1 logical px while
+        // retaining independent 9px digit pitch and original SCORE center.
+        assert_eq!(hud_hq_layout::BATARANG_CENTER,(211,58));
         assert_eq!(hud_digit_step_width(42,10,92*HQ_SCALE as i32,0),(26,276));
     }
 

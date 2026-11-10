@@ -813,12 +813,14 @@ jobs:
           for needle in (
               "hud_shell_hq: SpriteSet",
               "hud_digits_small_hq: Image",
+              "hud_digits_batarang_hq: Image",
               "hud_digits_large_hq: Image",
               'decode_sprite_frames_expected(include_bytes!("../assets/hud_shell_hq.bin"),3.0',
           ):
               assert needle in assets, needle
           for needle in (
               "draw_number_centered_hq_1to1",
+              "hud_digits_batarang_hq",
               "blit_region_1to1",
               "Original sprite 716: icon art and rounded translucent backing remain.",
           ):
@@ -849,6 +851,13 @@ jobs:
           layout=json.loads(Path("reverse-engineering/manifests/hud-hq-layout.json").read_text())
           assert hq["hq_layout_schema"]==layout["schema"]==1
           assert hq["small_digits"]["vertical_percent"]==layout["small_counter_height_percent"]==115
+          assert hq["batarang_digits"]["vertical_percent"]==layout["batarang_ink_height_percent"]==121
+          assert layout["hq_icon_resize"]["scale_percent"]==94
+          assert layout["counters"]["batarangs"]["center"]==[211,58]
+          assert Path("assets/hud_digits_batarang_hq.png").is_file()
+          with Image.open("assets/hud_digits_batarang_hq.png") as bat, Image.open("assets/hud_digits_small_hq.png") as small:
+              assert bat.size==small.size
+              assert bat.tobytes()!=small.tobytes(), "The Batarang atlas must actually be taller"
           assert layout["counters"]["batarangs"]["digit_advance"]==9
           assert layout["counters"]["lives"]["digit_advance"]==10
           assert layout["counters"]["batarangs"]["center"]==[211,59]
