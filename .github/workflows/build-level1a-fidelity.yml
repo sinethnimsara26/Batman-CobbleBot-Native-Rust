@@ -274,6 +274,42 @@ jobs:
           python "$tools/bake_level_tiles.py" "$swf" "$work/reports/symbols.json" "$work/level1a-detail-tiles-hq" --bitmaps "$work/bitmaps" --symbol 152 --place-x 2467.65 --place-y 239.25 --exclude-symbol 149 --exclude-symbol 151 --exclude-symbol 153 --exclude-symbol 14 --output-scale 3 --supersample 2 --downsample lanczos
           python "$tools/pack_level_tiles.py" "$work/level1a-detail-tiles-hq" "assets/level1a_detail_tiles_hq.bin" --format-version 2 --logical-pixel-scale 3.0 --crop-transparent
 
+      # ICON-ART-06 only: produce PNG design at Windows taskbar sizes from
+      # the source-derived bat in sprite #716. NO .ico/.rc/EXE embedding.
+      - name: Render and verify source-derived Windows icon ART (Batch06)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          python reverse-engineering/tools/bake_windows_icon_art.py --hud assets/hud_base_hq.png --out .generated/windows-icon-art
+          if ($LASTEXITCODE -ne 0) { throw "Icon-art generator failed" }
+          @'
+          import json
+          from pathlib import Path
+          from PIL import Image
+          root=Path(".generated/windows-icon-art")
+          data=json.loads((root/"artwork-report.json").read_text())
+          assert data["windows_exe_resource_embedded"] is False
+          assert data["extracted_bat_size"][0] >= 190
+          sizes=[16,24,32,48,64,128,256,512]
+          assert set(data["files"])==set(map(str,sizes))
+          for size in sizes:
+              p=root/f"batman-cobblebot-{size}.png"
+              im=Image.open(p).convert("RGBA")
+              assert im.size==(size,size),p
+              assert im.getpixel((0,0))[3]==0,"corners must remain transparent"
+              assert sum(1 for r,g,b,a in im.getdata() if a>128 and r>175 and g>115 and b<100)>size*size//40, (p,"gold bat missing")
+          assert not list(root.glob("*.ico")),"ICO embedding belongs to Batch07"
+          print("ICON-ART-06 PASS: original yellow bat, eight verified PNG sizes, no EXE/ICO changes")
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { throw "Icon-art size / source checks failed" }
+
+      - name: Upload Batch06 Windows icon artwork (not embedded)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Batman-CobbleBot-Windows-Icon-Art-Only
+          path: .generated/windows-icon-art/
+          if-no-files-found: error
+
       - name: Validate recovered assets and reject leaked control geometry
         shell: python
         run: |
