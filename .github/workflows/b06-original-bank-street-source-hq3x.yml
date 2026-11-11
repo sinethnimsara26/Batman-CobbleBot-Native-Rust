@@ -8,7 +8,6 @@ on:
       - reverse-engineering/tools/b06_bake_bank_street_hq3x.py
       - reverse-engineering/tools/bake_sprite_frames.py
       - reverse-engineering/tools/bake_level_tiles.py
-      - reverse-engineering/tools/bake_sprite_frames.py
       - reverse-engineering/tools/b05_bake_bank_street_1x.py
       - reverse-engineering/tools/b03_bake_stage_asset_proofs.py
       - .github/workflows/b06-original-bank-street-source-hq3x.yml
@@ -22,7 +21,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  source-bank-street-1x:
+  source-bank-street-hq3x:
     runs-on: windows-latest
     timeout-minutes: 45
     steps:
@@ -84,7 +83,7 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           $tools = "reverse-engineering/tools"
-          python "$tools/b06_bake_bank_street_hq3x.py" --swf ".generated/b06input/canonical_original.swf" --symbols ".generated/b06input/reports/symbols.json" --bitmaps ".generated/b06input/bitmaps" --instances "reverse-engineering/manifests/level-instances.json" --spec "reverse-engineering/manifests/level-spec.json" --out ".generated/b06-bank-source-1x"
+          python "$tools/b06_bake_bank_street_hq3x.py" --swf ".generated/b06input/canonical_original.swf" --symbols ".generated/b06input/reports/symbols.json" --bitmaps ".generated/b06input/bitmaps" --instances "reverse-engineering/manifests/level-instances.json" --spec "reverse-engineering/manifests/level-spec.json" --out ".generated/b06-bank-source-hq3x"
           if ($LASTEXITCODE -ne 0) { throw "B06 source Bank street HQ 3x proof FAILED" }
 
       - name: Upload development-only HQ3x Bank street source proof (no SWF/native pack)
@@ -92,6 +91,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: B06-CobbleBot-Original-Bank-Street-Source-HQ3x-Proofs
-          path: .generated/b06-bank-source-1x/
+          path: .generated/b06-bank-source-hq3x/
           if-no-files-found: warn
           retention-days: 30

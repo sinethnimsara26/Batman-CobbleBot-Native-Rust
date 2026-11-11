@@ -280,15 +280,24 @@ def main():
                 layers.append(Image.new("RGBA",(1800,1200),(0,0,0,0)))
         with Image.open(plain_dir/flat[xy]["file"]) as opened:
             expected=opened.convert("RGBA")
-        combined=Image.alpha_composite(layers[0],layers[1])
+        # The existing source renderer overwrites direct ImageDraw shape pixels
+        # (even semi-transparent RGBA) rather than alpha-compositing them.
+        # CI artifact #13876348846 showed 22,382 false over-blend differences
+        # at -4200; binary nontransparent replacement recovers ZERO difference.
+        # This tests deterministic *source rasterizer* parity, not GPU
+        # alpha behavior during actual original Flash gameplay.
+        combined=layers[0].copy()
+        binary_mask=layers[1].getchannel("A").point(
+            lambda alpha: 255 if alpha else 0
+        )
+        combined.paste(layers[1],(0,0),binary_mask)
         diff=ImageChops.difference(expected,combined)
         bbox=diff.getbbox()
-        # This is an empirical rendering-model diagnostic, NOT a claim that
-        # Flash's GPU/vector pipeline itself was sampled from live playback.
-        pixels=sum(1 for px in diff.getdata() if px != (0,0,0,0))
+        raw=diff.tobytes() if bbox else b""
+        pixels=sum(any(raw[i:i+4]) for i in range(0,len(raw),4))
         fraction=pixels/(1800*1200)
-        if fraction>0.01:
-            raise AssertionError(f"Depth recomposition differs on {fraction:.3%} pixels at {xy}")
+        if pixels != 0:
+            raise AssertionError(f"Original source rasterizer depth bands did not reproduce flat source pixels at {xy}: {pixels} mismatches")
         comparisons.append({"world_origin":list(xy),"different_pixels":pixels,
                             "different_fraction":fraction,
                             "rgba_recomposition_exact":pixels==0,
@@ -320,6 +329,7 @@ def main():
         "measured_offline_source_bake_seconds":{"one_x_baseline":round(t1,3),"hq_6x_to_3x":round(t3,3),
              "depth_flat_plain3x":round(elapsed_flat,3),
              **{label:round(seconds,3) for label,(_,seconds) in part_by_name.items()}},
+        "depth_recomposition_semantics":"source rasterizer direct-shape nonzero-alpha pixel replacement; not proven Flash live GPU blending",
         "depth_recomposition_comparison":comparisons,
         "depth_layer_visible_view_counts":visible_by_layer,
         "source_hq3x_png_and_rgba_hashes":{str(xy):{"png":hq[xy]["png_sha256"],"rgba":hq[xy]["rgba_sha256"]} for xy in VIEWS},
