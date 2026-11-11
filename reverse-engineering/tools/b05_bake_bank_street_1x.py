@@ -74,7 +74,7 @@ def source_definition_tags(swf, ids):
     start += 4
     matched = {}
     for code, payload, _, _ in tags(raw, start, len(raw)):
-        if code not in (2, 6, 11, 21, 22, 32, 35, 36, 37, 39, 48, 83) or len(payload) < 2:
+        if code not in (2, 6, 11, 21, 22, 32, 34, 35, 36, 37, 39, 48, 83) or len(payload) < 2:
             continue
         symbol = struct.unpack_from("<H", payload, 0)[0]
         if symbol in ids:
@@ -147,7 +147,10 @@ def main():
     origin = validate_stage("level1b", spec, stage, symbols)
     if origin != (1034.65, 239.25):
         raise AssertionError("Original source level placement changed")
-    excluded = static_filter(stage)
+    b03_excluded = static_filter(stage)
+    # Flash DefineButton2 #758/#771 are interactive controls, not static
+    # street scenery; source #774 is DefineText (rendered from original glyphs).
+    excluded = sorted(set(b03_excluded) | {758, 771})
     audit = source_depth_audit(stage, symbols, set(excluded))
     unsupported = set()
     shapes = load_shapes(args.swf, unsupported)
@@ -155,14 +158,14 @@ def main():
     chosen, x_columns = select_source_views(locations)
 
     source_tool = str(Path(__file__).with_name("bake_level_tiles.py"))
-    def bake(dest, samples, source_text):
+    def bake(dest, samples, source_text, exclude_symbols):
         command = [sys.executable, source_tool,
                    str(args.swf), str(args.symbols), str(dest),
                    "--bitmaps", str(args.bitmaps), "--symbol", "783",
                    "--place-x", str(origin[0]), "--place-y", str(origin[1])]
         if source_text:
             command.append("--include-source-static-text")
-        for cid in excluded:
+        for cid in exclude_symbols:
             command.extend(("--exclude-symbol", str(cid)))
         for x, y in samples:
             command.extend(("--only-tile", str(x), str(y)))
@@ -173,7 +176,7 @@ def main():
     # B03 baseline lacked source DefineText. Reproduce it independently
     # WITHOUT changing its historical 1x pixel evidence or native 1A art.
     legacy_dest = args.out / "b03_original_source_1x_recheck"
-    legacy = bake(legacy_dest, sorted(B03_1X_RGBA), source_text=False)
+    legacy = bake(legacy_dest, sorted(B03_1X_RGBA), source_text=False, exclude_symbols=b03_excluded)
     old_views = {(p["world_x"], p["world_y"]): p["file"] for p in legacy["tiles"]}
     for coordinate, digest in B03_1X_RGBA.items():
         if coordinate not in old_views or rgba_sha(legacy_dest / old_views[coordinate]) != digest:
@@ -182,13 +185,13 @@ def main():
     absent = legacy.get("missing_ids", [])
     original_types = source_definition_tags(args.swf, set(absent))
     print("B05_ORIGINAL_SOURCE_DEFINITION_TYPES", original_types, flush=True)
-    if sorted(absent) != [758, 771, 774] or original_types != {758: 11, 771: 11, 774: 11}:
-        raise AssertionError(f"Previously missing Bank source IDs are not solely original DefineText: {absent}, {original_types}")
+    if sorted(absent) != [758, 771, 774] or original_types != {758: 34, 771: 34, 774: 11}:
+        raise AssertionError(f"Original Bank missing IDs are not two DefineButton2 controls plus one DefineText: {absent}, {original_types}")
 
     # B05 improves only its source-art proof: load exact original DefineText
     # fonts and glyphs. No change to default Level1A bake semantics.
     dest = args.out / "source_1x"
-    manifest = bake(dest, chosen, source_text=True)
+    manifest = bake(dest, chosen, source_text=True, exclude_symbols=excluded)
     if (manifest["symbol"], manifest["placement"], manifest["tile_size"],
         manifest["logical_pixel_scale"]) != (783, list(origin), [600, 400], 1.0):
         raise AssertionError("Original source 1x level manifest contract changed")
@@ -245,6 +248,8 @@ def main():
         "source_unsupported_fill_types": manifest["unsupported_fills"],
         "b03_original_1x_pixel_hashes_rechecked_on_unmodified_default_baker": True,
         "previous_b03_missing_ids": absent,
+        "excluded_interactive_buttons_from_static_proof": [758, 771],
+        "original_define_text_symbol_recovered": 774,
         "original_missing_source_id_definition_types": {str(k):v for k,v in original_types.items()},
         "b05_exact_original_define_text_glyphs_enabled": True,
         "b05_missing_original_definitions_after_fix": manifest["missing_ids"],
