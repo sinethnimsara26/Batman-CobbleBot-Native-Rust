@@ -11,6 +11,8 @@ mod surface;
 mod stage;
 // B08: original Bank Street prop metadata is source-backed and inactive.
 mod bank_props;
+// B09: original source goon frame metadata remains unused by the live game.
+mod bank_goons;
 mod win32;
 
 fn main() {
