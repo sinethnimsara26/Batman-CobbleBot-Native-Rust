@@ -21,20 +21,116 @@ fn render_smoke_mode(out:&str,hq:bool){
     let mut game=Game::new();
     let mut input=InputState::default();
 
-    // Enter Level 1A without requiring a mouse click.
+    // Start the recovered Flash intro with keyboard input, no mouse.
     input.set(VK_ENTER,true);
     game.tick(&mut input,&ground);
     input.set(VK_ENTER,false);
+    assert_eq!(game.screen,AppScreen::Intro);
+    assert_eq!(game.intro_tick,0);
+    assert_eq!(game.take_audio_events(),vec![AudioEvent::IntroStart]);
+    assert_eq!(assets.intro_frames.len(),180);
+    snapshot(hq,&out,"00_intro_start.png",&mut game,&assets);
+    for _ in 0..80 {game.tick(&mut input,&ground);}
+    assert_eq!(game.screen,AppScreen::Intro);
+    snapshot(hq,&out,"00_intro_call.png",&mut game,&assets);
+    // INTRO-QA-01: capture EVERY final intro sample 175..=179 (not just a
+    // screenshot at 179), then the first playing frame. This deterministic
+    // renderer evidence detects a stuck visual even if the game state changes.
+    // A near-black source frame is NOT automatically a regression.
+    for _ in 0..95 {game.tick(&mut input,&ground);}
+    let mut transition_records=Vec::new();
+    for source_frame in 175_u16..=179 {
+        assert_eq!(game.screen,AppScreen::Intro);
+        assert_eq!(game.intro_tick,source_frame);
+        let (near_black,fingerprint)=intro_frame_metrics(hq,&mut game,&assets);
+        transition_records.push(format!(
+            "    {{\"phase\":\"intro\",\"frame\":{},\"near_black_fraction\":{:.6},\"pixel_fingerprint\":\"{:016x}\"}}",
+            source_frame,near_black,fingerprint
+        ));
+        if source_frame<179 {game.tick(&mut input,&ground);}
+    }
+    assert_eq!(game.take_audio_events(),vec![AudioEvent::IntroStop]);
+    snapshot(hq,&out,"00_intro_last.png",&mut game,&assets);
+    let terminal_fingerprint=intro_frame_metrics(hq,&mut game,&assets).1;
+    game.tick(&mut input,&ground);
     assert_eq!(game.screen,AppScreen::Playing);
+    assert_eq!(game.ticks,0);
+    assert_eq!(game.intro_fadeout_tick,None);
     assert_eq!(game.take_audio_events(),vec![AudioEvent::MusicStart]);
+    let (playing_start_dark,playing_start_hash)=intro_frame_metrics(hq,&mut game,&assets);
+    transition_records.push(format!(
+        "    {{\"phase\":\"playing\",\"tick\":0,\"near_black_fraction\":{:.6},\"pixel_fingerprint\":\"{:016x}\"}}",
+        playing_start_dark,playing_start_hash
+    ));
+
+    // Verify early keyboard skip remains source-correct: sprite34 has all 41
+    // frames and StopSounds precedes gameplay entry/music.
+    let mut skipped=Game::new();
+    let mut skip_keys=InputState::default();
+    skip_keys.set(VK_ENTER,true);
+    skipped.tick(&mut skip_keys,&ground);
+    skip_keys.set(VK_ENTER,false);
+    skipped.tick(&mut skip_keys,&ground);
+    skip_keys.set(VK_ENTER,true);
+    skipped.tick(&mut skip_keys,&ground);
+    skip_keys.set(VK_ENTER,false);
+    assert_eq!(skipped.screen,AppScreen::Intro);
+    assert_eq!(skipped.intro_fadeout_tick,Some(0));
+    for _ in 0..38 { skipped.tick(&mut skip_keys,&ground); }
+    assert_eq!(skipped.intro_fadeout_tick,Some(38));
+    assert_eq!(skipped.take_audio_events(),vec![AudioEvent::IntroStart]);
+    skipped.tick(&mut skip_keys,&ground); // fade #34 frame39 StopSounds
+    assert_eq!(skipped.take_audio_events(),vec![AudioEvent::IntroStop]);
+    skipped.tick(&mut skip_keys,&ground); // fade frame40 still displayed
+    assert_eq!(skipped.screen,AppScreen::Intro);
+    skipped.tick(&mut skip_keys,&ground); // original gotoNext=level1a
+    assert_eq!(skipped.screen,AppScreen::Playing);
+    assert_eq!(skipped.take_audio_events(),vec![AudioEvent::MusicStart]);
+
+    // Win32 release-inside dispatches the same idempotent native Rust fade.
+    let mut clicked=Game::new();
+    let mut mouse_input=InputState::default();
+    assert!(!clicked.skip_intro());
+    clicked.screen=AppScreen::Intro;
+    assert!(clicked.skip_intro());
+    assert!(!clicked.skip_intro());
+    assert_eq!(clicked.screen,AppScreen::Intro);
+    for _ in 0..40 { clicked.tick(&mut mouse_input,&ground); }
+    assert_eq!(clicked.intro_fadeout_tick,Some(40));
+    clicked.tick(&mut mouse_input,&ground);
+    assert_eq!(clicked.screen,AppScreen::Playing);
+    assert_eq!(clicked.take_audio_events(),vec![AudioEvent::IntroStop,AudioEvent::MusicStart]);
 
     // Preserve the real root presentation instead of skipping straight into
     // gameplay: fade-in starts immediately, level-title continues longer.
     snapshot(hq,&out,"00_fade_start.png",&mut game,&assets);
-    for _ in 0..25 { game.tick(&mut input,&ground); }
+    // Keep the historical fade screenshots at EXACT ticks 0, 25, 50.
+    // Verify no duplicate intro/music events on the first gameplay tick
+    // without shifting all subsequent hash-pinned images by one frame.
+    game.tick(&mut input,&ground);
+    assert!(game.take_audio_events().is_empty());
+    for _ in 0..24 { game.tick(&mut input,&ground); }
     snapshot(hq,&out,"01_fade_mid.png",&mut game,&assets);
     for _ in 0..25 { game.tick(&mut input,&ground); }
     snapshot(hq,&out,"02_level_title.png",&mut game,&assets);
+    let (playing_50_dark,playing_50_hash)=intro_frame_metrics(hq,&mut game,&assets);
+    transition_records.push(format!(
+        "    {{\"phase\":\"playing\",\"tick\":50,\"near_black_fraction\":{:.6},\"pixel_fingerprint\":\"{:016x}\"}}",
+        playing_50_dark,playing_50_hash
+    ));
+    // Save evidence BEFORE the assertions so a failing Windows CI uploads it.
+    let report=format!(
+        "{{\n  \"scenario\": \"natural-intro-to-playing\",\n  \"mode\": \"{}\",\n  \"near_black_rgb_threshold\": 20,\n  \"samples\": [\n{}\n  ]\n}}\n",
+        if hq {"hq3x"} else {"legacy1x"},
+        transition_records.join(",\n")
+    );
+    fs::write(out.join("intro-transition-qa.json"),report)
+        .expect("write natural intro transition diagnostics");
+    assert_ne!(terminal_fingerprint,playing_50_hash,
+        "intro terminal image must not remain visually identical to gameplay tick 50");
+    assert!(playing_50_dark<0.95,
+        "gameplay tick 50 is unexpectedly near-black ({:.3}); inspect intro-transition-qa.json",
+        playing_50_dark);
 
     // Let the 100-frame title timeline clear, then capture clean gameplay.
     while game.ticks < 105 { game.tick(&mut input,&ground); }
@@ -188,6 +284,29 @@ fn snapshot(hq:bool,out:&Path,name:&str,game:&mut Game,assets:&Assets){
     }
 }
 
+// Returns a deterministic visual fingerprint and fraction of pixels whose
+// RGB channels are ALL below 20. Platform screen capture is not involved:
+// these are actual native Rust renderer pixels, not a Win32 window test.
+fn intro_frame_metrics(hq:bool,game:&mut Game,assets:&Assets)->(f64,u64){
+    let fb=if hq {
+        let mut logical=RenderSurface::new(LOGICAL_W,LOGICAL_H);
+        let mut output=RenderSurface::new(render::HQ_W,render::HQ_H);
+        render::render_high_quality(&mut logical,&mut output,game,assets);
+        output
+    } else {
+        let mut output=RenderSurface::new(LOGICAL_W,LOGICAL_H);
+        render::render(&mut output,game,assets);
+        output
+    };
+    let dark=fb.pixels.iter().filter(|&&px|{
+        ((px>>16)&255)<20 && ((px>>8)&255)<20 && (px&255)<20
+    }).count();
+    let fingerprint=fb.pixels.iter().fold(0xcbf29ce484222325_u64,|hash,&px|{
+        (hash ^ u64::from(px)).wrapping_mul(0x100000001b3)
+    });
+    (dark as f64/fb.pixels.len() as f64,fingerprint)
+}
+
 pub fn benchmark_render(iterations:usize,out:&str){
     assert!(iterations>0,"benchmark iterations must be positive");
     let assets=Assets::load();
@@ -199,7 +318,17 @@ pub fn benchmark_render(iterations:usize,out:&str){
     input.set(VK_ENTER,true);
     game.tick(&mut input,&ground);
     input.set(VK_ENTER,false);
-    while game.ticks<105{game.tick(&mut input,&ground);}
+    // Native completion after the final 180 story frames must be non-blocking
+    // (the source's final sample is nearly black). SKIP still takes its own
+    // source fade path; this benchmark measures natural Level1A entry.
+    for _ in 0..179 { game.tick(&mut input,&ground); }
+    assert_eq!(game.screen,AppScreen::Intro);
+    assert_eq!(game.intro_tick,179);
+    game.tick(&mut input,&ground);
+    assert_eq!(game.screen,AppScreen::Playing);
+    assert_eq!(game.intro_fadeout_tick,None);
+    assert_eq!(game.ticks,0);
+    while game.ticks<105 { game.tick(&mut input,&ground); }
 
     let mut base=RenderSurface::new(LOGICAL_W,LOGICAL_H);
     let mut hq=RenderSurface::new(render::HQ_W,render::HQ_H);

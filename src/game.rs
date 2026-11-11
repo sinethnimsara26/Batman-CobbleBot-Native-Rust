@@ -71,10 +71,10 @@ const OVERLAY_WALK:usize=58;
 const OVERLAY_TO_STREET:usize=140;
 
 #[derive(Copy,Clone,Debug,PartialEq,Eq)]
-pub enum AppScreen{Title,Instructions,Playing}
+pub enum AppScreen{Title,Instructions,Intro,Playing}
 
 #[derive(Copy,Clone,Debug,PartialEq,Eq)]
-pub enum AudioEvent{MusicStart,MusicStop,Jump,Item}
+pub enum AudioEvent{IntroStart,IntroStop,MusicStart,MusicStop,Jump,Item}
 
 #[derive(Copy,Clone,Debug,PartialEq,Eq)]
 pub enum PlayerState{
@@ -169,6 +169,11 @@ pub struct Shot{pub x:f32,pub y:f32,pub dir:i32}
 
 pub struct Game{
     pub screen:AppScreen,
+    /// Original root frame 18 intro sequence, 0-based at 25 fps.
+    pub intro_tick:u16,
+    /// The 41 original frames of Flash fadeout sprite #34, started by SKIP.
+    pub intro_fadeout_tick:Option<u16>,
+    intro_sound_stopped:bool,
     pub player:Player,
     pub camera_x:f32,pub camera_y:f32,
     pub background_x:f32,pub background_y:f32,
@@ -197,6 +202,9 @@ impl Game{
     pub fn new()->Self{
         Self{
             screen:AppScreen::Title,
+            intro_tick:0,
+            intro_fadeout_tick:None,
+            intro_sound_stopped:false,
             // Runtime collision uses level-local coordinates. The original
             // player transform is game-local, so subtract the level placement.
             player:Player{
@@ -231,16 +239,62 @@ impl Game{
         }
     }
 
+    fn stop_intro_sound_once(&mut self){
+        if !self.intro_sound_stopped {
+            self.intro_sound_stopped=true;
+            self.audio_events.push(AudioEvent::IntroStop);
+        }
+    }
+
+    fn advance_intro_story(&mut self){
+        if self.intro_tick<179 {
+            self.intro_tick+=1;
+            // Source sprite #123 frame179 stops its audio independently.
+            if self.intro_tick==179 { self.stop_intro_sound_once(); }
+        }
+    }
+
+    fn begin_level1a(&mut self){
+        self.screen=AppScreen::Playing;
+        self.intro_tick=0;
+        self.intro_fadeout_tick=None;
+        self.stop_intro_sound_once();
+        self.audio_events.push(AudioEvent::MusicStart);
+        // Original level entry has playerJumping=true and snaps the camera.
+        self.update_camera();
+    }
+
+    /// Developer-only F7 target: use the same level-entry and neutral 25 Hz
+    /// simulation as a normal player who enters Level 1A and waits six seconds.
+    /// Called only from the Win32 --qa-navigation path; never used by the
+    /// original intro / SKIP transition or normal gameplay.
+    pub fn prepare_level1a_for_qa(&mut self,ground:&CollisionMask){
+        self.begin_level1a();
+        let mut neutral=InputState::default();
+        for _ in 0..150 {
+            self.tick(&mut neutral,ground);
+        }
+    }
+
+    /// Source button129's release-inside event starts the original fadeout.
+    /// No keyboard or mouse path may bypass its 41-frame transition.
+    pub fn skip_intro(&mut self)->bool{
+        if self.screen!=AppScreen::Intro || self.intro_fadeout_tick.is_some(){return false;}
+        self.intro_fadeout_tick=Some(0);
+        true
+    }
+
     pub fn tick(&mut self,input:&mut InputState,ground:&CollisionMask){
         match self.screen{
             AppScreen::Title=>{
                 if input.pressed(VK_I){self.screen=AppScreen::Instructions}
                 else if input.pressed(VK_ENTER)||input.pressed(VK_SPACE){
-                    self.screen=AppScreen::Playing;
-                    self.audio_events.push(AudioEvent::MusicStart);
-                    // The original level begins with playerJumping=true, so
-                    // cameraLogic snaps vertically on its first enterFrame.
-                    self.update_camera();
+                    self.screen=AppScreen::Intro;
+                    self.intro_tick=0;
+                    self.intro_fadeout_tick=None;
+                    self.intro_sound_stopped=false;
+                    // StartSound id 130 is on original SWF root frame 18.
+                    self.audio_events.push(AudioEvent::IntroStart);
                 }
                 input.clear_pressed();
                 return
@@ -248,9 +302,42 @@ impl Game{
             AppScreen::Instructions=>{
                 if input.pressed(VK_ESCAPE){self.screen=AppScreen::Title}
                 else if input.pressed(VK_ENTER)||input.pressed(VK_SPACE){
-                    self.screen=AppScreen::Playing;
-                    self.audio_events.push(AudioEvent::MusicStart);
-                    self.update_camera();
+                    self.screen=AppScreen::Intro;
+                    self.intro_tick=0;
+                    self.intro_fadeout_tick=None;
+                    self.intro_sound_stopped=false;
+                    // StartSound id 130 is on original SWF root frame 18.
+                    self.audio_events.push(AudioEvent::IntroStart);
+                }
+                input.clear_pressed();
+                return
+            },
+            AppScreen::Intro=>{
+                // Root frame18 is stopped; button129 release-inside starts
+                // fadeout sprite34. Its frame39 StopSounds precedes the
+                // frame40 dispatcher jump to level1a.
+                if let Some(frame)=self.intro_fadeout_tick{
+                    self.advance_intro_story();
+                    if frame>=40 {
+                        self.begin_level1a();
+                    }else{
+                        let next=frame+1;
+                        self.intro_fadeout_tick=Some(next);
+                        if next==39 { self.stop_intro_sound_once(); }
+                    }
+                }else if input.pressed(VK_ENTER)||input.pressed(VK_SPACE)||
+                         input.pressed(VK_ESCAPE) {
+                    let _=self.skip_intro();
+                }else{
+                    // Source sprite123's final frame is almost entirely black.
+                    // Do not trap the user there indefinitely: display the
+                    // terminal frame for one tick, then enter Level 1A. This
+                    // native auto-completion is a user-requested usability
+                    // correction; the original scripted auto-route is not
+                    // established by the recovered Stop action alone.
+                    let was_at_end=self.intro_tick==179;
+                    self.advance_intro_story();
+                    if was_at_end { self.begin_level1a(); }
                 }
                 input.clear_pressed();
                 return
@@ -766,5 +853,53 @@ impl Game{
             self.camera_y+=((target-self.camera_y)/4.0).trunc();
             self.background_y=((player_y/2.0-CAM_HEIGHT/1.5)/CAM_JUMP).trunc()-CAM_OFFSET;
         }
+    }
+}
+
+#[cfg(test)]
+mod qa_navigation_tests {
+    use super::{AppScreen,Game,InputState,LEVEL_X,LEVEL_Y,LOGICAL_H,VK_ENTER};
+    use crate::collision::CollisionMask;
+
+    #[test]
+    fn qa_f7_matches_normal_level_entry_after_neutral_gameplay() {
+        let ground=CollisionMask::level1a();
+        let mut natural=Game::new();
+        let mut input=InputState::default();
+
+        // Follow the public title-to-intro and source-derived 41-frame
+        // SKIP path rather than forcing the normal game's screen state.
+        input.set(VK_ENTER,true);
+        natural.tick(&mut input,&ground);
+        input.set(VK_ENTER,false);
+        assert_eq!(natural.screen,AppScreen::Intro);
+        assert!(natural.skip_intro());
+        for _ in 0..41 { natural.tick(&mut input,&ground); }
+        assert_eq!(natural.screen,AppScreen::Playing);
+        assert_eq!(natural.ticks,0);
+        for _ in 0..150 { natural.tick(&mut input,&ground); }
+
+        let mut qa=Game::new();
+        qa.prepare_level1a_for_qa(&ground);
+        assert_eq!(qa.screen,AppScreen::Playing);
+        assert_eq!(qa.ticks,150);
+        assert_eq!(qa.ticks,natural.ticks);
+        assert_eq!(qa.player.state,natural.player.state);
+        assert_eq!(qa.player.jumping,natural.player.jumping);
+        assert_eq!(qa.player.on_ground,natural.player.on_ground);
+        assert_eq!(qa.overlay_frame,natural.overlay_frame);
+        assert!((qa.player.x-natural.player.x).abs()<0.001);
+        assert!((qa.player.y-natural.player.y).abs()<0.001);
+        assert!((qa.camera_x-natural.camera_x).abs()<0.001);
+        assert!((qa.camera_y-natural.camera_y).abs()<0.001);
+
+        // These are the same logical stage coordinates used by the legacy
+        // and HQ Batman renderers, not guessed screen-space spawn offsets.
+        let stage_y=qa.player.y+LEVEL_Y+qa.camera_y;
+        let stage_x=qa.player.x+LEVEL_X+qa.camera_x;
+        assert!(stage_y>=0.0 && stage_y<LOGICAL_H as f32,
+                "QA actor origin offscreen: stage_y={stage_y}");
+        assert!(stage_x>=0.0 && stage_x<super::LOGICAL_W as f32,
+                "QA actor origin offscreen: stage_x={stage_x}");
     }
 }

@@ -6,6 +6,9 @@ pub const HQ_SCALE:usize=3;
 pub const HQ_W:usize=LOGICAL_W*HQ_SCALE;
 pub const HQ_H:usize=LOGICAL_H*HQ_SCALE;
 
+// Generated from one offline HUD manifest, never parsed at game runtime.
+mod hud_hq_layout { include!("../assets/hud_hq_layout.rs"); }
+
 #[derive(Copy,Clone,Debug,PartialEq,Eq)]
 pub enum RenderMode{Legacy1x,HighQuality}
 
@@ -51,8 +54,18 @@ pub fn render_with_config(
 
             if game.screen!=AppScreen::Playing{
                 // Title/instructions still use the exact Round-3 path.
-                render_legacy(base,game,assets);
-                upscale_opaque_base(base,target);
+                if game.screen==AppScreen::Intro && game.intro_fadeout_tick.is_some(){
+                    // Do not double-composite a low-res fade. Rust draws the
+                    // existing original sprite34 asset at genuine 3x.
+                    render_legacy_intro_overlay(base,game,assets,false);
+                    upscale_opaque_base(base,target);
+                    if let Some(t)=game.intro_fadeout_tick {
+                        draw_root_timeline_hq_lazy(target,&assets.fadeout_frames_hq,t as u64,301.0,205.0);
+                    }
+                }else{
+                    render_legacy(base,game,assets);
+                    upscale_opaque_base(base,target);
+                }
             }else{
                 // Round 8 preserves the original depth split while removing
                 // the last small moving objects from the blurry 1x world:
@@ -177,10 +190,29 @@ fn upscale_alpha_layer(src:&RenderSurface,dst:&mut RenderSurface){
 }
 
 fn render_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
+    render_legacy_intro_overlay(fb,game,assets,true);
+}
+
+fn render_legacy_intro_overlay(fb:&mut RenderSurface,game:&Game,assets:&Assets,show_fade:bool){
     fb.fill(0xff000000);
     match game.screen{
         AppScreen::Title=>{blit(fb,&assets.title_screen,0,0,600,400,false);return},
         AppScreen::Instructions=>{blit(fb,&assets.instructions_screen,0,0,600,400,false);return},
+        AppScreen::Intro=>{
+            let frame=(game.intro_tick as usize).min(assets.intro_frames.len()-1);
+            let story=assets.intro_frames.frame(frame);
+            blit(
+                fb,&story.image,
+                -story.anchor_x.round() as i32,-story.anchor_y.round() as i32,
+                story.image.w as i32,story.image.h as i32,false
+            );
+            if show_fade {
+                if let Some(t)=game.intro_fadeout_tick{
+                    draw_root_timeline_lazy_legacy(fb,&assets.fadeout_frames,t as u64,301.0,205.0);
+                }
+            }
+            return
+        },
         AppScreen::Playing=>{}
     }
     render_world_legacy(fb,game,assets);
@@ -397,9 +429,6 @@ fn draw_foreground_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
 fn draw_hud_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     const ROOT_X:f32=159.0;
     const ROOT_Y:f32=-11.0;
-    const LEGACY_ANCHOR_X:f32=0.48106384;
-    const LEGACY_ANCHOR_Y:f32=1.1601379;
-
     debug_assert!((assets.hud_shell_hq.logical_pixel_scale-HQ_SCALE as f32).abs()<0.001);
     debug_assert_eq!(assets.hud_shell_hq.len(),1);
     let shell=&assets.hud_shell_hq[0];
@@ -407,49 +436,100 @@ fn draw_hud_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     let shell_x=(ROOT_X*scale-shell.anchor_x).round() as i32;
     let shell_y=(ROOT_Y*scale-shell.anchor_y).round() as i32;
 
-    // Round 6 HUD assets already live at final presentation resolution.
-    // Copy them 1:1; never enlarge the 1x HUD or digit atlases at runtime.
-    blit(
-        fb,&shell.image,
-        shell_x,shell_y,
-        shell.image.w as i32,shell.image.h as i32,false
+    // Original sprite 716: icon art and rounded translucent backing remain.
+    // The unwanted separate full-width counter band must never return.
+    blit(fb,&shell.image,shell_x,shell_y,
+         shell.image.w as i32,shell.image.h as i32,false);
+
+    // Themed labels and dynamic counters share one stage-space layout; 
+    // source-authentic 1x Flash HUD and game state remain unchanged.
+    let s=HQ_SCALE as i32;
+    let (bx,by)=hud_hq_layout::BATARANG_CENTER;
+    draw_number_centered_hq_1to1(
+        fb,&assets.hud_digits_batarang_hq,bx*s,by*s,game.batarangs.max(0),
+        hud_hq_layout::BATARANG_MAX_WIDTH*s,
+        hud_hq_layout::BATARANG_DIGIT_ADVANCE*s
     );
 
-    // Preserve the exact legacy logical centers, then convert only at the
-    // presentation boundary. This makes field registration independently
-    // testable and keeps Game/HUD state in the original 600x400 coordinate system.
-    let legacy_x=(ROOT_X-LEGACY_ANCHOR_X).round() as i32;
-    let legacy_y=(ROOT_Y-LEGACY_ANCHOR_Y).round() as i32;
-    let s=HQ_SCALE as i32;
+    let score=game.score.max(0);
+    let (sx,sy)=hud_hq_layout::SCORE_CENTER;
+    let score_budget=hud_hq_layout::SCORE_MAX_WIDTH*s;
+    let large_cell=assets.hud_digits_large_hq.w/10;
+    // Preserve true-3x pixels: use the already-baked small atlas when a
+    // multi-digit score cannot fit the large glyphs into its column.
+    let use_small_score=large_cell*score.to_string().len()>score_budget as usize;
+    let score_atlas=if use_small_score{
+        &assets.hud_digits_small_hq
+    }else{
+        &assets.hud_digits_large_hq
+    };
+    // HUD-REAL-06C: compact transparent padding between the large SCORE
+    // glyphs without rescaling the pixels or moving the source shell/labels.
+    // Preserve the verified natural-step compact fallback for long scores.
+    let score_advance=if use_small_score{
+        0
+    }else{
+        hud_hq_layout::SCORE_LARGE_DIGIT_ADVANCE*s
+    };
     draw_number_centered_hq_1to1(
-        fb,&assets.hud_digits_small_hq,
-        (legacy_x+53)*s,(legacy_y+68)*s,game.batarangs.max(0)
+        fb,score_atlas,sx*s,sy*s,score,score_budget,score_advance
     );
-    draw_number_centered_hq_1to1(
-        fb,&assets.hud_digits_large_hq,
-        (legacy_x+228)*s,(legacy_y+47)*s,game.score.max(0)
-    );
-    draw_number_centered_hq_1to1(
+
+    // LIVES X is baked directly before this fixed value-left edge.
+    // Widening numbers extend rightward, never back over the caption.
+    draw_number_left_hq_1to1(
         fb,&assets.hud_digits_small_hq,
-        (legacy_x+155)*s,(legacy_y+69)*s,game.lives.max(0)
+        hud_hq_layout::LIVES_VALUE_LEFT*s,
+        hud_hq_layout::LIVES_CENTER_Y*s,
+        game.lives.max(0),hud_hq_layout::LIVES_MAX_WIDTH*s,
+        hud_hq_layout::LIVES_DIGIT_ADVANCE*s
     );
 }
 
-fn draw_number_centered_hq_1to1(fb:&mut RenderSurface,atlas:&Image,cx:i32,cy:i32,value:i32){
+// Return full 1:1 glyph-cell span with an independently chosen digit pitch.
+// Compact the transparent cell margins, never rescale runtime pixels or
+// truncate numeric values. Long SCORE values retain their tested small-atlas fallback.
+fn hud_digit_step_width(cell_w:i32,count:usize,max_width:i32,preferred:i32)->(i32,i32){
+    if cell_w<=0 || count==0{return (0,0);}
+    let n=count as i32;
+    let room=max_width.max(cell_w);
+    let requested=if preferred<=0{cell_w}else{preferred.min(cell_w)};
+    let step=if n>1 && cell_w+(n-1)*requested>room{
+        ((room-cell_w)/(n-1)).clamp(1,requested)
+    }else{requested};
+    (step,cell_w+step*(n-1))
+}
+fn draw_number_centered_hq_1to1(
+    fb:&mut RenderSurface,atlas:&Image,cx:i32,cy:i32,value:i32,
+    max_width:i32,preferred_advance:i32
+){
+    draw_number_hq_1to1(fb,atlas,cx,cy,value,max_width,preferred_advance,true);
+}
+fn draw_number_left_hq_1to1(
+    fb:&mut RenderSurface,atlas:&Image,x:i32,cy:i32,value:i32,
+    max_width:i32,preferred_advance:i32
+){
+    draw_number_hq_1to1(fb,atlas,x,cy,value,max_width,preferred_advance,false);
+}
+fn draw_number_hq_1to1(
+    fb:&mut RenderSurface,atlas:&Image,ax:i32,cy:i32,value:i32,
+    max_width:i32,preferred_advance:i32,centered:bool
+){
     if atlas.w<10||atlas.h==0{return;}
-    let cell_w=atlas.w/10;
-    if cell_w==0{return;}
-    let text=value.to_string();
-    let total=(cell_w*text.len()) as i32;
-    let mut x=cx-total/2;
+    let cell_w=(atlas.w/10) as i32;
+    if cell_w<=0{return;}
+    let digits=value.max(0).to_string();
+    let (advance,total)=hud_digit_step_width(
+        cell_w,digits.len(),max_width,preferred_advance
+    );
+    let x=if centered{ax-total/2}else{ax};
     let y=cy-atlas.h as i32/2;
-    for byte in text.bytes(){
-        if !(b'0'..=b'9').contains(&byte){continue;}
+    for (i,byte) in digits.bytes().enumerate(){
         let digit=(byte-b'0') as usize;
         blit_region_1to1(
-            fb,atlas,digit*cell_w,0,cell_w,atlas.h,x,y
+            fb,atlas,digit*cell_w as usize,0,
+            cell_w as usize,atlas.h,x+i as i32*advance,y
         );
-        x+=cell_w as i32;
     }
 }
 
@@ -714,11 +794,38 @@ fn draw_tiles_hq(fb:&mut RenderSurface,game:&Game,tiles:&LevelTileSet){
                 // then convert only that origin to presentation pixels.
                 let px=(x as f32+game.camera_x).round() as i32*s+t.crop_x;
                 let py=(y as f32+game.camera_y).round() as i32*s+t.crop_y;
-                blit(fb,&t.image,px,py,t.image.w as i32,t.image.h as i32,false);
+                // Detail tiles are already baked at the exact 3x pixel
+                // resolution. Avoid per-pixel resize math and out-of-bounds
+                // checks of the general sprite blitter.
+                blit_tile_hq_1to1(fb,&t.image,px,py);
             }
             x+=600;
         }
         y+=400;
+    }
+}
+
+/// Clip a source-sized HQ detail tile once per row, then blend visible pixels.
+/// Colors and alpha use the exact existing blend() routine: no approximation,
+/// unsafe pointers, resampling changes or mutations to legacy sprite paths.
+fn blit_tile_hq_1to1(dst:&mut RenderSurface,src:&Image,x:i32,y:i32){
+    if src.w==0 || src.h==0 || dst.w==0 || dst.h==0 {return;}
+    let x0=(x as i64).max(0).min(dst.w as i64) as usize;
+    let y0=(y as i64).max(0).min(dst.h as i64) as usize;
+    let x1=(x as i64+src.w as i64).max(0).min(dst.w as i64) as usize;
+    let y1=(y as i64+src.h as i64).max(0).min(dst.h as i64) as usize;
+    if x0>=x1 || y0>=y1 {return;}
+    let sx=(x0 as i64-x as i64) as usize;
+    let width=x1-x0;
+    for dy in y0..y1{
+        let sy=(dy as i64-y as i64) as usize;
+        let src_start=sy*src.w+sx;
+        let dst_start=dy*dst.w+x0;
+        let src_row=&src.pixels[src_start..src_start+width];
+        let dst_row=&mut dst.pixels[dst_start..dst_start+width];
+        for (&pixel,target) in src_row.iter().zip(dst_row.iter_mut()){
+            blend(target,pixel);
+        }
     }
 }
 fn blend_rgba(dst:&mut u32,src:u32){
@@ -758,7 +865,98 @@ fn blit(dst:&mut RenderSurface,src:&Image,x:i32,y:i32,rw:i32,rh:i32,flip:bool){i
 
 #[cfg(test)]
 mod tests{
-    use super::{blend,blend_rgba};
+    use super::{blend,blend_rgba,blit,blit_tile_hq_1to1,hud_digit_step_width,hud_hq_layout,HQ_SCALE};
+    use crate::assets::Image;
+    use crate::surface::RenderSurface;
+
+    #[test]
+    fn hud_hq_layout_keeps_digits_in_readable_columns(){
+        let s=HQ_SCALE as i32;
+        assert_eq!(hud_hq_layout::BATARANG_CENTER,(211,58));
+        assert_eq!(hud_hq_layout::BATARANG_DIGIT_ADVANCE,9);
+        assert_eq!(hud_hq_layout::LIVES_DIGIT_ADVANCE,10);
+        assert_eq!(hud_hq_layout::SCORE_CENTER,(387,35));
+        assert_eq!(hud_hq_layout::SCORE_LARGE_DIGIT_ADVANCE,16);
+        // The X remains baked at (306,63); move ONLY the live number closer.
+        assert_eq!(hud_hq_layout::LIVES_VALUE_LEFT,309);
+        assert_eq!(hud_hq_layout::LIVES_CENTER_Y,63);
+        for &(len,budget,cell,preferred) in &[
+            (1,hud_hq_layout::BATARANG_MAX_WIDTH*s,42,27),
+            (3,hud_hq_layout::BATARANG_MAX_WIDTH*s,42,27),
+            (2,hud_hq_layout::LIVES_MAX_WIDTH*s,42,30),
+            (6,hud_hq_layout::SCORE_MAX_WIDTH*s,42,42),
+            (10,hud_hq_layout::SCORE_MAX_WIDTH*s,42,42),
+        ]{
+            let (step,width)=hud_digit_step_width(cell,len,budget,preferred);
+            assert!(step>0 && step<=cell && width<=budget,
+                    "{len} digits exceed their HUD layout region");
+        }
+        assert!(66*6>hud_hq_layout::SCORE_MAX_WIDTH*s);
+        assert!(42*6<=hud_hq_layout::SCORE_MAX_WIDTH*s);
+    }
+
+    #[test]
+    fn hud_digit_layout_preserves_all_glyph_cells(){
+        assert_eq!(hud_digit_step_width(42,1,180,27),(27,42));
+        assert_eq!(hud_digit_step_width(42,3,180,27),(27,96));
+        assert_eq!(hud_digit_step_width(42,2,180,27),(27,69));
+        assert_eq!(hud_digit_step_width(42,2,180,30),(30,72));
+        assert_eq!(hud_digit_step_width(42,3,180,42),(42,126));
+        // 06C only: large 3x SCORE glyphs keep 66px cells but use 48px pitch.
+        // Two digits occupy 114px, four occupy 210px; centered x unchanged.
+        assert_eq!(hud_digit_step_width(66,2,276,16*3),(48,114));
+        assert_eq!(hud_digit_step_width(66,4,276,16*3),(48,210));
+        let (step,width)=hud_digit_step_width(42,10,270,42);
+        assert!(step<42 && step>=1 && width<=270);
+        // HUD-REAL-05C: the real 3x Impact small atlas has 42px cells;
+        // at ten score digits, 26px pitch clears glyph ink while 25px
+        // overlaps neighboring outlines. HQ-only 92 logical px fits 276px.
+        assert_eq!(hud_hq_layout::SCORE_MAX_WIDTH,92);
+        // HQ-only 06B: Batarang counter moves up 1 logical px while
+        // retaining independent 9px digit pitch and original SCORE center.
+        assert_eq!(hud_hq_layout::BATARANG_CENTER,(211,58));
+        assert_eq!(hud_digit_step_width(42,10,92*HQ_SCALE as i32,0),(26,276));
+    }
+
+    #[test]
+    fn hq_tile_clipped_blit_is_identical_to_general_blit(){
+        // Retain all original alpha/blend semantics while testing clipping
+        // on every side and partial visibility across the source rectangle.
+        let palette=[
+            0x00000000u32,0x00010203,0x01020408,0x208080ff,
+            0x8040a0e0,0xfefdfcfb,0xffffffff,0xff123456,
+        ];
+        let image=Image{
+            w:7,h:5,
+            pixels:(0..35).map(|i|palette[(i*5+i/7)%palette.len()]).collect(),
+        };
+        for &x in &[-20,-7,-5,-1,0,2,8,12,13,17]{
+            for &y in &[-20,-5,-3,-1,0,3,7,8,9,17]{
+                let mut reference=RenderSurface::new(13,9);
+                let mut optimized=RenderSurface::new(13,9);
+                for (i,pixel) in reference.pixels.iter_mut().enumerate(){
+                    *pixel=0x00102030u32.wrapping_add(i as u32*0x0003070b);
+                }
+                optimized.pixels.clone_from(&reference.pixels);
+                blit(&mut reference,&image,x,y,7,5,false);
+                blit_tile_hq_1to1(&mut optimized,&image,x,y);
+                assert_eq!(optimized.pixels,reference.pixels,
+                    "HQ 1:1 tile diverged from generic at x={x}, y={y}");
+            }
+        }
+    }
+
+    #[test]
+    fn hq_tile_clipped_blit_keeps_zero_sized_and_offscreen_tiles_noop(){
+        let image=Image{w:0,h:0,pixels:Vec::new()};
+        let mut dst=RenderSurface::new(5,4);
+        dst.fill(0xff336699);
+        blit_tile_hq_1to1(&mut dst,&image,0,0);
+        let other=Image{w:2,h:2,pixels:vec![0xffffffff;4]};
+        blit_tile_hq_1to1(&mut dst,&other,10,-10);
+        assert!(dst.pixels.iter().all(|&px|px==0xff336699));
+    }
+
 
     #[test]
     fn rgba_scratch_blend_matches_legacy_over_opaque_destination(){

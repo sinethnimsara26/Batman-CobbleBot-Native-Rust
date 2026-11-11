@@ -2,7 +2,7 @@ name: build-level1a-fidelity
 
 on:
   push:
-    branches: [main, level1a-cxform-fidelity, hq-rendering-phase1-halftone, hq-rendering-phase2-surfaces, hq-rendering-phase3-3x-surface, hq-rendering-phase4-pack-v2, hq-rendering-phase5-batman-3x, hq-rendering-phase6-hud-3x, hq-rendering-phase7-overlays-3x, hq-rendering-phase8-world-objects-3x, hq-rendering-phase9-dpi-awareness, hq-rendering-phase10-scenery-eval, hq-rendering-phase11-backdrop-3x, revive/round11-ci-baseline-2026-11-09]
+    branches: [main, level1a-cxform-fidelity, hq-rendering-phase1-halftone, hq-rendering-phase2-surfaces, hq-rendering-phase3-3x-surface, hq-rendering-phase4-pack-v2, hq-rendering-phase5-batman-3x, hq-rendering-phase6-hud-3x, hq-rendering-phase7-overlays-3x, hq-rendering-phase8-world-objects-3x, hq-rendering-phase9-dpi-awareness, hq-rendering-phase10-scenery-eval, hq-rendering-phase11-backdrop-3x, revive/round11-ci-baseline-2026-11-09, revive/level1a-intro-hud-fidelity-2026-11-09]
   workflow_dispatch:
 
 concurrency:
@@ -62,9 +62,39 @@ jobs:
           $tools = "reverse-engineering/tools"
           $work = ".generated"
           $swf = "$work/cobblebot.swf"
-          New-Item -ItemType Directory -Force -Path "$work/reports","$work/bitmaps","$work/sounds","$work/batman-frames","$work/batman-frames-hq","$work/pickup-frames","$work/pickup-frames-hq-super","$work/pickup-frames-hq","$work/batarang-frames","$work/batarang-frames-hq-super","$work/batarang-frames-hq","$work/level-title","$work/level-title-hq-super","$work/level-title-hq","$work/fadein","$work/fadein-hq-super","$work/fadein-hq","$work/fadeout","$work/fadeout-hq-super","$work/fadeout-hq","$work/tutorial-overlay","$work/tutorial-overlay-hq-super","$work/tutorial-overlay-hq","$work/hud","$work/hud-hq-super","$work/hud-hq-final","$work/level1a-tiles","$work/level1a-tiles-hq-base","$work/level1a-detail-tiles-1x","$work/level1a-detail-tiles-hq","$work/scenery-probes","$work/root-moon-hq-super","$work/root-moon-hq","assets","reverse-engineering/generated/collision_masks" | Out-Null
+          New-Item -ItemType Directory -Force -Path "$work/reports","$work/bitmaps","$work/sounds","$work/batman-frames","$work/batman-frames-hq","$work/pickup-frames","$work/pickup-frames-hq-super","$work/pickup-frames-hq","$work/batarang-frames","$work/batarang-frames-hq-super","$work/batarang-frames-hq","$work/level-title","$work/level-title-hq-super","$work/level-title-hq","$work/fadein","$work/fadein-hq-super","$work/fadein-hq","$work/fadeout","$work/fadeout-hq-super","$work/fadeout-hq","$work/tutorial-overlay","$work/tutorial-overlay-hq-super","$work/tutorial-overlay-hq","$work/hud","$work/hud-hq-super","$work/hud-hq-final","$work/level1a-tiles","$work/level1a-tiles-hq-base","$work/level1a-detail-tiles-1x","$work/level1a-detail-tiles-hq","$work/scenery-probes","$work/root-moon-hq-super","$work/root-moon-hq","$work/intro","assets","reverse-engineering/generated/collision_masks" | Out-Null
 
           python "$tools/swf_re.py" "$swf" "$work/reports"
+          # HUD-REAL-06B source-only probe: recover actual child placements
+          # before changing the scaled HQ icons. No source assets are edited.
+          @'
+          import json
+          from pathlib import Path
+          import sys
+          sys.path.insert(0,"reverse-engineering/tools")
+          from bake_sprite_frames import display_list
+          symbols=json.loads(Path(".generated/reports/symbols.json").read_text())
+          def nodes(sid,limit=2,seen=None):
+              if seen is None: seen=set()
+              if sid in seen or limit<0: return []
+              seen=seen|{sid}
+              symbol=symbols.get(str(sid))
+              if not symbol: return []
+              result=[]
+              for item in sorted(display_list(symbol,0).values(),key=lambda q:q.get("depth",0)):
+                  cid=item.get("character_id")
+                  entry={"parent":sid,"child":cid,"depth":item.get("depth"),
+                         "matrix":item.get("matrix",{}),"frame":item.get("frame",0)}
+                  result.append(entry)
+                  if cid is not None and limit>0: result+=nodes(cid,limit-1,seen)
+              return result
+          report={"sprite":716,"placements":nodes(716,2)}
+          out=Path(".generated/hud-06b-icon-source-hierarchy.json")
+          out.write_text(json.dumps(report,indent=2)+"\\n")
+          print("HUD-06B-HIERARCHY",json.dumps(report))
+          '@ | python -
+
+          python "$tools/inspect_intro_hud.py" "$swf" "$work/reports/symbols.json" "$work/reports/root_placements.json" "$work/intro-hud-source-report.json"
           @'
           import json
           from pathlib import Path
@@ -111,10 +141,18 @@ jobs:
           }
 
           python "$tools/extract_sounds.py" "$swf" "$work/sounds"
+          python "$tools/inspect_intro_behavior.py" "$swf" "$work/sounds/manifest.json" "$work/intro-behavior-report.json"
+          Copy-Item "$work/sounds/0130_sound_0130.mp3" "assets/intro_sound.mp3"
           Copy-Item "$work/sounds/0751_sound_0751.mp3" "assets/level1a_music.mp3"
           Copy-Item "$work/sounds/0248_sound_0248.mp3" "assets/jump.mp3"
           Copy-Item "$work/sounds/0004_item.mp3" "assets/item.mp3"
           python "$tools/stage_ui_screens.py" "$work/bitmaps" "assets"
+
+          # Preserve the original frame-18 story scene, including the phone
+          # briefing clips, rather than jumping directly from title to gameplay.
+          python "$tools/bake_root_intro.py" "$swf" "$work/reports/symbols.json" "$work/reports/root_placements.json" "$work/bitmaps" "$work/intro"
+          python "$tools/pack_sprite_frames.py" "$work/intro" "assets/intro_frames.bin" --format-version 2 --logical-pixel-scale 1.0
+          Copy-Item "$work/intro/intro_button_bounds.rs" "assets/intro_button_bounds.rs"
 
           python "$tools/render_collision_masks.py" "$swf" "$work/reports/symbols.json" "reverse-engineering/manifests/level-instances.json" "reverse-engineering/generated/collision_masks" --level level1a
 
@@ -206,8 +244,12 @@ jobs:
 
           # Round 6: rasterize HUD vector/device-font content at 6x, then
           # premultiplied-alpha Lanczos downsample to the final true 3x assets.
-          python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/hud-hq-super" --bitmaps "$work/bitmaps" --symbol 716 --scale 6.0 --all-frames
-          python "$tools/bake_hud_assets.py" "$swf" "$work/reports/symbols.json" "$work/hud-hq-super" "assets" --font "C:/Windows/Fonts/arial.ttf" --output-scale 3 --supersample 2 --downsample lanczos --suffix "_hq" --pack-dir "$work/hud-hq-final"
+          python "$tools/transform_hud_icons_hq.py" "$work/reports/symbols.json" "reverse-engineering/manifests/hud-hq-layout.json" "$work/reports/hud-icons-hq-symbols.json" "$work/hud-06b-icon-source-report.json"
+          python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/hud-icons-hq-symbols.json" "$work/hud-hq-super" --bitmaps "$work/bitmaps" --symbol 716 --scale 6.0 --all-frames --bounds-symbols-json "$work/reports/symbols.json"
+          # The new HUD is intentionally visually matched to the game's bold
+          # condensed gold tutorial prompts, not asserted as the original _sans.
+          if (!(Test-Path "C:/Windows/Fonts/impact.ttf")) { throw "Impact display font unavailable on Windows runner" }
+          python "$tools/bake_hud_assets.py" "$swf" "$work/reports/symbols.json" "$work/hud-hq-super" "assets" --font "C:/Windows/Fonts/impact.ttf" --style themed --hq-layout "reverse-engineering/manifests/hud-hq-layout.json" --emit-rust-layout "assets/hud_hq_layout.rs" --output-scale 3 --supersample 2 --downsample lanczos --suffix "_hq" --pack-dir "$work/hud-hq-final"
           python "$tools/pack_sprite_frames.py" "$work/hud-hq-final" "assets/hud_shell_hq.bin" --format-version 2 --logical-pixel-scale 3.0
           # Legacy full level remains the exact regression oracle.
           python "$tools/bake_level_tiles.py" "$swf" "$work/reports/symbols.json" "$work/level1a-tiles" --bitmaps "$work/bitmaps" --symbol 152 --place-x 2467.65 --place-y 239.25 --exclude-symbol 149 --exclude-symbol 151 --exclude-symbol 153
@@ -231,6 +273,60 @@ jobs:
           # then crop transparent margins in BCLVT002 for runtime efficiency.
           python "$tools/bake_level_tiles.py" "$swf" "$work/reports/symbols.json" "$work/level1a-detail-tiles-hq" --bitmaps "$work/bitmaps" --symbol 152 --place-x 2467.65 --place-y 239.25 --exclude-symbol 149 --exclude-symbol 151 --exclude-symbol 153 --exclude-symbol 14 --output-scale 3 --supersample 2 --downsample lanczos
           python "$tools/pack_level_tiles.py" "$work/level1a-detail-tiles-hq" "assets/level1a_detail_tiles_hq.bin" --format-version 2 --logical-pixel-scale 3.0 --crop-transparent
+
+      # ICON-ART-06 only: produce PNG design at Windows taskbar sizes from
+      # the source-derived bat in sprite #716. NO .ico/.rc/EXE embedding.
+      - name: Render and verify source-derived Windows icon ART (Batch06)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          python reverse-engineering/tools/bake_windows_icon_art.py --hud assets/hud_base_hq.png --out .generated/windows-icon-art
+          if ($LASTEXITCODE -ne 0) { throw "Icon-art generator failed" }
+          @'
+          import json
+          from pathlib import Path
+          from PIL import Image
+          root=Path(".generated/windows-icon-art")
+          data=json.loads((root/"artwork-report.json").read_text())
+          assert data["windows_exe_resource_embedded"] is False
+          assert data["extracted_bat_size"][0] >= 190
+          sizes=[16,24,32,48,64,128,256,512]
+          assert set(data["files"])==set(map(str,sizes))
+          for size in sizes:
+              p=root/f"batman-cobblebot-{size}.png"
+              im=Image.open(p).convert("RGBA")
+              assert im.size==(size,size),p
+              assert im.getpixel((0,0))[3]==0,"corners must remain transparent"
+              assert sum(1 for r,g,b,a in im.getdata() if a>128 and r>175 and g>115 and b<100)>size*size//40, (p,"gold bat missing")
+          assert not list(root.glob("*.ico")),"ICO embedding belongs to Batch07"
+          print("ICON-ART-06 PASS: original yellow bat, eight verified PNG sizes, no EXE/ICO changes")
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { throw "Icon-art size / source checks failed" }
+
+      - name: Upload Batch06 Windows icon artwork (not embedded)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Batman-CobbleBot-Windows-Icon-Art-Only
+          path: .generated/windows-icon-art/
+          if-no-files-found: error
+
+      # ICON-EXE-07: use the Batch06 PNGs (already uploaded separately),
+      # package all Windows ICO-supported sizes and fail if any are missing.
+      - name: Package source-derived multi-resolution Windows ICO (Batch07)
+        shell: pwsh
+        run: |
+          python reverse-engineering/tools/build_windows_ico.py --art .generated/windows-icon-art --out .generated/windows-icon-art/batman-cobblebot.ico
+          if ($LASTEXITCODE -ne 0) { throw "Batch07 ICO generation/verification failed" }
+          if (!(Test-Path .generated/windows-icon-art/batman-cobblebot.ico)) { throw "ICO not generated" }
+
+      - name: Upload Batch07 reproducible ICO and source report
+        uses: actions/upload-artifact@v4
+        with:
+          name: Batman-CobbleBot-Embedded-ICO-Source
+          path: |
+            .generated/windows-icon-art/batman-cobblebot.ico
+            .generated/windows-icon-art/ico-resource-report.json
+          if-no-files-found: error
 
       - name: Validate recovered assets and reject leaked control geometry
         shell: python
@@ -315,9 +411,85 @@ jobs:
           # record using the SWF's own embedded font glyphs.
           assert tutorial["missing_bitmap_ids"] == [], tutorial["missing_bitmap_ids"]
 
+          intro=json.loads(Path(".generated/intro/manifest.json").read_text())
+          behavior=json.loads(Path(".generated/intro-behavior-report.json").read_text())
+          assert any(cue["sound_id"]==130 and cue["frame"]==18 and cue["context"]=="root"
+                     for cue in behavior["direct_root_sound_cues"]), behavior["direct_root_sound_cues"]
+          assert any(any(action["op"]=="StopSounds" for action in block["actions"])
+                     for block in behavior["original_timeline_actions"].get("sprite:123",[])), "intro StopSounds missing"
+          assert Path("assets/intro_sound.mp3").stat().st_size > 10000, "original intro MP3 not extracted"
+          assert intro["source_root_frame"] == 18
+          assert intro["frame_count"] == 180
+          assert intro["size"] == [600,400]
+          assert intro["recovered_button_up_state"]["symbol"] == 129
+          assert intro["recovered_button_up_state"]["up_state_record_count"] >= 1
+          rect=intro["skip_button_stage_bounds"]
+          assert len(rect)==4 and 0 <= rect[0] < rect[2] <= 600 and 0 <= rect[1] < rect[3] <= 400, rect
+          assert (rect[2]-rect[0]) <= 150 and (rect[3]-rect[1]) <= 100, rect
+          assert Path("assets/intro_button_bounds.rs").read_text().startswith("const INTRO_SKIP_RECT:"), "missing source-generated Rust hitbox"
+          assert intro["deferred_script_controlled_transition_ids"] == [34]
+          assert intro["held_stopped_sprites"] == [{
+              "symbol":122, "source_frame_count":165,
+              "stop_frame_zero_based":164, "baked_frame_count":180,
+          },{
+              "symbol":35, "source_frame_count":15,
+              "stop_frame_zero_based":14, "baked_frame_count":180,
+          }]
+          assert Path(".generated/intro/intro-contact-sheet.png").is_file()
+          diagnostic=json.loads(Path(".generated/intro/intro-frame-diagnostics.json").read_text())
+          assert diagnostic["frame_count"]==180
+          assert [x["frame"] for x in diagnostic["frames"]]==list(range(180))
+          # At source frame 14 the 15-frame fade stops. Old modulo playback
+          # restarted its fully-black frame at 15,30,45,..., causing flashes.
+          # Confirm the repaired bake doesn't insert those black pulses while
+          # preserving the original initial black fade (frame 0).
+          frames=diagnostic["frames"]
+          assert frames[0]["near_black_fraction"] > 0.95
+          for tick in (15,30,45,60):
+              assert frames[tick]["near_black_fraction"] < 0.90, (tick, frames[tick])
+          assert max(frames[tick]["changed_pixel_fraction_from_previous"] for tick in (15,30,45,60)) < 0.25, "unexpected 15-frame blackout/flash cycle"
+          # The recovered source's last sample is almost black. The Rust
+          # state machine must never hold that visual indefinitely.
+          assert frames[179]["near_black_fraction"] > 0.95, frames[179]
+          game_code=Path("src/game.rs").read_text()
+          assert "if was_at_end { self.begin_level1a(); }" in game_code
+
+          assert all(0<=x["near_black_fraction"]<=1 and 0<=x["changed_pixel_fraction_from_previous"]<=1 for x in diagnostic["frames"])
+          assert all(isinstance(b["tag_offset"],int) and all(isinstance(a["offset"],int) for a in b["actions"])
+                     for blocks in behavior["original_timeline_actions"].values() for b in blocks)
+          assert any(any(a["op"]=="Stop" for a in b["actions"])
+                     for b in behavior["original_timeline_actions"]["root"])
+          assert any(b["frame"]==164 and any(a["op"]=="Stop" for a in b["actions"])
+                     for b in behavior["original_timeline_actions"]["sprite:122"])
+          assert behavior["intro_symbol_ids"] == [122,123,126,35]
+          button=behavior["skip_button_actions"]
+          assert button["button_id"]==129 and isinstance(button["handlers"],list)
+          assert isinstance(button["action_offset"],int)
+          assert all(isinstance(h["condition_offset"],int) and isinstance(h["actions"],list)
+                     for h in button["handlers"])
+          assert len(button["handlers"])==1
+          release=button["handlers"][0]
+          assert release["conditions_hex"]=="0x0800", release
+          assert release["events"]==["over_down_to_over_up"] and release["key_code"]==0, release
+          assert {"_root","gotoNext","level1a","fadeout","play"}.issubset(release["strings"]), release
+          assert any(x["op"]=="CallMethod" for x in release["actions"]), release
+          assert any(b["frame"]==39 and any(x["op"]=="StopSounds" for x in b["actions"])
+                     for b in behavior["original_timeline_actions"]["scripted_fade:34"])
+          assert len(json.loads(Path(".generated/fadeout/manifest.json").read_text())["frames"]) == 41
+
+          assert any(b["frame"]==14 and any(a["op"]=="Stop" for a in b["actions"])
+                     for b in behavior["original_timeline_actions"]["sprite:35"])
+
+          assert intro["unsupported_fills"] == [], intro["unsupported_fills"]
+          assert intro["missing_bitmap_ids"] == [], intro["missing_bitmap_ids"]
+          from PIL import ImageChops
+          with Image.open(".generated/intro/000.png") as start:
+              with Image.open(".generated/intro/080.png") as middle:
+                  assert ImageChops.difference(start.convert("RGB"),middle.convert("RGB")).getbbox(), "intro failed to animate"
           hud=json.loads(Path("assets/hud.json").read_text())
           print("HUD:",hud)
           assert hud["hud_size"] == [283,86], hud["hud_size"]
+          assert hud["style"] == "source", hud["style"]
           assert hud["variables"] == {"702":"_root.batarangs","713":"_root.score","714":"_root.lives"}, hud["variables"]
           assert hud["static_text"] == {"700":"BATARANG","710":"HEALTH","711":"SCORE","715":"lives x"}, hud["static_text"]
 
@@ -623,6 +795,9 @@ jobs:
 
           legacy=json.loads(Path("assets/hud.json").read_text())
           hq=json.loads(Path("assets/hud_hq.json").read_text())
+          assert legacy["style"] == "source" and hq["style"] == "themed", (legacy["style"],hq["style"])
+          assert legacy["font_filename"].lower()=="arial.ttf", legacy["font_filename"]
+          assert hq["font_filename"].lower()=="impact.ttf", hq["font_filename"]
 
           assert legacy["variables"] == hq["variables"] == {
               "702":"_root.batarangs","713":"_root.score","714":"_root.lives"
@@ -692,14 +867,16 @@ jobs:
           for needle in (
               "hud_shell_hq: SpriteSet",
               "hud_digits_small_hq: Image",
+              "hud_digits_batarang_hq: Image",
               "hud_digits_large_hq: Image",
               'decode_sprite_frames_expected(include_bytes!("../assets/hud_shell_hq.bin"),3.0',
           ):
               assert needle in assets, needle
           for needle in (
               "draw_number_centered_hq_1to1",
+              "hud_digits_batarang_hq",
               "blit_region_1to1",
-              "Round 6 HUD assets already live at final presentation resolution",
+              "Original sprite 716: icon art and rounded translucent backing remain.",
           ):
               assert needle in render, needle
 
@@ -722,7 +899,58 @@ jobs:
           }
           Path(".generated/hq-hud-asset-report.json").write_text(json.dumps(report,indent=2))
           print(json.dumps(report,indent=2))
-          print("Round 6 HUD contract PASS: true 3x shell/text/digits, 1:1 runtime path, field centers locked.")
+          # HUD-REAL-03: the dark full-width duplicate band was rejected in
+          # actual Windows UI feedback. Protect against its reintroduction,
+          # while requiring the existing source-derived translucent shell.
+          layout=json.loads(Path("reverse-engineering/manifests/hud-hq-layout.json").read_text())
+          assert hq["hq_layout_schema"]==layout["schema"]==1
+          assert hq["small_digits"]["vertical_percent"]==layout["small_counter_height_percent"]==115
+          assert hq["hq_lives_multiplier"]["text"]=="X"
+          assert hq["hq_lives_multiplier"]["logical_center"]==[306,63]
+          assert hq["hq_lives_multiplier"]["atlas"]=="small"
+          assert hq["hq_lives_multiplier"]["static_caption_ink_overlap_px"]==0
+          assert hq["hq_lives_multiplier"]["source_opaque_contact_rows_6x"]<=1
+          assert layout["counters"]["lives"]["multiplier_center"]==[306,63]
+          assert layout["static_offsets_logical"]["715"]==[-8,5], "HQ LIVES word must clear its promoted X"
+          assert hq["batarang_digits"]["vertical_percent"]==layout["batarang_ink_height_percent"]==121
+          assert layout["hq_icon_resize"]["scale_percent"]==94
+          assert layout["counters"]["batarangs"]["center"]==[211,58]
+          assert Path("assets/hud_digits_batarang_hq.png").is_file()
+          with Image.open("assets/hud_digits_batarang_hq.png") as bat, Image.open("assets/hud_digits_small_hq.png") as small:
+              assert bat.size==small.size
+              assert bat.tobytes()!=small.tobytes(), "The Batarang atlas must actually be taller"
+          assert layout["counters"]["batarangs"]["digit_advance"]==9
+          assert layout["counters"]["lives"]["digit_advance"]==10
+          assert layout["counters"]["batarangs"]["center"]==[211,58]
+          assert layout["counters"]["score"]["max_width"]==92
+          assert layout["counters"]["score"]["large_digit_advance"]==16
+          assert "hud_hq_layout::SCORE_LARGE_DIGIT_ADVANCE*s" in render
+          generated=Path("assets/hud_hq_layout.rs").read_text()
+          for symbol in ("BATARANG_CENTER","BATARANG_MAX_WIDTH",
+                         "SCORE_CENTER","SCORE_MAX_WIDTH","SCORE_LARGE_DIGIT_ADVANCE","LIVES_VALUE_LEFT",
+                         "LIVES_CENTER_Y","LIVES_MAX_WIDTH",
+              "BATARANG_DIGIT_ADVANCE","LIVES_DIGIT_ADVANCE"):
+              assert f"pub const {symbol}:" in generated, symbol
+              assert f"hud_hq_layout::{symbol}" in render, symbol
+          assert 'include!("../assets/hud_hq_layout.rs")' in render
+          assert "HUD_COUNTER_ROW_Y:i32=82" not in render
+          assert "draw_hud_counter_band_hq" not in render, "duplicate HQ counter band returned"
+          assert "fb,&shell.image," in hud_fn, "original HUD shell no longer blitted"
+          assert "static_offsets_logical" in baker
+          assert "stretched_atlas.alpha_composite(" in baker
+          assert "hud_digit_step_width" in render
+          assert "preferred_advance" in render
+          assert "outline=max(2,round(0.90*scale))" in baker
+          assert "outline=max(2,round(0.89*pixel_scale))" in baker
+          assert "color=(255,235,80,255)" in baker, "HQ gold label contrast style changed unexpectedly"
+          assert "color=(255,241,153,255)" in baker, "HQ large numeral contrast style changed unexpectedly"
+          assert "stroke_width=outline,stroke_fill=(2,2,5,255))" in baker
+          print("Round 6 HUD contract PASS: 1x source preserved, 94% HQ vector icons, taller isolated Batarang, original labels and no duplicate band.")
+
+      - name: Validate HUD-REAL-05C true-3x multi-value ink clearance
+        shell: pwsh
+        run: |
+          python reverse-engineering/tools/check_hud_multivalue_ink.py
 
       - name: Validate Round 7 true-3x foreground timelines
         shell: python
@@ -1430,10 +1658,109 @@ jobs:
           targets: x86_64-pc-windows-msvc
 
       - name: Run sprite-pack compatibility tests
-        run: cargo test --release --target x86_64-pc-windows-msvc
+        run: cargo test --release --locked --target x86_64-pc-windows-msvc
 
       - name: Build Level 1A fidelity slice
-        run: cargo build --release --target x86_64-pc-windows-msvc
+        run: cargo build --release --locked --target x86_64-pc-windows-msvc
+
+      # BUILD-LOCK-10 final: require committed Cargo.lock and --locked MSVC
+      # test/build, then verify Cargo did not alter its tracked bytes.
+      - name: Verify committed Cargo.lock resolution (Batch10 final)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (!(Test-Path -LiteralPath "Cargo.lock")) {
+              throw "Cargo.lock missing after native MSVC build"
+          }
+          $data = Get-Content Cargo.lock -Raw
+          if ($data -notmatch '\[\[package\]\]' -or $data -notmatch 'name = "png"') {
+              throw "Generated Cargo.lock lacks expected dependency records"
+          }
+          $committed = (git rev-parse "HEAD:Cargo.lock").Trim()
+          $working = (git hash-object Cargo.lock).Trim()
+          if ($LASTEXITCODE -ne 0 -or $working -ne $committed) {
+              throw "Cargo modified the checked-in Cargo.lock"
+          }
+          Get-FileHash Cargo.lock -Algorithm SHA256
+          cargo metadata --format-version 1 --no-deps --locked --offline | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw "Current generated lockfile failed offline metadata validation" }
+          Write-Host "BUILD-LOCK-10 PASS: tracked Windows Cargo.lock unchanged under --locked test and build"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Batman-CobbleBot-CargoLock-Actual-Windows-Snapshot
+          path: Cargo.lock
+          if-no-files-found: error
+
+      # ICON-EXE-07: actual built PE resource table, Windows Shell icon
+      # extraction, and the NORMAL game HWND's registered class icon.
+      # This is not a claim that a user's pinned taskbar has refreshed its cache.
+      # MANUAL-ACCEPTANCE-PREP-11: exercise the real user-PC diagnostic
+      # script with the actual native game EXE, but NEVER call audio hardware,
+      # GUI screenshots or original Flash fidelity physically verified.
+      - name: Verify safe local Windows acceptance-evidence kit (Batch11)
+        shell: pwsh
+        timeout-minutes: 3
+        run: |
+          $ErrorActionPreference = "Stop"
+          & ./scripts/collect-level1a-windows-evidence.ps1 -ExePath "target/x86_64-pc-windows-msvc/release/batman_cobblebot_native.exe" -OutputDirectory ".generated/manual-acceptance-qa"
+          if (!(Test-Path ".generated/manual-acceptance-qa/level1a-local-environment.json")) {
+              throw "Batch11 local report missing"
+          }
+          if (!(Test-Path ".generated/manual-acceptance-qa/level1a-player-checklist.md")) {
+              throw "Batch11 manual acceptance checklist missing"
+          }
+          $qa = Get-Content ".generated/manual-acceptance-qa/level1a-local-environment.json" -Raw | ConvertFrom-Json
+          if ($qa.schema_version -ne 1 -or !$qa.local_only_no_automatic_upload -or !$qa.no_screen_or_audio_capture) {
+              throw "Batch11 privacy/safety/report contract broken"
+          }
+          if ($qa.exe.file_name -ne "batman_cobblebot_native.exe" -or $qa.exe.sha256.Length -ne 64) {
+              throw "Batch11 tested EXE identity/hash missing"
+          }
+          if ($qa.manual_checks.original_flash_side_by_side -ne "NOT_TESTED_BY_SCRIPT" -or
+              $qa.manual_checks.sound_music_effects_and_volume_flyout -ne "NOT_TESTED_BY_SCRIPT" -or
+              $qa.manual_checks.windows_explorer_and_pinned_taskbar_icon -ne "NOT_TESTED_BY_SCRIPT") {
+              throw "Batch11 false physical Windows acceptance PASS"
+          }
+          Write-Host "MANUAL-ACCEPTANCE-PREP-11 PASS: real EXE inspected, reports emitted, human gates correctly NOT_TESTED"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Batman-CobbleBot-Level1A-Windows-Local-Acceptance-Kit-QA
+          path: .generated/manual-acceptance-qa/
+          if-no-files-found: warn
+
+      - name: Verify native Windows EXE / Shell / window icon (Batch07)
+        shell: pwsh
+        timeout-minutes: 3
+        run: |
+          python reverse-engineering/tools/windows_icon_resource_probe.py --exe target/x86_64-pc-windows-msvc/release/batman_cobblebot_native.exe --out .generated/windows-icon-resource-qa
+          if ($LASTEXITCODE -ne 0) { throw "Batch07 actual PE/Win32 icon QA failed" }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Batman-CobbleBot-Real-Windows-Icon-Resource-QA
+          path: .generated/windows-icon-resource-qa/
+          if-no-files-found: warn
+
+      # ICON-SHELL-PIXEL-QA-09: sample TRUE Windows Shell-extracted HICON
+      # artwork, not merely nonzero handles. Original source PNG vs captured
+      # pixels at actual 16/32px, with real Win32 DrawIconEx evidence retained.
+      - name: Verify actual Windows Shell icon pixels (Batch09)
+        shell: pwsh
+        timeout-minutes: 3
+        run: |
+          python reverse-engineering/tools/windows_icon_visual_probe.py --exe target/x86_64-pc-windows-msvc/release/batman_cobblebot_native.exe --art .generated/windows-icon-art --out .generated/windows-icon-visual-qa
+          if ($LASTEXITCODE -ne 0) { throw "Batch09 real Shell HICON pixel proof failed" }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Batman-CobbleBot-Real-Windows-Shell-Icon-Pixel-QA
+          path: .generated/windows-icon-visual-qa/
+          if-no-files-found: warn
 
       - name: Smoke-check executable, legacy pixels, HQ output and render timing
         shell: pwsh
@@ -1457,12 +1784,55 @@ jobs:
 
           $legacyShots = Get-ChildItem ".generated/visual-smoke/*.png"
           $hqShots = Get-ChildItem ".generated/visual-smoke-hq/*.png"
-          if ($legacyShots.Count -ne 17) { throw "Expected 17 legacy smoke screenshots, got $($legacyShots.Count)" }
-          if ($hqShots.Count -ne 17) { throw "Expected 17 HQ smoke screenshots, got $($hqShots.Count)" }
+          if ($legacyShots.Count -ne 20) { throw "Expected 20 legacy smoke screenshots, got $($legacyShots.Count)" }
+          if ($hqShots.Count -ne 20) { throw "Expected 20 HQ smoke screenshots, got $($hqShots.Count)" }
           $legacyShots | Format-Table Name,Length
           $hqShots | Format-Table Name,Length
           Get-Content ".generated/render-benchmark.json"
           Get-Content ".generated/scenery-scroll-benchmark.json"
+
+      # WIN-GUI-PILOT-01: real Win32 GUI feasibility only; infrastructure
+      # limitations must not invalidate the existing verified headless tests.
+      - name: Pilot real Win32 window capture and OS keyboard input
+        shell: pwsh
+        timeout-minutes: 2
+        continue-on-error: true
+        run: |
+          python reverse-engineering/tools/windows_gui_pilot.py --exe target/x86_64-pc-windows-msvc/release/batman_cobblebot_native.exe --out .generated/windows-gui-pilot
+
+
+      # FS-QA-03: strict real Windows EXE fullscreen F/Esc integration test.
+      # Different from the existing opt-in QA-navigation F7/F8 pilot.
+      - name: Verify native F/Esc fullscreen window geometry and intro continuity
+        shell: pwsh
+        timeout-minutes: 3
+        run: |
+          python reverse-engineering/tools/windows_fullscreen_probe.py --exe target/x86_64-pc-windows-msvc/release/batman_cobblebot_native.exe --out .generated/windows-fullscreen-qa
+
+      # HUD-REAL-06A: launch the standard native Windows EXE while Enter is
+      # already held, then require release + a genuinely new Enter press.
+      # Old color-art title vs intro upper-black panel are checked in OS captures.
+      - name: Verify real Windows startup ignores inherited Enter
+        shell: pwsh
+        timeout-minutes: 2
+        run: |
+          python reverse-engineering/tools/windows_title_startup_probe.py --exe target/x86_64-pc-windows-msvc/release/batman_cobblebot_native.exe --out .generated/windows-gui-pilot
+
+      - name: Require three real Windows F8 HUD captures
+        shell: python
+        run: |
+          import json
+          from pathlib import Path
+          out=Path(".generated/windows-gui-pilot")
+          report=json.loads((out/"pilot-report.json").read_text())
+          qa=report.get("qa_navigation",{})
+          cases=qa.get("hud_fixtures",[])
+          assert qa.get("hud_test_status")=="THREE_OS_F8_CAPTURES_WITH_CHANGED_HUD",qa
+          assert len(cases)==3,cases
+          assert all(c["changed_from_prior"] for c in cases),cases
+          assert all((out/c["file"]).is_file() for c in cases),cases
+          assert not report["errors"],report["errors"]
+          print("HUD-REAL-05C genuine Win32 keyboard F8 and screenshots PASS")
 
       - name: Verify Round 2 legacy pixels against renderer-repair baseline
         shell: python
@@ -1491,7 +1861,7 @@ jobs:
           actual={p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in root.glob("*.png")}
           missing=set(expected)-set(actual)
           extra=set(actual)-set(expected)
-          allowed_extra={"04_walk.png","13_world_objects.png"}
+          allowed_extra={"04_walk.png","13_world_objects.png","00_intro_start.png","00_intro_call.png","00_intro_last.png"}
           if missing or extra!=allowed_extra:
               raise SystemExit(f"legacy screenshot set changed unexpectedly: missing={sorted(missing)} extra={sorted(extra)}")
           bad={name:(expected[name],actual[name]) for name in expected if actual[name]!=expected[name]}
@@ -1509,7 +1879,7 @@ jobs:
           legacy=sorted(Path(".generated/visual-smoke").glob("*.png"))
           hq=sorted(Path(".generated/visual-smoke-hq").glob("*.png"))
           assert [p.name for p in legacy] == [p.name for p in hq]
-          assert len(legacy) == 17
+          assert len(legacy) == 20
           for lp,hp in zip(legacy,hq):
               with Image.open(lp) as lo, Image.open(hp) as hi:
                   assert lo.size == (600,400), (lp.name,lo.size)
@@ -1531,7 +1901,7 @@ jobs:
           assert scroll["samples_count"] >= 40, scroll
           assert scroll["p95_ms"] < 40.0, scroll
 
-          print("HQ dimensions PASS: 17/17 frames are 1800x1200, including the Round-8 world-object checkpoint.")
+          print("HQ dimensions PASS: 20/20 frames are 1800x1200, including the terminal 00_intro_last.png and Round-8 world objects.")
           print("Round 5 render benchmark:",json.dumps(bench,indent=2))
           print("Round 10 scenery-scroll benchmark:",json.dumps(scroll,indent=2))
 
@@ -1758,6 +2128,47 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
+          name: Batman-CobbleBot-Level1A-Intro-Behavior-Report
+          path: .generated/intro-behavior-report.json
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Batman-CobbleBot-Level1A-Intro-Contact-Sheet
+          path: .generated/intro/intro-contact-sheet.png
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Batman-CobbleBot-Level1A-Intro-Frame-Diagnostics
+          path: .generated/intro/intro-frame-diagnostics.json
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Batman-CobbleBot-Level1A-Intro-HUD-Source-Report
+          path: .generated/intro-hud-source-report.json
+          if-no-files-found: error
+
+      # Always retain report and actual desktop images when available.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Batman-CobbleBot-Level1A-Windows-GUI-Pilot
+          path: .generated/windows-gui-pilot/
+          if-no-files-found: warn
+
+
+      # Preserve real OS fullscreen captures and failure reports even on failure.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Batman-CobbleBot-Level1A-Fullscreen-Windows-QA
+          path: .generated/windows-fullscreen-qa/
+          if-no-files-found: warn
+
+      - uses: actions/upload-artifact@v4
+        with:
           name: Batman-CobbleBot-Level1A-Fidelity-Windows-x64
           path: target/x86_64-pc-windows-msvc/release/batman_cobblebot_native.exe
           if-no-files-found: error
@@ -1773,6 +2184,17 @@ jobs:
           name: Batman-CobbleBot-Level1A-HQ3x-Visual-Smoke
           path: .generated/visual-smoke-hq/*.png
           if-no-files-found: error
+
+      # INTRO-QA-01: independent frame-by-frame natural intro diagnostics.
+      # Upload even if smoke tests fail after writing these reports.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Batman-CobbleBot-Level1A-Intro-Transition-Metrics
+          path: |
+            .generated/visual-smoke/intro-transition-qa.json
+            .generated/visual-smoke-hq/intro-transition-qa.json
+          if-no-files-found: warn
 
       - uses: actions/upload-artifact@v4
         with:
@@ -1890,3 +2312,41 @@ jobs:
             assets/hud_digits_small_hq.png
             assets/hud_digits_large_hq.png
           if-no-files-found: error
+
+      # INTRO-AUDIO-QA-05: real OS foreground switch plus in-process WinMM
+      # MCI status position, pause/resume and 25 Hz Intro tick comparisons.
+      # The hosted runner has zero audio endpoints and MCI open error 277;
+      # allow *only that infrastructure state* to be reported BLOCKED without
+      # implying sound passed. A real audio-equipped Windows PC must pass
+      # strict MCI playback-position tests without this explicit flag.
+      - name: Verify real Win32 intro focus (MCI hardware proof separately classified)
+        shell: pwsh
+        timeout-minutes: 3
+        run: |
+          python reverse-engineering/tools/windows_intro_audio_focus_probe.py --exe target/x86_64-pc-windows-msvc/release/batman_cobblebot_native.exe --out .generated/windows-intro-audio-qa --allow-hosted-no-audio
+
+      # Always retain actual MCI status TSV and OS screenshots on failure.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Batman-CobbleBot-Level1A-Intro-Audio-Windows-QA
+          path: .generated/windows-intro-audio-qa/
+          if-no-files-found: warn
+
+      # Batch08 real installed-copy integration. Prior strict build/GUI/HUD/
+      # fullscreen/legacy hash/performance/audio-focus checks must have run.
+      # Copy the ACTUAL EXE into a fresh LOCALAPPDATA folder and independently
+      # recheck its linked icon, Windows Shell icon and all 20 HQ PNG hashes.
+      - name: Verify standalone installed-copy native game integration (Batch08)
+        shell: pwsh
+        timeout-minutes: 4
+        run: |
+          python reverse-engineering/tools/windows_final_integration_probe.py --exe target/x86_64-pc-windows-msvc/release/batman_cobblebot_native.exe --generated .generated --out .generated/windows-integration-qa
+          if ($LASTEXITCODE -ne 0) { throw "Batch08 installed-copy integration failed" }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Batman-CobbleBot-Level1A-Installed-EXE-Integration-QA
+          path: .generated/windows-integration-qa/
+          if-no-files-found: warn

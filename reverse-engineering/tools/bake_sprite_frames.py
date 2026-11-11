@@ -939,6 +939,8 @@ def main():
     parser.add_argument("--bitmaps", type=Path, help="directory produced by extract_bitmaps.py (defaults beside the SWF source directory)")
     parser.add_argument("--all-frames", action="store_true", help="bake the whole symbol timeline into a directory plus manifest")
     parser.add_argument("--native-bounds", action="store_true", help="size the single-frame PNG to the symbol's native transformed bounds")
+    parser.add_argument("--bounds-symbols-json", type=Path,
+                        help="optional ORIGINAL source symbols for image bounds/anchor; rasterize from positional symbols_json")
     parser.add_argument("--clip-stage-width", type=float, help="for --all-frames, crop rendering to this logical stage width")
     parser.add_argument("--clip-stage-height", type=float, help="for --all-frames, crop rendering to this logical stage height")
     parser.add_argument("--place-x", type=float, default=0.0, help="logical stage X of the symbol origin when stage clipping")
@@ -946,6 +948,10 @@ def main():
     args = parser.parse_args()
 
     symbols = json.loads(args.symbols_json.read_text(encoding="utf-8"))
+    # 06B: calculate canvas from ORIGINAL sprite placements while drawing
+    # modified HQ icon vectors. Otherwise shrinking icons shifts labels.
+    bounds_symbols = (json.loads(args.bounds_symbols_json.read_text(encoding="utf-8"))
+                      if args.bounds_symbols_json is not None else symbols)
     unsupported: set[str] = set()
     shapes = load_shapes(args.swf, unsupported)
     load_text_defs(args.swf)
@@ -976,7 +982,7 @@ def main():
         # timelines for packing/HQ finalization.
         frame_count = max(1, int(symbol.get("frames", 0) or 0))
         frame_bounds = [
-            symbol_bounds(args.symbol, frame, (1.0, 0.0, 0.0, 1.0, 0.0, 0.0), symbols, shapes)
+            symbol_bounds(args.symbol, frame, (1.0, 0.0, 0.0, 1.0, 0.0, 0.0), bounds_symbols, shapes)
             for frame in range(frame_count)
         ]
         visible_bounds = [box for box in frame_bounds if all(math.isfinite(value) for value in box)]
@@ -1063,7 +1069,7 @@ def main():
         return
 
     missing: set[int] = set()
-    source_bounds = symbol_bounds(args.symbol, args.frame, (1.0, 0.0, 0.0, 1.0, 0.0, 0.0), symbols, shapes)
+    source_bounds = symbol_bounds(args.symbol, args.frame, (1.0, 0.0, 0.0, 1.0, 0.0, 0.0), bounds_symbols, shapes)
     if not all(math.isfinite(value) for value in source_bounds):
         raise ValueError(f"symbol {args.symbol} frame {args.frame} has no supported solid vector fills")
     if args.native_bounds:

@@ -1,0 +1,94 @@
+name: publish-level1a-v0.2.0
+
+on:
+  push:
+    branches:
+      - revive/level1a-intro-hud-fidelity-2026-11-09
+    paths:
+      - docs/releases/LEVEL1A_V0.2.0_RELEASE_REQUEST.md
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish-pinned-level1a:
+    if: github.repository == 'sinethnimsara26/Batman-CobbleBot-Native-Rust'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Verify exact green Windows source, avoid duplicate release
+        id: preflight
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          expected=49e8fd343e4f37f045ba71f24fff0999211f0f11
+          grep -Fq "$expected" docs/releases/LEVEL1A_V0.2.0_RELEASE_REQUEST.md
+          actual="$(gh api "repos/$REPO/actions/runs/42936169736" --jq '.head_sha')"
+          status="$(gh api "repos/$REPO/actions/runs/42936169736" --jq '.status')"
+          result="$(gh api "repos/$REPO/actions/runs/42936169736" --jq '.conclusion')"
+          test "$actual" = "$expected"
+          test "$status" = 'completed'
+          test "$result" = 'success'
+          if gh release view level1a-v0.2.0 --repo "$REPO" >/dev/null 2>&1; then
+            echo 'publish=false' >> "$GITHUB_OUTPUT"
+            echo 'Existing release will not be overwritten.'
+          else
+            echo 'publish=true' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Retrieve verified executable and build release package
+        if: steps.preflight.outputs.publish == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          mkdir -p stage dist
+          gh run download 42936169736 --repo "$REPO" --name Batman-CobbleBot-Level1A-Fidelity-Windows-x64 --dir stage
+          test -s stage/batman_cobblebot_native.exe
+          cp stage/batman_cobblebot_native.exe dist/batman_cobblebot_native.exe
+          cp LICENSE stage/LICENSE
+          cp THIRD_PARTY_NOTICE.md stage/THIRD_PARTY_NOTICE.md
+          cp docs/releases/LEVEL1A_V0.2.0_RELEASE_NOTES.md stage/RELEASE_NOTES.md
+          python3 - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile, ZIP_DEFLATED
+          names = ('batman_cobblebot_native.exe', 'LICENSE', 'THIRD_PARTY_NOTICE.md', 'RELEASE_NOTES.md')
+          with ZipFile('dist/Batman-CobbleBot-Level1A-Windows-x64.zip', 'w', ZIP_DEFLATED, compresslevel=6) as z:
+              for name in names:
+                  p = Path('stage') / name
+                  assert p.is_file() and p.stat().st_size, name
+                  z.write(p, arcname=name)
+          with ZipFile('dist/Batman-CobbleBot-Level1A-Windows-x64.zip') as z:
+              assert tuple(z.namelist()) == names
+              assert z.testzip() is None
+          PY
+          (cd dist && sha256sum batman_cobblebot_native.exe Batman-CobbleBot-Level1A-Windows-x64.zip > SHA256SUMS.txt)
+          cat dist/SHA256SUMS.txt
+
+      - name: Publish tag at the tested code commit, not the documentation commit
+        if: steps.preflight.outputs.publish == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh release create level1a-v0.2.0 \
+            dist/batman_cobblebot_native.exe \
+            dist/Batman-CobbleBot-Level1A-Windows-x64.zip \
+            dist/SHA256SUMS.txt \
+            --repo "$REPO" \
+            --target 49e8fd343e4f37f045ba71f24fff0999211f0f11 \
+            --title 'Level 1A v0.2.0 — Final Playable Snapshot (2026-11-11)' \
+            --notes-file docs/releases/LEVEL1A_V0.2.0_RELEASE_NOTES.md
+          gh release view level1a-v0.2.0 --repo "$REPO" --json tagName,assets,url

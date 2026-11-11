@@ -88,12 +88,15 @@ pub struct Assets {
     pub hud_digits_large: Image,
     pub hud_shell_hq: SpriteSet,
     pub hud_digits_small_hq: Image,
+    pub hud_digits_batarang_hq: Image,
     pub hud_digits_large_hq: Image,
     pub level1a_tiles: LevelTileSet,
     pub level1a_tiles_hq_base: LevelTileSet,
     pub level1a_detail_tiles_hq: LevelTileSet,
     pub title_screen: Image,
     pub instructions_screen: Image,
+    /// 180 original root-frame-18 story samples, loaded lazily.
+    pub intro_frames: LazySpriteSet,
 }
 
 impl Assets {
@@ -122,12 +125,14 @@ impl Assets {
             hud_digits_large: decode_png(include_bytes!("../assets/hud_digits_large.png")),
             hud_shell_hq: decode_sprite_frames_expected(include_bytes!("../assets/hud_shell_hq.bin"),3.0,"hud_shell_hq"),
             hud_digits_small_hq: decode_png(include_bytes!("../assets/hud_digits_small_hq.png")),
+            hud_digits_batarang_hq: decode_png(include_bytes!("../assets/hud_digits_batarang_hq.png")),
             hud_digits_large_hq: decode_png(include_bytes!("../assets/hud_digits_large_hq.png")),
             level1a_tiles: LevelTileSet::new_expected(include_bytes!("../assets/level1a_tiles.bin"),1.0,12,"level1a_tiles"),
             level1a_tiles_hq_base: LevelTileSet::new_expected(include_bytes!("../assets/level1a_tiles_hq_base.bin"),1.0,4,"level1a_tiles_hq_base"),
             level1a_detail_tiles_hq: LevelTileSet::new_expected(include_bytes!("../assets/level1a_detail_tiles_hq.bin"),3.0,4,"level1a_detail_tiles_hq"),
             title_screen: decode_png(include_bytes!("../assets/title_screen.png")),
             instructions_screen: decode_png(include_bytes!("../assets/instructions_screen.png")),
+            intro_frames: decode_sprite_frames_lazy_expected(include_bytes!("../assets/intro_frames.bin"),1.0,"intro_frames"),
         }
     }
 }

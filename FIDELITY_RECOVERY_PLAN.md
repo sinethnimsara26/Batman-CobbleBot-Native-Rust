@@ -1,5 +1,8 @@
 # CobbleBot Native Fidelity Recovery Plan
 
+> **Historical recovery plan, not current build or acceptance status.** This record belongs to the earlier native prototype. For current Rust Level1A, icon, CI, and QA acceptance use [2026-11-11 audit](docs/PROJECT_WIDE_AUDIT_2026-11-11.md) and [current handoff](docs/AI_HANDOFF.md). Preserve historical commit/run/hashes below as originally reported.
+
+
 ## Goal
 
 Produce a portable native Windows executable whose gameplay and presentation are visually and behaviorally close enough to the original Flash release that ordinary play looks like the same game, while replacing the Flash runtime and ActionScript execution with Rust wherever practical.

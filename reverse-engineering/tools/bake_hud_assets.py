@@ -20,7 +20,7 @@ import json
 import math
 import struct
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageChops, ImageDraw, ImageFont
 
 from swf_re import Bits, read_rect, tags
 from render_collision_masks import affine, compose, point
@@ -117,7 +117,7 @@ def field_box(info,transform,anchor):
     ]
 
 
-def draw_field(image,info,transform,anchor,font_path):
+def draw_field(image,info,transform,anchor,font_path,style="source",hq_layout=None):
     box=field_box(info,transform,anchor)
     sx=math.hypot(transform[0],transform[2])
     sy=math.hypot(transform[1],transform[3])
@@ -127,12 +127,51 @@ def draw_field(image,info,transform,anchor,font_path):
     text=info.get("initial_text","").replace("\r","").replace("\n","")
     draw=ImageDraw.Draw(image)
     color=info.get("color",(255,255,255,255))
-    if info.get("align")==2:
-        draw.text(((box[0]+box[2])/2.0,(box[1]+box[3])/2.0),text,font=font,fill=color,anchor="mm")
+    centered=info.get("align")==2
+    xy=((box[0]+box[2])/2.0,(box[1]+box[3])/2.0) if centered else (box[0],box[1])
+    anchor_type="mm" if centered else "lt"
+    if style=="themed":
+        # Player-requested design candidate: follow the tutorial's condensed,
+        # heavy yellow action lettering (Impact is the closest installed face).
+        # Do not claim Impact is the original Flash embedded tutorial font.
+        # The white _sans legacy rendering above remains the source oracle.
+        text=text.upper()
+        # Respect original SWF field rectangles while gaining visual weight.
+        # Especially important near the health icon / lives digit.
+        max_width=max(1.0,box[2]-box[0]-2.0*scale)
+        max_height=max(1.0,box[3]-box[1]-1.0*scale)
+        # Single HQ layout manifest also generates the native Rust counters.
+        dx,dy=hq_layout["static_offsets_logical"][str(info["id"])]
+        xy=(xy[0]+dx*scale,xy[1]+dy*scale)
+        if info["id"]==715:
+            # Draw the caption alone. Measure its previous full "LIVES X"
+            # length so this label does not grow or move when X is promoted.
+            text="LIVES"
+            fit_text="LIVES X"
+        else:
+            fit_text=text
+        size=max(1,round(info.get("font_height",12.0)*scale*
+                         (0.73 if info["id"]==715 else 0.94)))
+        while size>1:
+            font=ImageFont.truetype(str(font_path),size=size)
+            tb=draw.textbbox((0,0),fit_text,font=font,anchor=anchor_type)
+            if tb[2]-tb[0]<=max_width and tb[3]-tb[1]<=max_height:
+                break
+            size-=1
+        color=(255,235,80,255) if info["id"]!=715 else (255,248,205,255)
+        outline=max(2,round(0.90*scale))
+        # HUD-REAL-05B: slightly wider near-black edge and darker offset
+        # shadow improve contrast on bright scenery without changing the
+        # stage geometry, font face, or legacy source-rendered captions.
+        shadow=(xy[0]+0.62*scale,xy[1]+0.62*scale)
+        draw.text(shadow,text,font=font,fill=(5,5,8,255),anchor=anchor_type,
+                  stroke_width=outline+max(1,round(0.24*scale)),
+                  stroke_fill=(5,5,8,255))
+        draw.text(xy,text,font=font,fill=color,anchor=anchor_type,
+                  stroke_width=outline,stroke_fill=(2,2,5,255))
     else:
-        draw.text((box[0],box[1]),text,font=font,fill=color,anchor="lt")
+        draw.text(xy,text,font=font,fill=color,anchor=anchor_type)
     return box
-
 
 def resize_premultiplied(image:Image.Image,size:tuple[int,int],method:str):
     if image.size==size:
@@ -144,23 +183,144 @@ def resize_premultiplied(image:Image.Image,size:tuple[int,int],method:str):
     return image.convert("RGBa").resize(size,Image.Resampling.LANCZOS).convert("RGBA")
 
 
-def digit_atlas(font_path:Path,base_size:int,pixel_scale:float):
-    size=max(1,round(base_size*pixel_scale))
+def digit_atlas(font_path:Path,base_size:int,pixel_scale:float,style="source",vertical_percent:int=100,extra_glyph=None):
+    # Legacy atlases remain unchanged. The HQ atlas uses the exact same
+    # condensed typeface as the HQ labels, with distinct number sizes.
+    size=max(1,round(base_size*pixel_scale*
+                     ((0.80 if base_size>16 else 0.76) if style=="themed" else 1.0)))
     font=ImageFont.truetype(str(font_path),size=size)
     probe=Image.new("RGBA",(8,8),(0,0,0,0))
     draw=ImageDraw.Draw(probe)
     bounds=[draw.textbbox((0,0),str(i),font=font,anchor="lt") for i in range(10)]
     cell_w=max(b[2]-b[0] for b in bounds)+max(1,round(6*pixel_scale))
     cell_h=max(b[3]-b[1] for b in bounds)+max(1,round(8*pixel_scale))
-    atlas=Image.new("RGBA",(cell_w*10,cell_h),(0,0,0,0))
+    if style=="themed":
+        # The revised, smaller Impact glyphs must retain the source-sized
+        # presentation CELLS; shrinking the whole 3x atlas breaks the HUD
+        # asset contract and changes every number's placement/spacing.
+        # Legacy source atlases have 15x20 (small) and 24x31 (large)
+        # cells. Keep at least 92% of those *at the requested raster scale*
+        # while drawing smaller centered glyphs inside their empty padding.
+        # This preserves >2.5x legacy physical atlas dimensions after the
+        # 6x -> 3x Lanczos step, without enlarging the actual type.
+        source_cell=(15,20) if base_size==16 else (24,31)
+        cell_w=max(cell_w,math.ceil(source_cell[0]*pixel_scale*0.92))
+        cell_h=max(cell_h,math.ceil(source_cell[1]*pixel_scale*0.92))
+    glyphs=[str(i) for i in range(10)] + ([extra_glyph] if extra_glyph else [])
+    atlas=Image.new("RGBA",(cell_w*len(glyphs),cell_h),(0,0,0,0))
     draw=ImageDraw.Draw(atlas)
-    for i in range(10):
-        draw.text((i*cell_w+cell_w/2.0,cell_h/2.0),str(i),font=font,fill=(255,255,255,255),anchor="mm")
-    return atlas,{"cell_w":cell_w,"cell_h":cell_h,"font_px":size}
-
+    for i,glyph in enumerate(glyphs):
+        xy=(i*cell_w+cell_w/2.0,cell_h/2.0)
+        if style=="themed":
+            color=(255,241,153,255) if base_size>16 else (255,250,226,255)
+            outline=max(2,round(0.89*pixel_scale))
+            draw.text((xy[0]+0.60*pixel_scale,xy[1]+0.60*pixel_scale),
+                      glyph,font=font,fill=(5,5,8,255),anchor="mm",
+                      stroke_width=outline+1,stroke_fill=(5,5,8,255))
+            draw.text(xy,glyph,font=font,fill=color,anchor="mm",
+                      stroke_width=outline,stroke_fill=(2,2,5,255))
+        else:
+            draw.text(xy,glyph,font=font,fill=(255,255,255,255),anchor="mm")
+    if style=="themed" and base_size==16 and vertical_percent>100:
+        # Enlarge ONLY the visible small-digit ink in the offline 6x bake.
+        # Keep atlas cell dimensions and the revised HQ palette intact.
+        # The native game still blits already-baked 3x pixels at exact 1:1.
+        stretched_atlas=Image.new("RGBA",atlas.size,(0,0,0,0))
+        margin=max(1,round(0.5*pixel_scale))
+        for i in range(len(glyphs)):
+            cell=atlas.crop((i*cell_w,0,(i+1)*cell_w,cell_h))
+            bounds=cell.getbbox()
+            if bounds is None:
+                raise ValueError(f"Small HQ digit {i} has no visible ink")
+            glyph=cell.crop(bounds)
+            new_height=min(cell_h-2*margin,round(glyph.height*vertical_percent/100))
+            if new_height<=glyph.height:
+                raise ValueError(f"Small HQ digit {i} lacks headroom to stretch")
+            taller=resize_premultiplied(
+                glyph,(glyph.width,new_height),"lanczos"
+            )
+            stretched_atlas.alpha_composite(
+                taller,(i*cell_w+bounds[0],(cell_h-new_height)//2)
+            )
+        atlas=stretched_atlas
+    meta={"cell_w":cell_w,"cell_h":cell_h,"font_px":size}
+    if style=="themed" and base_size==16:
+        meta["vertical_percent"]=vertical_percent
+    return atlas,meta
 
 def scale_box(box,factor):
     return [value/factor for value in box]
+
+
+def read_hq_layout(path:Path):
+    cfg=json.loads(path.read_text(encoding="utf-8"))
+    if cfg.get("schema")!=1 or cfg.get("hud_sprite_id")!=716 or cfg.get("logical_stage")!=[600,400]:
+        raise ValueError("Invalid HQ HUD schema, Flash symbol or stage")
+    fields=cfg.get("static_offsets_logical",{})
+    if set(fields)!={"700","710","711","715"}:
+        raise ValueError("HQ label fields mismatch original sprite")
+    for cid,pair in fields.items():
+        if not isinstance(pair,list) or len(pair)!=2 or any(
+            type(v) is not int or abs(v)>20 for v in pair
+        ):
+            raise ValueError(f"Invalid HQ label offset for {cid}: {pair}")
+    ctr=cfg.get("counters",{})
+    if set(ctr)!={"batarangs","score","lives"}:
+        raise ValueError("HQ counter roles mismatch original HUD")
+    if [ctr[k]["field_id"] for k in ("batarangs","score","lives")]!=[702,713,714]:
+        raise ValueError("HQ counters no longer match source fields")
+    for role in ("batarangs","score"):
+        c=ctr[role]
+        x,y=c["center"]
+        if not (type(x) is int and type(y) is int and 0<x<600 and 0<y<400 and
+                type(c["max_width"]) is int and 20<=c["max_width"]<=150):
+            raise ValueError(f"Invalid HQ {role} position/width")
+    if not (type(ctr["batarangs"].get("digit_advance")) is int and
+            6<=ctr["batarangs"]["digit_advance"]<=13):
+        raise ValueError("Batarang digit pitch must fit visible ink and cell")
+    if not (type(ctr["lives"].get("digit_advance")) is int and
+            6<=ctr["lives"]["digit_advance"]<=13):
+        raise ValueError("Lives digit pitch must fit visible ink and cell")
+    large_advance=ctr["score"].get("large_digit_advance")
+    if type(large_advance) is not int or not 14<=large_advance<=22:
+        raise ValueError("HQ large SCORE digit advance must be 14..22 logical pixels")
+    percent=cfg.get("small_counter_height_percent")
+    if type(percent) is not int or not 100<=percent<=125:
+        raise ValueError("Small digit vertical stretch must be 100..125 percent")
+    bat_height=cfg.get("batarang_ink_height_percent")
+    if type(bat_height) is not int or not percent<bat_height<=125:
+        raise ValueError("Dedicated Batarang digit ink must be taller but fit in the same small cell")
+    l=ctr["lives"]
+    multiplier=l.get("multiplier_center")
+    if not (type(l["left"]) is int and type(l["center_y"]) is int and
+            0<l["left"]<600 and 0<l["center_y"]<400 and
+            type(l["max_width"]) is int and 20<=l["max_width"]<=150 and
+            multiplier==[306,l["center_y"]] and
+            2<=l["left"]-multiplier[0]<=7):
+        raise ValueError("Invalid HQ lives anchor, multiplier position, or spacing")
+    return cfg
+
+
+def generate_rust_hq_layout(path:Path,cfg:dict):
+    b=cfg["counters"]["batarangs"]
+    s=cfg["counters"]["score"]
+    l=cfg["counters"]["lives"]
+    lines=[
+        "// GENERATED by bake_hud_assets.py from hud-hq-layout.json; do not edit.",
+        "// Original 600x400 logical stage, compiled into native Rust HUD.",
+        f"pub const BATARANG_CENTER:(i32,i32)=({b['center'][0]},{b['center'][1]});",
+        f"pub const BATARANG_MAX_WIDTH:i32={b['max_width']};",
+        f"pub const BATARANG_DIGIT_ADVANCE:i32={b['digit_advance']};",
+        f"pub const SCORE_CENTER:(i32,i32)=({s['center'][0]},{s['center'][1]});",
+        f"pub const SCORE_MAX_WIDTH:i32={s['max_width']};",
+        f"pub const SCORE_LARGE_DIGIT_ADVANCE:i32={s['large_digit_advance']};",
+        f"pub const LIVES_VALUE_LEFT:i32={l['left']};",
+        f"pub const LIVES_CENTER_Y:i32={l['center_y']};",
+        f"pub const LIVES_MAX_WIDTH:i32={l['max_width']};",
+        f"pub const LIVES_DIGIT_ADVANCE:i32={l['digit_advance']};",
+    ]
+    path.parent.mkdir(parents=True,exist_ok=True)
+    path.write_text("\n".join(lines)+"\n",encoding="utf-8")
 
 
 def main():
@@ -176,6 +336,9 @@ def main():
                     help="temporary raster scale multiplier before final downsample")
     ap.add_argument("--downsample",choices=("none","lanczos"),default="none")
     ap.add_argument("--suffix",default="",help="output suffix, e.g. _hq")
+    ap.add_argument("--style",choices=("source","themed"),default="source",help="source device-font oracle or alternate Batman-style HQ labels")
+    ap.add_argument("--hq-layout",type=Path,help="themed label and Rust counter stage coordinates")
+    ap.add_argument("--emit-rust-layout",type=Path,help="generated native Rust HUD constants")
     ap.add_argument("--pack-dir",type=Path,
                     help="optional one-frame pack-ready directory for the final HUD shell")
     ns=ap.parse_args()
@@ -188,6 +351,16 @@ def main():
         raise ValueError("supersampled HUD output requires --downsample lanczos")
     if ns.supersample==1 and ns.downsample!="none":
         raise ValueError("--downsample is only meaningful with --supersample > 1")
+
+    if ns.style=="themed":
+        if ns.hq_layout is None or ns.emit_rust_layout is None:
+            raise ValueError("Themed HQ HUD needs --hq-layout and --emit-rust-layout")
+        hq_layout=read_hq_layout(ns.hq_layout)
+        generate_rust_hq_layout(ns.emit_rust_layout,hq_layout)
+    else:
+        if ns.hq_layout is not None or ns.emit_rust_layout is not None:
+            raise ValueError("Source-style legacy HUD cannot use custom HQ coordinates")
+        hq_layout=None
 
     symbols=json.loads(ns.symbols_json.read_text(encoding="utf-8"))
     edit=parse_edit_texts(ns.swf)
@@ -215,18 +388,97 @@ def main():
 
     temp_anchor=[float(v) for v in manifest["anchor_in_bitmap"]]
     image=Image.open(ns.hud_frames/"000.png").convert("RGBA")
+    # Independent mask of just the baked static captions, no HUD vector art.
+    static_ink=Image.new("RGBA",image.size,(0,0,0,0)) if ns.style=="themed" else None
+    x_shell_contact_rows=0
     temp_fields={}
 
     for cid in sorted(HUD_IDS):
         info=edit[cid]
         if cid in STATIC_IDS:
-            temp_fields[str(cid)]=draw_field(image,info,found[cid],temp_anchor,ns.font)
+            temp_fields[str(cid)]=draw_field(image,info,found[cid],temp_anchor,ns.font,ns.style,hq_layout)
+            if static_ink is not None:
+                draw_field(static_ink,info,found[cid],temp_anchor,ns.font,ns.style,hq_layout)
         else:
             temp_fields[str(cid)]=field_box(info,found[cid],temp_anchor)
 
     temp_scale=ns.output_scale*ns.supersample
-    small_image,small_meta=digit_atlas(ns.font,16,temp_scale)
-    large_image,large_meta=digit_atlas(ns.font,32,temp_scale)
+    small_image,small_meta=digit_atlas(
+        ns.font,16,temp_scale,ns.style,
+        hq_layout["small_counter_height_percent"] if hq_layout is not None else 100,
+        extra_glyph="X" if ns.style=="themed" else None
+    )
+    # Build X from exactly the same rasterized numeric atlas, using the
+    # existing 115%-stretched Impact glyph appearance. The ten number cells
+    # are cropped back before output, leaving the numeric runtime unmodified.
+    if ns.style=="themed":
+        cell_w=small_meta["cell_w"]
+        assert small_image.width==11*cell_w
+        x_glyph=small_image.crop((10*cell_w,0,11*cell_w,small_image.height))
+        small_image=small_image.crop((0,0,10*cell_w,small_image.height))
+        mx,my=hq_layout["counters"]["lives"]["multiplier_center"]
+        # HUD sprite 716 is placed at source root stage (159,-11).
+        x=round((mx-159)*temp_scale+temp_anchor[0]-x_glyph.width/2)
+        y=round((my+11)*temp_scale+temp_anchor[1]-x_glyph.height/2)
+        # An atlas CELL contains intentional transparent padding. Its bottom
+        # can extend a few 6x pixels past sprite 716's canvas even when every
+        # actual anti-aliased X pixel fits. Crop ONLY transparent margins;
+        # never clip visible ink or enlarge/reposition the source HUD shell.
+        ink_box=x_glyph.getchannel("A").getbbox()
+        if ink_box is None:
+            raise ValueError("Lives X glyph unexpectedly has no visible pixels")
+        x+=ink_box[0]
+        y+=ink_box[1]
+        x_glyph=x_glyph.crop(ink_box)
+        if x<0 or y<0 or x+x_glyph.width>image.width or y+x_glyph.height>image.height:
+            raise ValueError("Visible Lives X ink is outside the original HUD shell canvas")
+        old_alpha=image.crop((x,y,x+x_glyph.width,y+x_glyph.height)).getchannel("A")
+        old_opaque=old_alpha.point(lambda v:255 if v>=208 else 0)
+        x_ink=x_glyph.getchannel("A").point(lambda v:255 if v>=32 else 0)
+        caption_alpha=static_ink.crop((x,y,x+x_glyph.width,y+x_glyph.height)).getchannel("A")
+        caption_ink=caption_alpha.point(lambda v:255 if v>=32 else 0)
+        caption_collision=ImageChops.multiply(caption_ink,x_ink)
+        if caption_collision.getbbox() is not None:
+            raise ValueError(f"Lives X overlaps independently rasterized static caption ink: {caption_collision.getbbox()}")
+        # Permit at most ONE 6x source-art edge row of contact; wider
+        # opaque-shell or any static-caption overlap remains a hard failure.
+        source_collision=ImageChops.multiply(old_opaque,x_ink).getbbox()
+        x_shell_contact_rows=0 if source_collision is None else source_collision[3]-source_collision[1]
+        if x_shell_contact_rows>1:
+            raise ValueError(f"Lives X has multirow opaque-shell collision: {source_collision} glyph_origin=({x},{y})")
+        # HUD-LIVES-GAP-01: prove that all ten dynamic digit glyphs sit
+        # close to (but never on top of) the baked X. Measure the ACTUAL
+        # 6x alpha ink, not padded atlas cells or approximate text metrics.
+        number_left=hq_layout["counters"]["lives"]["left"]
+        first_digit_x=round((number_left-159)*temp_scale+temp_anchor[0])
+        first_ink_left=min(
+            small_image.crop((i*cell_w,0,(i+1)*cell_w,small_image.height))
+            .getchannel("A").point(lambda v:255 if v>=32 else 0)
+            .getbbox()[0]
+            for i in range(10)
+        )
+        rightmost_x_ink=x+x_ink.getbbox()[2]-1
+        min_gap_6x=first_digit_x+first_ink_left-rightmost_x_ink-1
+        if not (0<=min_gap_6x<=4*temp_scale):
+            raise ValueError(f"Lives X-to-digit ink clearance out of range: {min_gap_6x}px at {temp_scale}x")
+        print("HUD-LIVES-X:",{
+            "static_caption_overlap_px":0,
+            "source_opaque_contact_rows_6x":x_shell_contact_rows,
+            "source_bbox":source_collision,
+            "minimum_X_to_digit_alpha_ink_gap_6x":min_gap_6x
+        })
+        image.alpha_composite(x_glyph,(x,y))
+    large_image,large_meta=digit_atlas(ns.font,32,temp_scale,ns.style)
+    # HUD-REAL-06B: separate, taller Batarang-only HQ atlas. Health/Lives
+    # and any narrow-score fallback keep the same original 115% small atlas.
+    batarang_image=batarang_meta=None
+    if ns.style=="themed":
+        batarang_image,batarang_meta=digit_atlas(
+            ns.font,16,temp_scale,ns.style,
+            hq_layout["batarang_ink_height_percent"]
+        )
+        if batarang_meta["cell_w"]!=small_meta["cell_w"] or batarang_meta["cell_h"]!=small_meta["cell_h"]:
+            raise ValueError("Dedicated Batarang atlas must retain small digit geometry")
 
     factor=float(ns.supersample)
     if ns.supersample>1:
@@ -246,10 +498,14 @@ def main():
                 "cell_w":final_cell_w,
                 "cell_h":final_cell_h,
                 "font_px":round(meta["font_px"]/factor),
+                **({"vertical_percent":meta["vertical_percent"]}
+                   if "vertical_percent" in meta else {}),
             }
 
         small_image,small_meta=finish_atlas(small_image,small_meta)
         large_image,large_meta=finish_atlas(large_image,large_meta)
+        if batarang_image is not None:
+            batarang_image,batarang_meta=finish_atlas(batarang_image,batarang_meta)
 
     final_anchor=[value/factor for value in temp_anchor]
     fields={key:scale_box(box,factor) for key,box in temp_fields.items()}
@@ -262,13 +518,20 @@ def main():
     image.save(ns.outdir/base_name)
     small_image.save(ns.outdir/small_name)
     large_image.save(ns.outdir/large_name)
+    if batarang_image is not None:
+        batarang_image.save(ns.outdir/f"hud_digits_batarang{ns.suffix}.png")
 
     meta={
         "hud_size":list(image.size),
+        "style":ns.style,
+        "font_filename":ns.font.name,
+        "hq_layout_schema":hq_layout["schema"] if hq_layout is not None else None,
         "anchor_in_bitmap":final_anchor,
         "fields":fields,
         "small_digits":small_meta,
         "large_digits":large_meta,
+        "batarang_digits":batarang_meta,
+        "hq_lives_multiplier":({"text":"X","logical_center":hq_layout["counters"]["lives"]["multiplier_center"],"atlas":"small","static_caption_ink_overlap_px":0,"source_opaque_contact_rows_6x":x_shell_contact_rows} if hq_layout is not None else None),
         "variables":{str(cid):edit[cid].get("variable","") for cid in sorted(DYNAMIC_IDS)},
         "static_text":{str(cid):edit[cid].get("initial_text","").replace("\r","") for cid in sorted(STATIC_IDS)},
         "output_scale":ns.output_scale,
