@@ -6,6 +6,10 @@ The goal is not a loose remake. The project aims to preserve the original game's
 
 ## Latest project checkpoint (2026-11-11)
 
+**Windows local acceptance kit (Batch11):** Native [81-step Windows CI #42934164402](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42934164402) passed, including a test-only [PowerShell collector](scripts/collect-level1a-windows-evidence.ps1) that writes a local, non-uploaded Windows hardware/EXE provenance report and a player checklist. Read the [player acceptance guide](docs/revival/LEVEL1A_WINDOWS_ACCEPTANCE_GUIDE_2026-11-11.md). Original Flash side-by-side, actual audio playback, user pinned taskbar icon and mixed DPI remain unverified; Level1A issue17 stays open.
+
+
+
 **Reproducible Windows Rust build (Batch10):** The native executable now tracks the exact Cargo-generated `Cargo.lock` (12 packages, generated on Windows CI), and the [fully successful 79-step Windows build #42899490952](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42899490952) uses `cargo test --locked` and `cargo build --locked` with strict lockfile-unchanged validation. Source/GUI/fidelity limits were preserved; real hardware sound/Flash acceptance remains open. See the latest [handoff](docs/AI_HANDOFF.md) and [build audit](docs/PROJECT_WIDE_AUDIT_2026-11-11.md).
 
 
