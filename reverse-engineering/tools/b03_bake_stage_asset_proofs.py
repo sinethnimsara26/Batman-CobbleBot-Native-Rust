@@ -174,6 +174,10 @@ def bake_one_stage(name, swf, symbols_path, bitmaps, out, spec, stage,
                 "--place-x", origin[0], "--place-y", origin[1]]
         if scale == 3:
             opts += ["--output-scale", 3, "--supersample", 2, "--downsample", "lanczos"]
+        # Ground/pit, checkpoint/camera triggers and independent game-level
+        # actors MUST stay out of the source-level static scenery preview.
+        for source_id in exclusions:
+            opts += ["--exclude-symbol", source_id]
         for x, y in candidates:
             opts += ["--only-tile", x, y]
         run(*opts)
