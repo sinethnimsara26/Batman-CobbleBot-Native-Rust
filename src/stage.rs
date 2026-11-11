@@ -1,0 +1,344 @@
+//! B02: immutable, source-extracted stage metadata and an INACTIVE route.
+//!
+//! Original source: reverse-engineering/manifests/{level-spec,
+//! level-instances,level-constants-raw,routing-evidence}.json, verified on the
+//! canonical FWS in Windows B01 Actions run #42981445349.
+//!
+//! The native game still only renders and simulates Level 1A. This module
+//! intentionally does NOT load assets, move the player, execute transitions,
+//! change sound playback or reinitialize root progress. B03 and B04 own those
+//! separate steps. Root progress (score, lives, Batarangs) is distinct from
+//! stage-local camera, health, enemies, checkpoints, wave and timer state.
+//!
+//! Metadata is dormant until those later implementation gates. Suppress only
+//! this module's dead-code warnings so no fake runtime usage is introduced.
+#![allow(dead_code)]
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[repr(u8)]
+pub enum StageId {
+    Level1A = 0,
+    Level1B = 1,
+    Level1C = 2,
+    Level2A = 3,
+    Level2B = 4,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum StoryCard {
+    Escape,
+    Tv,
+    Kabuki,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SourceScene {
+    Stage(StageId),
+    Card(StoryCard),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SourceCamera {
+    pub height: f32,
+    pub jump: f32,
+    pub min_x: f32,
+    pub max_x: f32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct StageDescriptor {
+    pub id: StageId,
+    /// Zero-based ROOT timeline index from the verified FWS parser.
+    pub root_frame_zero_based: u8,
+    pub game_symbol: u16,
+    pub level_symbol: u16,
+    pub ground_symbol: u16,
+    /// Game-local origin of the placed "level" sprite; not screen pixels.
+    pub level_origin_game_local: (f32, f32),
+    /// Player placement is relative to the "game" sprite (NOT the level).
+    pub player_spawn_game_local: (f32, f32),
+    pub source_player_direction: i8,
+    pub camera: SourceCamera,
+    /// Original root StartSound ID. A tag does not establish loop semantics.
+    pub root_start_sound_id: u16,
+}
+
+impl StageDescriptor {
+    /// Source game-local player placement converted to level-local coordinates.
+    /// Does not mutate the running game and does not apply root screen camera.
+    pub fn player_spawn_level_local(&self) -> (f32, f32) {
+        (
+            self.player_spawn_game_local.0 - self.level_origin_game_local.0,
+            self.player_spawn_game_local.1 - self.level_origin_game_local.1,
+        )
+    }
+}
+
+pub const STAGES: [StageDescriptor; 5] = [
+    StageDescriptor {
+        id: StageId::Level1A,
+        root_frame_zero_based: 19,
+        game_symbol: 696,
+        level_symbol: 152,
+        ground_symbol: 151,
+        level_origin_game_local: (2467.65, 239.25),
+        player_spawn_game_local: (284.95, -661.5),
+        source_player_direction: 1,
+        camera: SourceCamera { height: 150.0, jump: 1.25, min_x: -1350.0, max_x: 7650.0 },
+        root_start_sound_id: 751,
+    },
+    StageDescriptor {
+        id: StageId::Level1B,
+        root_frame_zero_based: 20,
+        game_symbol: 1075,
+        level_symbol: 783,
+        ground_symbol: 782,
+        level_origin_game_local: (1034.65, 239.25),
+        player_spawn_game_local: (528.15, -18.75),
+        source_player_direction: -1,
+        camera: SourceCamera { height: 125.0, jump: 3.0, min_x: -6220.0, max_x: 600.0 },
+        root_start_sound_id: 1076,
+    },
+    StageDescriptor {
+        id: StageId::Level1C,
+        root_frame_zero_based: 21,
+        game_symbol: 1251,
+        level_symbol: 1095,
+        ground_symbol: 1094,
+        level_origin_game_local: (1485.65, 239.25),
+        player_spawn_game_local: (122.05, 281.25),
+        source_player_direction: 1,
+        camera: SourceCamera { height: 270.0, jump: 4.0, min_x: 250.0, max_x: 2150.0 },
+        root_start_sound_id: 1252,
+    },
+    StageDescriptor {
+        id: StageId::Level2A,
+        root_frame_zero_based: 23,
+        game_symbol: 1402,
+        level_symbol: 1317,
+        ground_symbol: 1316,
+        level_origin_game_local: (1210.1, 238.25),
+        player_spawn_game_local: (227.2, 115.4),
+        source_player_direction: -1,
+        camera: SourceCamera { height: 275.0, jump: 3.0, min_x: 200.0, max_x: 55252.0 },
+        root_start_sound_id: 1409,
+    },
+    StageDescriptor {
+        id: StageId::Level2B,
+        root_frame_zero_based: 25,
+        game_symbol: 1496,
+        level_symbol: 1485,
+        ground_symbol: 1484,
+        level_origin_game_local: (1210.1, 238.25),
+        player_spawn_game_local: (4413.7, 6854.3),
+        source_player_direction: 1,
+        camera: SourceCamera { height: 275.0, jump: 3.0, min_x: 250.0, max_x: 55252.0 },
+        root_start_sound_id: 1504,
+    },
+];
+
+impl StageId {
+    pub const ALL: [Self; 5] = [
+        Self::Level1A, Self::Level1B, Self::Level1C, Self::Level2A, Self::Level2B
+    ];
+
+    /// Strings used by the original gotoNext/gotoLast ActionScript routes.
+    pub const fn source_label(self) -> &'static str {
+        match self {
+            Self::Level1A => "level1a",
+            Self::Level1B => "level1b",
+            Self::Level1C => "level1c",
+            Self::Level2A => "level2a",
+            Self::Level2B => "level2b",
+        }
+    }
+
+    /// Source-extraction manifest uses level1c_penguin, unlike AVM1 level1c.
+    pub const fn manifest_key(self) -> &'static str {
+        match self {
+            Self::Level1C => "level1c_penguin",
+            _ => self.source_label(),
+        }
+    }
+
+    pub fn from_source_label(label: &str) -> Option<Self> {
+        match label {
+            "level1a" => Some(Self::Level1A),
+            "level1b" => Some(Self::Level1B),
+            "level1c" => Some(Self::Level1C),
+            "level2a" => Some(Self::Level2A),
+            "level2b" => Some(Self::Level2B),
+            _ => None,
+        }
+    }
+
+    pub const fn from_source_root_frame(frame: u8) -> Option<Self> {
+        match frame {
+            19 => Some(Self::Level1A),
+            20 => Some(Self::Level1B),
+            21 => Some(Self::Level1C),
+            23 => Some(Self::Level2A),
+            25 => Some(Self::Level2B),
+            _ => None, // 22/24/26 are story card frames, not gameplay.
+        }
+    }
+
+    pub const fn descriptor(self) -> &'static StageDescriptor {
+        &STAGES[self as usize]
+    }
+
+    /// Declarative ORIGINAL Flash progression, deliberately never invoked
+    /// by Game::tick in B02. Completing a stage must not prematurely jump.
+    pub const fn next_source_scene(self) -> SourceScene {
+        match self {
+            Self::Level1A => SourceScene::Stage(Self::Level1B),
+            Self::Level1B => SourceScene::Stage(Self::Level1C),
+            Self::Level1C => SourceScene::Card(StoryCard::Escape),
+            Self::Level2A => SourceScene::Card(StoryCard::Tv),
+            Self::Level2B => SourceScene::Card(StoryCard::Kabuki),
+        }
+    }
+}
+
+impl StoryCard {
+    pub const fn root_frame_zero_based(self) -> u8 {
+        match self {
+            Self::Escape => 22,
+            Self::Tv => 24,
+            Self::Kabuki => 26,
+        }
+    }
+
+    pub const fn sprite_id(self) -> u16 {
+        match self {
+            Self::Escape => 1267,
+            Self::Tv => 1479,
+            Self::Kabuki => 1569,
+        }
+    }
+
+    pub const fn source_label(self) -> &'static str {
+        match self {
+            Self::Escape => "card:escape",
+            Self::Tv => "card:tv",
+            Self::Kabuki => "card:kabuki",
+        }
+    }
+
+    /// Kabuki's original destination is Level3A, outside B02's stage set.
+    pub const fn next_in_scope(self) -> Option<StageId> {
+        match self {
+            Self::Escape => Some(StageId::Level2A),
+            Self::Tv => Some(StageId::Level2B),
+            Self::Kabuki => None,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{SourceScene, StageId, StoryCard, STAGES};
+    use crate::game::{AppScreen, Game, LEVEL_X, LEVEL_Y};
+
+    #[test]
+    fn five_stages_have_stable_original_root_frames_and_symbols() {
+        let expected = [
+            (19, 696, 152, 151),
+            (20, 1075, 783, 782),
+            (21, 1251, 1095, 1094),
+            (23, 1402, 1317, 1316),
+            (25, 1496, 1485, 1484),
+        ];
+        for (index, id) in StageId::ALL.iter().enumerate() {
+            let d = id.descriptor();
+            let (frame, game, level, ground) = expected[index];
+            assert_eq!(d.id, *id);
+            assert_eq!((d.root_frame_zero_based, d.game_symbol, d.level_symbol, d.ground_symbol),
+                       (frame, game, level, ground));
+            assert_eq!(StageId::from_source_root_frame(frame), Some(*id));
+            assert!(d.camera.min_x < d.camera.max_x);
+            assert!(matches!(d.source_player_direction, -1 | 1));
+        }
+        assert_eq!(STAGES.len(), 5);
+        for card_frame in [22, 24, 26] {
+            assert_eq!(StageId::from_source_root_frame(card_frame), None);
+        }
+    }
+
+    #[test]
+    fn original_actionscript_labels_round_trip_without_renaming_penguin() {
+        for id in StageId::ALL {
+            assert_eq!(StageId::from_source_label(id.source_label()), Some(id));
+        }
+        assert_eq!(StageId::Level1C.source_label(), "level1c");
+        assert_eq!(StageId::Level1C.manifest_key(), "level1c_penguin");
+        assert_eq!(StageId::from_source_label("level1c_penguin"), None);
+        assert_eq!(StageId::from_source_label("level3a"), None);
+    }
+
+    #[test]
+    fn immutable_routes_preserve_important_intermediate_story_cards() {
+        assert_eq!(StageId::Level1A.next_source_scene(), SourceScene::Stage(StageId::Level1B));
+        assert_eq!(StageId::Level1B.next_source_scene(), SourceScene::Stage(StageId::Level1C));
+        assert_eq!(StageId::Level1C.next_source_scene(), SourceScene::Card(StoryCard::Escape));
+        assert_eq!(StoryCard::Escape.next_in_scope(), Some(StageId::Level2A));
+        assert_eq!(StageId::Level2A.next_source_scene(), SourceScene::Card(StoryCard::Tv));
+        assert_eq!(StoryCard::Tv.next_in_scope(), Some(StageId::Level2B));
+        assert_eq!(StageId::Level2B.next_source_scene(), SourceScene::Card(StoryCard::Kabuki));
+        assert_eq!(StoryCard::Kabuki.next_in_scope(), None);
+        assert_eq!((StoryCard::Escape.root_frame_zero_based(), StoryCard::Escape.sprite_id()), (22,1267));
+        assert_eq!((StoryCard::Tv.root_frame_zero_based(), StoryCard::Tv.sprite_id()), (24,1479));
+        assert_eq!((StoryCard::Kabuki.root_frame_zero_based(), StoryCard::Kabuki.sprite_id()), (26,1569));
+    }
+
+    #[test]
+    fn source_camera_and_music_cues_are_stage_specific_and_inert() {
+        let expected = [
+            (150.0, 1.25, -1350.0, 7650.0, 751),
+            (125.0, 3.0, -6220.0, 600.0, 1076),
+            (270.0, 4.0, 250.0, 2150.0, 1252),
+            (275.0, 3.0, 200.0, 55252.0, 1409),
+            (275.0, 3.0, 250.0, 55252.0, 1504),
+        ];
+        for (index, id) in StageId::ALL.iter().enumerate() {
+            let d = id.descriptor();
+            let (height, jump, min_x, max_x, cue) = expected[index];
+            assert_eq!((d.camera.height, d.camera.jump, d.camera.min_x,
+                        d.camera.max_x, d.root_start_sound_id),
+                       (height, jump, min_x, max_x, cue));
+        }
+    }
+
+    #[test]
+    fn verified_source_player_positions_convert_from_game_to_level_space() {
+        let expected_local = [
+            (-2182.70, -900.75),
+            (-506.50, -258.00),
+            (-1363.60, 42.00),
+            (-982.90, -122.85),
+            (3203.60, 6616.05),
+        ];
+        for (id, (x, y)) in StageId::ALL.into_iter().zip(expected_local) {
+            let d = id.descriptor();
+            let (rx, ry) = d.player_spawn_level_local();
+            assert!((rx - x).abs() < 0.002, "{id:?}: x={rx} != {x}");
+            assert!((ry - y).abs() < 0.002, "{id:?}: y={ry} != {y}");
+        }
+    }
+
+    #[test]
+    fn default_game_still_only_runs_level1a_with_unchanged_spawn() {
+        let game = Game::new();
+        assert_eq!(game.screen, AppScreen::Title);
+        assert_eq!(game.active_stage(), StageId::Level1A);
+        assert_eq!(game.intro_tick, 0);
+        assert_eq!(game.ticks, 0);
+        assert_eq!((game.score, game.lives, game.batarangs, game.health), (0, 5, 0, 100));
+        assert_eq!((LEVEL_X, LEVEL_Y), StageId::Level1A.descriptor().level_origin_game_local);
+        let (x, y) = StageId::Level1A.descriptor().player_spawn_level_local();
+        assert!((game.player.x - x).abs() < 0.002);
+        assert!((game.player.y - y).abs() < 0.002);
+        assert!(game.shots.is_empty());
+        assert!(!game.level1a_complete);
+    }
+}

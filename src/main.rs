@@ -7,6 +7,8 @@ mod game;
 mod headless;
 mod render;
 mod surface;
+// B02 original-source metadata stays inactive until stage-transition work.
+mod stage;
 mod win32;
 
 fn main() {

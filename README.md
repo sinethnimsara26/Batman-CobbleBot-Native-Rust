@@ -1,5 +1,10 @@
 # Batman: The CobbleBot Caper — Native Rust Reimplementation
 
+## B02 native stage foundation verified (2026-11-11)
+
+[Draft PR #22](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/22) adds immutable source-backed StageId and per-stage metadata for the Bank/Penguin/Labs route but **does not enable any new gameplay or scene transitions**. [Actual Windows code CI #42990726444](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42990726444) passed 81/81 workflow steps, 27/27 Rust tests, 15/15 historical 1× hashes and 20/20 HQ installed-copy hashes. The frozen [Level1A v0.2.0 release](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/releases/tag/level1a-v0.2.0) is untouched. [B02 evidence and safeguards](docs/revival/LEVEL2_B02_STAGE_DESCRIPTOR_DESIGN_2026-11-11.md). B03 visual asset baking is next, not started.
+
+
 ## Next-stage original-game reconstruction — planning checkpoint (2026-11-11)
 
 The finished-for-now Level1A release remains untouched. The original Flash route is **Level1A → Level1B Bank streets → Penguin Level1C → escape story card → Gotham Labs Level2A → TV card → Level2B** (the manifest's root frame numbers are **zero-based parser indices**). We inspected the previously verified SWF-extracted placements, combat statistics, camera constants and collision dimensions, and recorded what still needs fresh raw AVM1/source-frame confirmation. See the [source evidence inventory](docs/revival/LEVEL2_SOURCE_EVIDENCE_2026-11-11.md), [32-small-batch implementation roadmap](docs/revival/LEVEL2_IMPLEMENTATION_ROADMAP_2026-11-11.md) and [umbrella issue #20](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/issues/20). **No next-stage gameplay is implemented yet**; the first prospective batch B01 re-verifies exact original source and audio/AI behavior before modifying Rust. This research-only plan lives on `plan/level2-source-roadmap-2026-11-11` and does not merge PR18 or modify main/release.
