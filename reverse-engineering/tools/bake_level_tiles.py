@@ -9,7 +9,7 @@ import math
 
 from PIL import Image
 
-from bake_sprite_frames import load_shapes, render_symbol, symbol_bounds
+from bake_sprite_frames import load_shapes, load_text_defs, render_symbol, symbol_bounds
 
 
 def load_bitmaps(bitmap_dir: Path):
@@ -36,6 +36,10 @@ def main():
         action="append",
         default=[],
         help="child character IDs to omit from visible tiles (repeatable)",
+    )
+    parser.add_argument(
+        "--include-source-static-text", action="store_true",
+        help="Opt-in original DefineText glyphs for stage scenery proofs; default 1A bake unchanged",
     )
     parser.add_argument("--place-x", type=float, default=2467.65)
     parser.add_argument("--place-y", type=float, default=239.25)
@@ -65,6 +69,11 @@ def main():
         raise ValueError(f"symbol {args.symbol} is not present in symbols.json")
     unsupported: set[str] = set()
     shapes = load_shapes(args.swf, unsupported)
+    if args.include_source_static_text:
+        # Needed by source symbol #783 children 758/771/774, which are
+        # DefineText rather than missing bitmap/sprite definitions.
+        # Opt-in so already-accepted 1A baked pixels cannot change.
+        load_text_defs(args.swf)
     bitmap_dir = args.bitmaps or args.swf.resolve().parent.parent / "bitmaps"
     bitmaps = load_bitmaps(bitmap_dir)
     excluded_symbols = set(args.exclude_symbol)
@@ -168,6 +177,7 @@ def main():
 
     manifest = {
         "symbol": args.symbol,
+        "source_static_text_enabled": args.include_source_static_text,
         "excluded_symbols": sorted(excluded_symbols),
         "placement": [args.place_x, args.place_y],
         "tile_size": [args.tile_width * args.output_scale, args.tile_height * args.output_scale],

@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import struct
 from pathlib import Path
 import subprocess
 import sys
@@ -21,6 +22,7 @@ from b03_bake_stage_asset_proofs import (
     point_candidates, static_filter, validate_stage,
 )
 from bake_sprite_frames import display_list, load_shapes
+from swf_re import read_rect, tags
 
 # Independently downloaded and decoded B03 Windows artifact #13843344043.
 # Pixel-level RGBA SHA256, deliberately independent of PNG encoder metadata.
@@ -65,6 +67,20 @@ def select_source_views(locations):
     if len(result) < 7:
         raise AssertionError("Cannot reconstruct seven distinct original Bank street views")
     return result, x_columns
+
+def source_definition_tags(swf, ids):
+    raw = swf.read_bytes()
+    _, start = read_rect(raw, 8)
+    start += 4
+    matched = {}
+    for code, payload, _, _ in tags(raw, start, len(raw)):
+        if code not in (2, 6, 11, 21, 22, 32, 35, 36, 37, 39, 48, 83) or len(payload) < 2:
+            continue
+        symbol = struct.unpack_from("<H", payload, 0)[0]
+        if symbol in ids:
+            matched[symbol] = code
+    return matched
+
 
 def source_depth_audit(stage, symbols, excluded):
     children = list(display_list(symbols[str(stage["level_symbol_id"])], 0).values())
@@ -138,20 +154,41 @@ def main():
     locations, bounds, visible_children = point_candidates(stage, origin, symbols, shapes, excluded)
     chosen, x_columns = select_source_views(locations)
 
-    dest = args.out / "source_1x"
-    command = [sys.executable, str(Path(__file__).with_name("bake_level_tiles.py")),
-               str(args.swf), str(args.symbols), str(dest),
-               "--bitmaps", str(args.bitmaps),
-               "--symbol", "783",
-               "--place-x", str(origin[0]), "--place-y", str(origin[1])]
-    for cid in excluded:
-        command.extend(("--exclude-symbol", str(cid)))
-    for x, y in chosen:
-        command.extend(("--only-tile", str(x), str(y)))
-    print("B05_EXEC", " ".join(command), flush=True)
-    subprocess.run(command, check=True)
+    source_tool = str(Path(__file__).with_name("bake_level_tiles.py"))
+    def bake(dest, samples, source_text):
+        command = [sys.executable, source_tool,
+                   str(args.swf), str(args.symbols), str(dest),
+                   "--bitmaps", str(args.bitmaps), "--symbol", "783",
+                   "--place-x", str(origin[0]), "--place-y", str(origin[1])]
+        if source_text:
+            command.append("--include-source-static-text")
+        for cid in excluded:
+            command.extend(("--exclude-symbol", str(cid)))
+        for x, y in samples:
+            command.extend(("--only-tile", str(x), str(y)))
+        print("B05_EXEC", " ".join(command), flush=True)
+        subprocess.run(command, check=True)
+        return read_json(dest / "manifest.json")
 
-    manifest = read_json(dest / "manifest.json")
+    # B03 baseline lacked source DefineText. Reproduce it independently
+    # WITHOUT changing its historical 1x pixel evidence or native 1A art.
+    legacy_dest = args.out / "b03_original_source_1x_recheck"
+    legacy = bake(legacy_dest, sorted(B03_1X_RGBA), source_text=False)
+    old_views = {(p["world_x"], p["world_y"]): p["file"] for p in legacy["tiles"]}
+    for coordinate, digest in B03_1X_RGBA.items():
+        if coordinate not in old_views or rgba_sha(legacy_dest / old_views[coordinate]) != digest:
+            raise AssertionError(f"Prior B03 decoded-pixel regression at {coordinate}")
+        print("B05_B03_1X_RGBA_IDENTITY_PASS", coordinate, digest, flush=True)
+    absent = legacy.get("missing_ids", [])
+    original_types = source_definition_tags(args.swf, set(absent))
+    print("B05_ORIGINAL_SOURCE_DEFINITION_TYPES", original_types, flush=True)
+    if sorted(absent) != [758, 771, 774] or original_types != {758: 11, 771: 11, 774: 11}:
+        raise AssertionError(f"Previously missing Bank source IDs are not solely original DefineText: {absent}, {original_types}")
+
+    # B05 improves only its source-art proof: load exact original DefineText
+    # fonts and glyphs. No change to default Level1A bake semantics.
+    dest = args.out / "source_1x"
+    manifest = bake(dest, chosen, source_text=True)
     if (manifest["symbol"], manifest["placement"], manifest["tile_size"],
         manifest["logical_pixel_scale"]) != (783, list(origin), [600, 400], 1.0):
         raise AssertionError("Original source 1x level manifest contract changed")
@@ -162,14 +199,15 @@ def main():
     if manifest["requested_tile_origins"] != [list(xy) for xy in chosen]:
         raise AssertionError("Rendered sample locations mismatch source-derived selection")
     if manifest.get("missing_ids"):
-        raise AssertionError(f"Missing actual original artwork IDs: {manifest['missing_ids']}")
+        raise AssertionError(f"Missing original art even after source DefineText reconstruction: {manifest['missing_ids']}")
+    if manifest.get("source_static_text_enabled") is not True:
+        raise AssertionError("B05 original DefineText glyph recovery was not enabled")
     rendered = {(p["world_x"], p["world_y"]): p["file"] for p in manifest["tiles"]}
     if len(rendered) < 7:
         raise AssertionError(f"Only {len(rendered)} visible 1x Bank street samples")
-    for coordinate, digest in B03_1X_RGBA.items():
-        if coordinate not in rendered or rgba_sha(dest / rendered[coordinate]) != digest:
-            raise AssertionError(f"B03 original 1x decoded-pixel regression at {coordinate}")
-        print("B05_B03_1X_RGBA_IDENTITY_PASS", coordinate, digest, flush=True)
+    for coordinate in B03_1X_RGBA:
+        if coordinate not in rendered:
+            raise AssertionError(f"Missing prior Bank sample coordinate {coordinate}")
 
     samples = []
     for x, y in chosen:
@@ -205,7 +243,11 @@ def main():
         "excluded_source_logic_actor_prop_symbols": excluded,
         "source_1x_view_hashes": samples, "contact_sheet": sheet,
         "source_unsupported_fill_types": manifest["unsupported_fills"],
-        "b03_original_1x_pixel_hashes_rechecked": True,
+        "b03_original_1x_pixel_hashes_rechecked_on_unmodified_default_baker": True,
+        "previous_b03_missing_ids": absent,
+        "original_missing_source_id_definition_types": {str(k):v for k,v in original_types.items()},
+        "b05_exact_original_define_text_glyphs_enabled": True,
+        "b05_missing_original_definitions_after_fix": manifest["missing_ids"],
         "complete_level_pack_refusal_verified": True,
         "all_art_partial_proof_only_never_embeddable": True,
         "original_source_static_art_not_live_gameplay": True,

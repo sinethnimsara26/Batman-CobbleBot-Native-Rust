@@ -8,6 +8,7 @@ on:
       - reverse-engineering/tools/b05_bake_bank_street_1x.py
       - reverse-engineering/tools/bake_level_tiles.py
       - reverse-engineering/tools/b03_bake_stage_asset_proofs.py
+      - reverse-engineering/tools/bake_level_tiles.py
       - .github/workflows/b05-original-bank-street-source-1x.yml
   workflow_dispatch:
 
