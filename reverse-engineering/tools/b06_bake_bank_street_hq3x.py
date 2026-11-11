@@ -320,7 +320,7 @@ def main():
         "source_level_local_bounds":bounds,
         "source_geometry_derived_candidate_x_columns":len(x_columns),
         "b05_1x_pixel_hashes_identical_all_nine":True,
-        "one_x_sha256_inputs":samples,
+        "one_x_sha256_inputs":[{"world_x":xy[0],"world_y":xy[1],**samples[xy]} for xy in VIEWS],
         "hq_true_original_source_rerasterized_not_bilinear_count":independent_hq,
         "hq_source_render_scale":6,
         "hq_output_scale":3,
