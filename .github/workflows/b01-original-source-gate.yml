@@ -1,0 +1,133 @@
+name: b01-original-source-gate
+
+on:
+  push:
+    branches:
+      - plan/level2-source-roadmap-2026-11-11
+    paths:
+      - reverse-engineering/tools/b01_source_probe.py
+      - .github/workflows/b01-original-source-gate.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bcb-b01-source-plan
+  cancel-in-progress: true
+
+jobs:
+  canonical-original-analysis:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install verified-source parser bitmap dependency
+        shell: pwsh
+        run: python -m pip install --disable-pip-version-check "Pillow>=11,<15"
+
+      - name: Download canonical original SWF and verify uncompressed source SHA
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $url = "https://archive.org/download/the-batman-cobblebot-caper/The%20Batman%20-%20The%20Cobblebot%20Caper.swf"
+          $done = $false
+          for ($attempt = 1; $attempt -le 4; $attempt++) {
+            try {
+              Invoke-WebRequest -Uri $url -OutFile "b01-canonical-download.swf" -ErrorAction Stop
+              $done = $true
+              break
+            } catch {
+              if ($attempt -eq 4) { throw }
+              Start-Sleep -Seconds (5 * $attempt)
+            }
+          }
+          if (-not $done) { throw "Original SWF unavailable" }
+          @'
+          from pathlib import Path
+          import hashlib, zlib
+          original = Path("b01-canonical-download.swf").read_bytes()
+          if original[:3] == b"CWS":
+              fws = b"FWS" + original[3:8] + zlib.decompress(original[8:])
+          elif original[:3] == b"FWS":
+              fws = original
+          else:
+              raise SystemExit(f"Unsupported source signature {original[:3]!r}")
+          expected = "3d9e1992404313bc2e2652d46a5838160ef721e2ad559fdd7455f3c54f8ac1ed"
+          actual = hashlib.sha256(fws).hexdigest()
+          if actual != expected or len(fws) != 2819100:
+              raise SystemExit(f"Wrong original source: SHA={actual} bytes={len(fws)}")
+          Path(".generated").mkdir(exist_ok=True)
+          Path(".generated/cobblebot.swf").write_bytes(fws)
+          print("B01_CANONICAL_SOURCE_VERIFIED", actual, len(fws))
+          '@ | python -
+
+      - name: Re-extract ActionScript source, manifests, and original sounds
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $tools = "reverse-engineering/tools"
+          $swf = ".generated/cobblebot.swf"
+          New-Item -ItemType Directory -Force ".generated/reports", ".generated/manifests", ".generated/bitmaps", ".generated/sounds", ".generated/b01" | Out-Null
+          python "$tools/swf_re.py" "$swf" ".generated/reports"
+          if ($LASTEXITCODE -ne 0) { throw "Raw AVM1 parser failed" }
+          python "$tools/extract_bitmaps.py" "$swf" ".generated/bitmaps"
+          if ($LASTEXITCODE -ne 0) { throw "Original bitmap extraction failed" }
+          python "$tools/extract_sounds.py" "$swf" ".generated/sounds"
+          if ($LASTEXITCODE -ne 0) { throw "Original source sound indexing failed" }
+          python "$tools/generate_manifests.py" ".generated/reports" ".generated/manifests" --bitmaps ".generated/bitmaps/manifest.json" --sounds ".generated/sounds/manifest.json"
+          if ($LASTEXITCODE -ne 0) { throw "Canonical manifest generation failed" }
+          python "$tools/b01_source_probe.py" --swf "$swf" --reports ".generated/reports" --generated-manifests ".generated/manifests" --tracked-manifests "reverse-engineering/manifests" --out ".generated/b01"
+          if ($LASTEXITCODE -ne 0) { throw "B01 original-source gate failed" }
+
+      - name: Bake bounded original-symbol evidence frames (NOT live Flash screenshots)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $tools = "reverse-engineering/tools"
+          $swf = ".generated/cobblebot.swf"
+          $symbols = ".generated/reports/symbols.json"
+          $bitmaps = ".generated/bitmaps"
+          $out = ".generated/b01/source-proofs"
+          New-Item -ItemType Directory -Force $out | Out-Null
+          $proofs = @(
+            @{ id=880; label="goon_a" },
+            @{ id=1005; label="biker" },
+            @{ id=1250; label="penguin" },
+            @{ id=1325; label="lab_door" },
+            @{ id=1328; label="lab_elevator" }
+          )
+          foreach ($proof in $proofs) {
+            $file = Join-Path $out ("symbol_{0}_frame000_{1}.png" -f $proof.id, $proof.label)
+            python "$tools/bake_sprite_frames.py" "$swf" "$symbols" "$file" --bitmaps "$bitmaps" --symbol $proof.id --frame 0 --scale 0.5 --width 600 --height 400
+            if ($LASTEXITCODE -ne 0) { throw "Could not bake source symbol $($proof.id)" }
+          }
+          @'
+          import hashlib,json
+          from pathlib import Path
+          from PIL import Image
+          folder=Path(".generated/b01/source-proofs")
+          paths=sorted(folder.glob("symbol_*.png"))
+          if len(paths)!=5: raise SystemExit("expected five source-symbol proof PNGs")
+          records=[]
+          for path in paths:
+              with Image.open(path) as im:
+                  if im.size != (600,400): raise SystemExit(f"Wrong probe size {path}: {im.size}")
+              records.append({"source_sprite_frame_zero_based":0,"symbol_proof":path.name,
+                              "rendered_size": [600,400],"render_scale":0.5,
+                              "sha256":hashlib.sha256(path.read_bytes()).hexdigest(),
+                              "classification":"static source-symbol render, NOT original gameplay"})
+          with (folder/"proof-image-manifest.json").open("w") as f:
+              json.dump(records,f,indent=2)
+          print("B01_ORIGINAL_SYMBOL_PROOFS",len(records),json.dumps(records))
+          '@ | python -
+
+      - name: Publish evidence-only artifact (exclude original SWF and copyrighted full packs)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: B01-CobbleBot-Original-Source-Evidence
+          path: .generated/b01/
+          if-no-files-found: warn
+          retention-days: 30
