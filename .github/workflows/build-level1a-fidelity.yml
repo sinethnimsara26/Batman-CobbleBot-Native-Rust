@@ -1695,6 +1695,42 @@ jobs:
       # ICON-EXE-07: actual built PE resource table, Windows Shell icon
       # extraction, and the NORMAL game HWND's registered class icon.
       # This is not a claim that a user's pinned taskbar has refreshed its cache.
+      # MANUAL-ACCEPTANCE-PREP-11: exercise the real user-PC diagnostic
+      # script with the actual native game EXE, but NEVER call audio hardware,
+      # GUI screenshots or original Flash fidelity physically verified.
+      - name: Verify safe local Windows acceptance-evidence kit (Batch11)
+        shell: pwsh
+        timeout-minutes: 3
+        run: |
+          $ErrorActionPreference = "Stop"
+          & ./scripts/collect-level1a-windows-evidence.ps1 -ExePath "target/x86_64-pc-windows-msvc/release/batman_cobblebot_native.exe" -OutputDirectory ".generated/manual-acceptance-qa"
+          if (!(Test-Path ".generated/manual-acceptance-qa/level1a-local-environment.json")) {
+              throw "Batch11 local report missing"
+          }
+          if (!(Test-Path ".generated/manual-acceptance-qa/level1a-player-checklist.md")) {
+              throw "Batch11 manual acceptance checklist missing"
+          }
+          $qa = Get-Content ".generated/manual-acceptance-qa/level1a-local-environment.json" -Raw | ConvertFrom-Json
+          if ($qa.schema_version -ne 1 -or !$qa.local_only_no_automatic_upload -or !$qa.no_screen_or_audio_capture) {
+              throw "Batch11 privacy/safety/report contract broken"
+          }
+          if ($qa.exe.file_name -ne "batman_cobblebot_native.exe" -or $qa.exe.sha256.Length -ne 64) {
+              throw "Batch11 tested EXE identity/hash missing"
+          }
+          if ($qa.manual_checks.original_flash_side_by_side -ne "NOT_TESTED_BY_SCRIPT" -or
+              $qa.manual_checks.sound_music_effects_and_volume_flyout -ne "NOT_TESTED_BY_SCRIPT" -or
+              $qa.manual_checks.windows_explorer_and_pinned_taskbar_icon -ne "NOT_TESTED_BY_SCRIPT") {
+              throw "Batch11 false physical Windows acceptance PASS"
+          }
+          Write-Host "MANUAL-ACCEPTANCE-PREP-11 PASS: real EXE inspected, reports emitted, human gates correctly NOT_TESTED"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Batman-CobbleBot-Level1A-Windows-Local-Acceptance-Kit-QA
+          path: .generated/manual-acceptance-qa/
+          if-no-files-found: warn
+
       - name: Verify native Windows EXE / Shell / window icon (Batch07)
         shell: pwsh
         timeout-minutes: 3
