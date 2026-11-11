@@ -9,6 +9,8 @@ mod render;
 mod surface;
 // B02 original-source metadata stays inactive until stage-transition work.
 mod stage;
+// B08: original Bank Street prop metadata is source-backed and inactive.
+mod bank_props;
 mod win32;
 
 fn main() {

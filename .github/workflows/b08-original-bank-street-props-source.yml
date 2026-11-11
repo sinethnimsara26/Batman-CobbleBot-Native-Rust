@@ -1,0 +1,91 @@
+name: b08-original-bank-street-props-source
+
+on:
+  push:
+    branches:
+      - revive/level2-b08-bank-props-source-2026-11-12
+    paths:
+      - reverse-engineering/tools/b08_bake_bank_props.py
+      - src/bank_props.rs
+      - .github/workflows/b08-original-bank-street-props-source.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: b08-original-bank-street-props
+  cancel-in-progress: true
+
+jobs:
+  source-bank-props:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install development-only Pillow source rasterizer
+        shell: pwsh
+        run: python -m pip install --disable-pip-version-check "Pillow>=11,<15"
+
+      - name: Download and strictly SHA-verify original canonical SWF
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $url = "https://archive.org/download/the-batman-cobblebot-caper/The%20Batman%20-%20The%20Cobblebot%20Caper.swf"
+          for ($attempt = 1; $attempt -le 4; $attempt++) {
+            try {
+              Invoke-WebRequest -Uri $url -OutFile ".original-b08-download.swf" -ErrorAction Stop
+              break
+            } catch {
+              if ($attempt -eq 4) { throw }
+              Start-Sleep -Seconds (5 * $attempt)
+            }
+          }
+          @'
+          import hashlib,zlib
+          from pathlib import Path
+          src=Path(".original-b08-download.swf").read_bytes()
+          if src[:3]==b"CWS":
+              fws=b"FWS"+src[3:8]+zlib.decompress(src[8:])
+          elif src[:3]==b"FWS":
+              fws=src
+          else:
+              raise SystemExit(f"Invalid SWF header: {src[:3]!r}")
+          sha=hashlib.sha256(fws).hexdigest()
+          if sha!="3d9e1992404313bc2e2652d46a5838160ef721e2ad559fdd7455f3c54f8ac1ed" or len(fws)!=2819100:
+              raise SystemExit(f"Wrong original source {sha}, length {len(fws)}")
+          out=Path(".generated/b08input/canonical_original.swf")
+          out.parent.mkdir(parents=True,exist_ok=True)
+          out.write_bytes(fws)
+          print("B08_CANONICAL_ORIGINAL_FWS_PASS",sha,len(fws))
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { throw "Original canonical source verification FAILED" }
+
+      - name: Extract original symbols and bitmaps for frame-0 prop evidence
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $tools = "reverse-engineering/tools"
+          $swf = ".generated/b08input/canonical_original.swf"
+          New-Item -ItemType Directory -Force ".generated/b08input/reports",".generated/b08input/bitmaps" | Out-Null
+          python "$tools/swf_re.py" "$swf" ".generated/b08input/reports"
+          if ($LASTEXITCODE -ne 0) { throw "Original symbol extraction failed" }
+          python "$tools/extract_bitmaps.py" "$swf" ".generated/b08input/bitmaps"
+          if ($LASTEXITCODE -ne 0) { throw "Original bitmap extraction failed" }
+
+      - name: Bake, depth-check and fail-closed pack-check all nine original props
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          python reverse-engineering/tools/b08_bake_bank_props.py --swf ".generated/b08input/canonical_original.swf" --symbols ".generated/b08input/reports/symbols.json" --bitmaps ".generated/b08input/bitmaps" --instances "reverse-engineering/manifests/level-instances.json" --spec "reverse-engineering/manifests/level-spec.json" --out ".generated/b08-bank-props-source"
+          if ($LASTEXITCODE -ne 0) { throw "B08 nine original-source prop/depth proofs failed" }
+
+      - name: Upload B08 original frame-0 prop and source depth proofs (no full SWF)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: B08-CobbleBot-Original-Bank-Props-Source-Proofs
+          path: .generated/b08-bank-props-source/
+          if-no-files-found: warn
+          retention-days: 30
