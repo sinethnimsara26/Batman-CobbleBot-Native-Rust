@@ -1,0 +1,67 @@
+# Batman native Rust — Level 1B → Penguin → Gotham Labs roadmap
+
+**Date:** 2026-11-11. **Status:** PLANNED ONLY; **no new gameplay implemented**.  
+**Evidence basis:** [original-source evidence inventory](LEVEL2_SOURCE_EVIDENCE_2026-11-11.md), [game specification](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/blob/ba53299c0cf618b20bc418d89973009138b1c7e0/reverse-engineering/GAME_SPEC.md), source-derived manifests and code.  
+**Stable rollback:** [released `level1a-v0.2.0`](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/releases/tag/level1a-v0.2.0) at `49e8fd3`, permanently untouched.  
+**Current planning branch:** `plan/level2-source-roadmap-2026-11-11`, intentionally separate from draft PR18 and main.  
+**Terminology:** Level1A/1B/1C are segments of **Gotham Bank**, followed by `card:escape`; Gotham Labs **Level 2 proper** consists of `level2a` and `level2b` with `card:tv` between them. User's instruction "next level" means plan the actual complete route, not silently skip 1B/1C.
+
+## Scope, count and release gates
+
+**Estimate: 32 narrowly scoped batches after this research/planning checkpoint**, divided into **4 foundation**, **9 Level1B**, **6 Penguin and story-card**, **7 Labs2A**, **6 Labs2B/end-to-end**. Actual number can change **only** when documented source discoveries or failed tests justify splitting/combining. These are logical work units, NOT elapsed-time estimates or promises of exact completion cost. Each batch must implement/review one bounded change, run the proper Windows CI gates, update six mandatory records (research ledger, audit, handoff, tasks, worklog, AGENTS review) and stop until a new authorized turn. No force-push/merge, no main edit, no released tag rewrite.
+
+**Milestones:** M0 original source behavior verified; M1 Level1B playable; M2 Bank chapter Penguin defeated and escape card plays; M3 Labs Level2A playable and TV card; M4 Labs Level2B complete to Kabuki story card; M5 real Windows player acceptance and optional next version release (not automatic).
+
+## 32 proposed batches (explicit testable boundaries)
+
+| Batch | Group | One objective | Acceptance evidence/gate |
+|---|---|---|---|
+| **B01** | Source gate | Freshly validate the canonical FWS SHA, inspect raw root20/21/23/25 DoAction, `respawn2`, `bikerAI`, `goonAI`, `penguinAI`, `cameraLogic2`, `elevatorLogic`, `doorOpen`, `clockTimer` and source music triggers; bake labelled proof frames for all next scenes | Actual source-generation CI artifact, exact offsets/branch predicates, durations; documented known/unknown matrix. **No runtime gameplay change.** |
+| **B02** | Foundation | Add source-backed `StageId`/per-stage descriptors for 1A/1B/1C/2A/2B, immutable stage-local config and safe scene-state routing with default 1A | Existing Level1A mode identical; stage enum serialization/state transition tests; no new visible scene |
+| **B03** | Foundation | Parameterize existing deterministic SWF tile/scene/animation pack tooling by source stage IDs/transforms and enforce immutable originals / non-visible logic layers | Source-baked 1B/1C/2A/2B pack manifest validation, per-sprite provenance and no gameplay change |
+| **B04** | Foundation | Wire current `CP_NEXT` Level1A completion through original 41-frame fade to *pending Level1B entry* with resource-specific audio stop/start and explicit score/lives/ammo carry decisions from B01 | Headless exact transition-tick and state-carry contract; historical 1A screenshots 15/15 intact |
+| **B05** | Level1B | Recover source-authentic 600×400 static Bank street/scrolling level tiles from source symbol #783; exclude enemy & trigger logic from tile bake | Fixed source 1× viewport captures at several street coordinates with pixel/hash evidence |
+| **B06** | Level1B | Produce high-quality 3× 1B scenery and depth layers from the same original vectors/bitmaps, preserving original sprite placements | 1× untouched; HQ source overlay/alpha and p95 under existing threshold |
+| **B07** | Level1B | Wire level1B original ground #782, spawn/facing left, camera limits -6220..600, height125/jump3, and point-probe collision | Source mask origin (-11196,-886), size12102×1413; deterministic walking, jumping, fall, no wall leakage |
+| **B08** | Level1B | Restore four cans #785, four trash props #790 and mailbox #793 with original depth; distinguish decorative vs original script-interactive collisions | Source-frame/depth comparisons, no collision geometry leaked visually |
+| **B09** | Level1B | Bake both thug animation families #880/#964 and labels/child durations; register ten exact named spawn transforms | 10/10 named placements and source frames matched; memory-bounded lazy animation |
+| **B10** | Level1B | Port `goonAI` noncombat stand/walk/retreat/chase/edge and encounter activation with source RNG assumptions exposed | Deterministic pursuit/edge/patrol scenarios, no invented behaviors |
+| **B11** | Level1B | Add source-branch accurate goon attacks, punches/kicks/Batarangs, damage, invulnerability, death and score/combo | Repro source damage 5/10/15/conditional20, goon HP32/strength5/speed9, +100 score; no double-hit |
+| **B12** | Level1B | Restore biker #1005 sprite, `bikerAI`, one biker spawn, impact/hit/knockoff behavior and original motorcycle/audio cue mapping | Source-derived action timing, biker strength10, no duplicate hit or rider reset on focus |
+| **B13** | Level1B | Restore 3 original checkpoints, 4 ammo pickups, appropriate overlay/respawn/pit handling and original 1B→1C trigger; integrate Windows gameplay regression | Full 1B route (not just shortcut) ends in correct fade/1C; stable baseline hashes and real QA screenshots |
+| **B14** | Penguin 1C | Bake root21 Penguin encounter backdrop/arena #1095 and ground #1094, stage coordinates and source-specific smaller HUD root transform | Original-scale arena/ground captures and root HUD transform, correct initial viewport |
+| **B15** | Penguin 1C | Bake boss #1250's 99-frame outer timeline and source-labelled nested animation sequences, attack FX | Source frames/labels and anchor parity, no placeholder art |
+| **B16** | Penguin 1C | Implement `penguinAI` movement/dodge/block/approach logic with original RNG/camera/facing | Source-step behavioral tests, 200HP & speed6 from init, distinguish `stength` typo |
+| **B17** | Penguin 1C | Implement Penguin attack/attack2/laser, Batman hit response, boss HP/knockdowns and +500 scoring from actual source branches | Deterministic frame/tick health transitions; invincibility and collision tests |
+| **B18** | Penguin 1C | Implement boss defeat and 1C→`card:escape` trigger, original card sprite #1267 225-frame timeline and end-to-2A event | Boss outcome never skips/loops card; fade/audio/item/score preserved |
+| **B19** | Bank milestone | Run integrated original-route 1A→1B→1C→escape-card regression and Windows visual/focus/GUI/performance tests, with manual player checklist | New Bank chapter QA artifact and acceptance record; 1A immutable release remains untouched |
+| **B20** | Labs 2A | Bake source level2a #1317 and original 1×/3× static lab background, separate 18 door, 3 elevator and dynamic enemy objects | Source screenshot/depth comparison at multiple vertical locations, no black placeholders |
+| **B21** | Labs 2A | Implement large original ground #1316, vertical stage-relative camera `cameraLogic2`, 10 camera triggers and source spawn facing left | Ground mask 8781×10060 and camera min200/max55252 exactly mapped, multi-floor movement |
+| **B22** | Labs 2A | Implement original `doorOpen` and the 18 source door instances with accurate collision/open-close frames | 18/18 original instances and trigger tests, source timing verified |
+| **B23** | Labs 2A | Implement original `elevatorLogic` with three elevators, player/platform attachment, gravity transfer and edge cases | 3/3 platforms, boarding/exiting/focus tests, no floor fall-through |
+| **B24** | Labs 2A | Restore 9 Lab goons #1365, source 70HP/strength10/speed6, and one flying eagle #1393 with `birdAI` | Per-enemy animation/spawn/combat/score and 10HP eagle hit path verified |
+| **B25** | Labs 2A | Integrate 4 checkpoints, 9 ammo pickups, 1 health pickup, source lab soundtrack/SFX and overlay instructions | Spawn/item/audio state across focus/respawn, original frame/key timing |
+| **B26** | Labs 2A | Wire exact 2A exit → `card:tv` sprite #1479 (end zero-based frame151) → 2B; complete dedicated Windows source/visual/performance QA | 2A-to-card-to-2B genuinely traversable, no artificial skip or altered 1A golden |
+| **B27** | Labs 2B | Bake source 2B #1485 environment, ground #1484, distinct starting transform (4413.7,6854.3), original layer order | 1×/3× 2B source captures and ground origin/size parity |
+| **B28** | Labs 2B | Reuse source-verified door/elevator components with exact **16 doors/3 elevators** and 10 camera triggers | Every original instance transform and per-stage camera/interaction regression |
+| **B29** | Labs 2B | Reconstruct lava1 #1486, any verified timer/`clockTimer`/other hazards from full AVM1, avoid speculative spawned enemies | Resolve compact-spec clock vs unnamed-instance discrepancy; deterministic hazard/timer tests |
+| **B30** | Labs 2B | Add 4 checkpoints, 10 ammo pickups, lab section-specific tutorial/audio/respawn, preserve health/lives/score from 2A | State carry + death/retry/complete QA; user-visible no UI regression |
+| **B31** | Labs 2B | Reconstruct final 2B completion fade and `card:kabuki` sprite #1569 (end zero-based frame159) without implementing Level3A yet | Real 2B→Kabuki transition on native engine, card correct and no unintended Level3 gameplay |
+| **B32** | Full named Level2 | End-to-end Windows CI/source rendering/stability/sound-on-real-PC (where available), documentation and player acceptance kit, decide a new separate milestone release **only after actual signoff** | Genuine run artifacts, parity matrix, 1A invariants and 1B/Penguin/2A/2B passage; any unresolved mismatch becomes a new bounded follow-up |
+
+## Phase-level engineering architecture (minimum necessary; avoid broad rewrites)
+
+- **Data ownership:** canonical manifest/symbol placement in offline tools, Rust `StageId`/scene config and immutable decoded scene resources at runtime. Keep source-game SWF out of Git and out of shipped Flash runtime. Enforce asset hash/origin/version and no arbitrary runtime file loading.
+- **Game state:** separate root-facing `AppScreen`, stage ID, transition and persistent player progress (score/lives/ammo) from stage-local health, timers, enemies, camera, checkpoints and resets; use source AVM1 gating for each carried value. Do not assume the stage's `playerLives=3` equals root `lives=5`.
+- **Renderer:** reuse 1× source oracle and 3× hierarchy, add per-stage backdrops, tiles, authored depth sorting and enemy overlays. Preserve fullscreen F/Esc, window icon, no black bands and all known 1A source/HQ regression baselines.
+- **Combat:** source-timed animation states/AI from `goonAI`, `bikerAI`, `penguinAI`, `birdAI`; deterministic tests for invulnerability, hit count, score/combo, attacks and focus pauses. New `rand`-like behavior must be deterministic under QA seeds but respect observed original odds.
+- **Audio:** retain real native audio and focus pause/resume; source map for 1B/1C/2A/2B and cards, unique temp-dir ownership fix tracked independently by issue19. A hosted runner with MCI277/zero endpoints does NOT certify actual playback.
+- **QA:** opt-in developer scene jump (stage-aware F7/F8 or new explicit QA key) only after genuine stage entry exists; never expose it as original behavior, never rely on it to "prove" natural progression. New named-stage screenshot hashes in parallel with old 15/15 1× and 20/20 HQ relocation checks. Use the Windows CI pipeline with binary/source digest and performance budget <40ms p95 as existing baseline; manual physical tests at milestone boundaries.
+
+## Source-trace gates and risk buffer
+
+**Highest risks**: (A) missing currently untracked raw action disassembly, especially 1B→1C and source sound/event conditions; (B) broad hard-coded Level1A coordinates/assets/AI in current Rust source; (C) accurate sprite depth/animations/scene transitions; (D) massive 2A/2B vertical ground masks and cameras; (E) doors/elevator/hazard interactive logic; (F) audio hardware proof and unpinned build supplies (tracked separately in [issue19](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/issues/19)). Do not mark unknown AVM1 details as VERIFIED from name-only manifests. If B01 shows missing evidence, split an additional RE-only microbatch before implementation and update this numbered plan truthfully.
+
+**Minimum per-batch deliverables:** one small code/doco change set, native Windows CI or explicit inability, original-source versus Rust QA comparison, 1A hash/non-regression, six-file checkpoint with RE/AUD IDs, live branch and draft PR status, and STOP. Preserve historical Level1A released binary. New Level2 branch/PR should be draft; no main merge, no Level1B or next full release prior to player acceptance.
+
+**NEXT AUTHORIZED MOVE, WHEN ASKED:** B01 source/AVM1 validation and proof-frame artifacts, no game behavior changes. This planning checkpoint itself creates the roadmap and evidence docs **only**.
