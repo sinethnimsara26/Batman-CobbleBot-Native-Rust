@@ -1,5 +1,10 @@
 # Level 1A final-for-now release — code-quality and provenance audit
 
+## POST-PUBLICATION VERIFIED, November 11, 2026
+
+The one-shot publisher [#42966211975](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42966211975) completed SUCCESS and [release level1a-v0.2.0](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/releases/tag/level1a-v0.2.0) is LIVE. Confirmed tag and frozen branch source `49e8fd343e4f37f045ba71f24fff0999211f0f11` match previously passed Windows CI. Actual EXE SHA256 `eb198cea86de94f0bab1fe1722589550c96a18d1ea33cacf6d0c1fdffa4d2665`; ZIP SHA256 `7f6bda32283d9bbb66c2a259c8bb63adc51c2dcc6f7a39fca70c96d88fe82475`; checksum manifest and GitHub source archives present. The publisher did NOT change frozen game code. The earlier text describing publication as pending was correct when drafted and is now superseded. [Open hardening follow-ups #19](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/issues/19) are documented without a false "fixed" claim. Strict fidelity issue17 remains open; no exhaustive new security or speaker test was performed.
+
+
 **Date:** 2026-11-11. **Source reviewed:** `49e8fd343e4f37f045ba71f24fff0999211f0f11` on `revive/level1a-intro-hud-fidelity-2026-11-09`. **Permanent branch:** `release/level1a-v0.2.0`. **Scope:** observed source/CI/repository metadata, not an exhaustive penetration test or rerun of all game scenarios. No new Rust/runtime code changes in this release checkpoint.
 
 ## Reconciliation

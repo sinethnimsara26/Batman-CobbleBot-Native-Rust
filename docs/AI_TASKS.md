@@ -1,5 +1,12 @@
 # Persistent development tasks — Batman Rust port
 
+## POST-PUBLICATION — 2026-11-11 RELEASE-FREEZE-12 VERIFIED
+
+**GitHub RELEASE VERIFIED:** [`level1a-v0.2.0`](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/releases/tag/level1a-v0.2.0), publisher [run #42966211975](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42966211975) SUCCESS. Exact tag and frozen branch commit: `49e8fd343e4f37f045ba71f24fff0999211f0f11`. Three real assets include Windows EXE (SHA256 `eb198cea86de94f0bab1fe1722589550c96a18d1ea33cacf6d0c1fdffa4d2665`), Windows ZIP (SHA256 `7f6bda32283d9bbb66c2a259c8bb63adc51c2dcc6f7a39fca70c96d88fe82475`) and `SHA256SUMS.txt`, plus GitHub source archives. Publishing is **no longer pending**; old draft language below records its pre-publish state.
+
+**Risk backlog created:** [issue #19](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/issues/19) for L1A-QA-01..06, independent from source/physical fidelity [issue #17](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/issues/17). User approval permits treating current Level1A playable slice final-for-now and planning Level1B; no claim of perfect Flash source equivalence or vulnerability-free code. **NEXT:** Level1B source-evidence mapping and batched architecture plan (not implementation yet); preserve frozen tag, PR18 draft, main and legacy Level1B.
+
+
 ## 2026-11-11 — RELEASE-FREEZE-12: player-approved Level1A snapshot, repository scan, release and quality audit
 
 **Status:** Level 1A **accepted for now by user**; dedicated frozen branch `release/level1a-v0.2.0` points to code `49e8fd343e4f37f045ba71f24fff0999211f0f11`, successfully Windows-tested in [run #42936169736](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42936169736), artifact 13819117162. Release `level1a-v0.2.0` **publication pending actual workflow success and asset verification**. Code remains unchanged (no post-player-test regressions introduced). User approval is not proof of physical audio position, pixel-perfect Flash source comparison, old pinned icon or every DPI monitor. Issue #17 remains open for those strict original-fidelity conditions; PR #18 remains draft/unmerged.

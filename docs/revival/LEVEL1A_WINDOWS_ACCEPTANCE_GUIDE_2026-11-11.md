@@ -1,5 +1,10 @@
 # Level 1A — physical Windows acceptance guide
 
+## New verified release download — 2026-11-11
+
+The [Level1A v0.2.0 tagged release](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/releases/tag/level1a-v0.2.0) is now LIVE, publisher [#42966211975](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42966211975) passed; it is preferable to the "latest development artifact" installation path below when testing the frozen Level1A. The EXE's SHA256 is `eb198cea86de94f0bab1fe1722589550c96a18d1ea33cacf6d0c1fdffa4d2665`. Download ZIP, extract and launch. User has approved current visible gameplay as final for now. The remaining checklist below is specifically for **optional stricter source/hardware fidelity**, not grounds to deny the player-tested snapshot; issue17 remains available to record individual results. No claim of physical speaker/original Flash verification is added by publishing.
+
+
 ## 2026-11-11 status correction: user accepted playable Level1A **for now**
 
 The player has now tested the game and reports no obvious remaining issues, and specifically asks to archive Level1A before planning the next level. Accordingly **general current-game acceptance is given**. The older blanket text below that says no manual acceptance has occurred is historical; it continues to accurately describe the **separate strict original-SWF/source and physical-audio/DPI checklist**, whose individual items were not all documented as passed. The [frozen source SHA `49e8fd343e4f37f045ba71f24fff0999211f0f11`](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/commit/49e8fd343e4f37f045ba71f24fff0999211f0f11) is on `release/level1a-v0.2.0`. Publisher target `level1a-v0.2.0` is pending independent release/assets confirmation. Issue #17 tracks strict remaining fidelity questions; PR #18 stays draft, and Level1B can be planned separately without pretending that all hardware checks passed.
