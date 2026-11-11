@@ -31,6 +31,10 @@ def main():
         raise ValueError("transparent tile cropping requires BCLVT002")
 
     manifest = json.loads((args.tiles / "manifest.json").read_text(encoding="utf-8"))
+    # B03 evidence packs sample only a tiny fraction of the original world.
+    # Refuse to create a valid-looking runtime BCLVT container from them.
+    if manifest.get("partial_proof_only") or manifest.get("never_embed_as_complete_level"):
+        raise ValueError("partial B03 source proof tiles cannot be packed as a complete native level")
     manifest_scale = float(manifest.get("logical_pixel_scale", 1.0))
     if abs(manifest_scale - args.logical_pixel_scale) > 1e-6:
         raise ValueError(

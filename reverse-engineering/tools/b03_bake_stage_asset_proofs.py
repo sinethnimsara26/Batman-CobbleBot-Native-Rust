@@ -319,6 +319,20 @@ def main():
               "1x", result["rendered_1x"],
               "3x", result["rendered_3x"],
               "actor", result["source_actor_symbol"], flush=True)
+    # Explicit negative integration test: B03 preview manifests MUST NOT
+    # produce a valid-looking native asset pack. Future B05/B06 full packs
+    # will have no "partial_proof_only" marker and retain the old behavior.
+    attempted_pack = args.out / "DANGER_INCOMPLETE_LEVEL_MUST_NOT_EXIST.bin"
+    reject = subprocess.run(
+        [sys.executable, str(Path(__file__).with_name("pack_level_tiles.py")),
+         str(args.out / STAGES[0] / "source_1x"), str(attempted_pack)],
+        text=True, capture_output=True, check=False,
+    )
+    if (reject.returncode == 0 or attempted_pack.exists()
+            or "partial B03 source proof tiles cannot be packed" not in reject.stderr):
+        raise AssertionError("B03 preview unexpectedly packable as a complete native level")
+    print("B03_PREVIEW_PACK_GUARD_PASS", flush=True)
+
     sheet = make_contact_sheet(args.out, stages)
     summary = {
         "batch": "LEVEL2-B03",
@@ -330,6 +344,7 @@ def main():
         "proprietary_swf_not_uploaded": True,
         "runtime_level1a_assets_not_modified": True,
         "not_actual_source_gameplay_screenshot": True,
+        "partial_preview_pack_is_rejected_by_native_packer": True,
         "all_stage_tiles_are_partial_proofs_not_complete_native_packs": True,
     }
     (args.out / "B03_STAGE_SOURCE_ASSET_REPORT.json").write_text(

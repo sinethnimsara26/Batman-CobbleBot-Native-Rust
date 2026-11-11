@@ -6,6 +6,7 @@ on:
       - revive/level2-b03-source-asset-proofs-2026-11-11
     paths:
       - reverse-engineering/tools/bake_level_tiles.py
+      - reverse-engineering/tools/pack_level_tiles.py
       - reverse-engineering/tools/b03_bake_stage_asset_proofs.py
       - .github/workflows/b03-upcoming-stage-source-art-proofs.yml
   workflow_dispatch:
