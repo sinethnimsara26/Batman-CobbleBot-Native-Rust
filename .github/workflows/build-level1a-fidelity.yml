@@ -2,7 +2,7 @@ name: build-level1a-fidelity
 
 on:
   push:
-    branches: [main, level1a-cxform-fidelity, hq-rendering-phase1-halftone, hq-rendering-phase2-surfaces, hq-rendering-phase3-3x-surface, hq-rendering-phase4-pack-v2, hq-rendering-phase5-batman-3x, hq-rendering-phase6-hud-3x, hq-rendering-phase7-overlays-3x, hq-rendering-phase8-world-objects-3x, hq-rendering-phase9-dpi-awareness, hq-rendering-phase10-scenery-eval, hq-rendering-phase11-backdrop-3x, revive/round11-ci-baseline-2026-11-09, revive/level1a-intro-hud-fidelity-2026-11-09, revive/level2-b02-stage-descriptors-2026-11-11, revive/level2-b03-source-asset-proofs-2026-11-11, revive/level2-b04-pending-transition-2026-11-11, revive/level2-b05-bank-street-source-1x-2026-11-11, revive/level2-b06-bank-street-hq3x-2026-11-11]
+    branches: [main, level1a-cxform-fidelity, hq-rendering-phase1-halftone, hq-rendering-phase2-surfaces, hq-rendering-phase3-3x-surface, hq-rendering-phase4-pack-v2, hq-rendering-phase5-batman-3x, hq-rendering-phase6-hud-3x, hq-rendering-phase7-overlays-3x, hq-rendering-phase8-world-objects-3x, hq-rendering-phase9-dpi-awareness, hq-rendering-phase10-scenery-eval, hq-rendering-phase11-backdrop-3x, revive/round11-ci-baseline-2026-11-09, revive/level1a-intro-hud-fidelity-2026-11-09, revive/level2-b02-stage-descriptors-2026-11-11, revive/level2-b03-source-asset-proofs-2026-11-11, revive/level2-b04-pending-transition-2026-11-11, revive/level2-b05-bank-street-source-1x-2026-11-11, revive/level2-b06-bank-street-hq3x-2026-11-11, revive/level2-b07-bank-ground-probes-2026-11-11]
   workflow_dispatch:
 
 concurrency:
@@ -154,7 +154,8 @@ jobs:
           python "$tools/pack_sprite_frames.py" "$work/intro" "assets/intro_frames.bin" --format-version 2 --logical-pixel-scale 1.0
           Copy-Item "$work/intro/intro_button_bounds.rs" "assets/intro_button_bounds.rs"
 
-          python "$tools/render_collision_masks.py" "$swf" "$work/reports/symbols.json" "reverse-engineering/manifests/level-instances.json" "reverse-engineering/generated/collision_masks" --level level1a
+          python "$tools/render_collision_masks.py" "$swf" "$work/reports/symbols.json" "reverse-engineering/manifests/level-instances.json" "reverse-engineering/generated/collision_masks" --level level1a --level level1b
+          python "$tools/b07_probe_bank_ground.py" "reverse-engineering/generated/collision_masks/manifest.json" "reverse-engineering/generated/collision_masks/level1b_ground.png" ".generated/b07-bank-ground"
 
           # Preserve the exact 1x player pack as the legacy regression oracle.
           python "$tools/bake_player_states.py" "$swf" "$work/reports/symbols.json" "$work/batman-frames" --bitmaps "$work/bitmaps" --symbol 691 --scale 0.163742
@@ -1652,6 +1653,14 @@ jobs:
           Path(".generated/dpi-awareness-report.json").write_text(json.dumps(report,indent=2))
           print(json.dumps(report,indent=2))
           print("Round 9 DPI contract PASS: Per-Monitor-V2 preferred, legacy fallback retained, 3:2 viewport stable at 100/125/150%.")
+
+      - name: Upload B07 original Bank Street #782 collision source proof
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: B07-Original-Bank-Street-Ground-Probe
+          path: .generated/b07-bank-ground/
+          if-no-files-found: error
 
       - uses: dtolnay/rust-toolchain@stable
         with:
