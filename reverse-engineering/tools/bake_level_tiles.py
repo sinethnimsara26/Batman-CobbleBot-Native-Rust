@@ -41,6 +41,10 @@ def main():
         "--include-source-static-text", action="store_true",
         help="Opt-in original DefineText glyphs for stage scenery proofs; default 1A bake unchanged",
     )
+    parser.add_argument(
+        "--root-depth-range", nargs=2, type=int, metavar=("LOW", "HIGH"),
+        help="B06 evidence only: original sprite's direct authored placement-depth band",
+    )
     parser.add_argument("--place-x", type=float, default=2467.65)
     parser.add_argument("--place-y", type=float, default=239.25)
     parser.add_argument("--tile-width", type=int, default=600)
@@ -54,6 +58,11 @@ def main():
         help="B03 bounded source-proof tile origins; not a complete level pack (repeatable)",
     )
     args = parser.parse_args()
+    if args.root_depth_range is not None:
+        if args.root_depth_range[0] > args.root_depth_range[1]:
+            raise ValueError("reversed --root-depth-range")
+        if args.only_tile is None:
+            raise ValueError("partial root-depth layer may only be baked with --only-tile")
     if args.output_scale < 1:
         raise ValueError("--output-scale must be >= 1")
     if args.supersample < 1:
@@ -151,6 +160,7 @@ def main():
             unsupported,
             missing,
             excluded_symbols=excluded_symbols,
+            root_depth_range=args.root_depth_range,
         )
         if args.downsample == "lanczos":
             final_size = (
@@ -178,6 +188,7 @@ def main():
     manifest = {
         "symbol": args.symbol,
         "source_static_text_enabled": args.include_source_static_text,
+        "source_root_depth_range": args.root_depth_range,
         "excluded_symbols": sorted(excluded_symbols),
         "placement": [args.place_x, args.place_y],
         "tile_size": [args.tile_width * args.output_scale, args.tile_height * args.output_scale],
@@ -192,7 +203,7 @@ def main():
         "missing_ids": sorted(missing),
         "tiles": records,
     }
-    if args.only_tile is not None:
+    if args.only_tile is not None or args.root_depth_range is not None:
         manifest["partial_proof_only"] = True
         manifest["requested_tile_origins"] = [[x, y] for x, y in tile_origins]
         manifest["never_embed_as_complete_level"] = True
