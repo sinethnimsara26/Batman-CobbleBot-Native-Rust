@@ -9,6 +9,8 @@
 //! change sound playback or reinitialize root progress. B03 and B04 own those
 //! separate steps. Root progress (score, lives, Batarangs) is distinct from
 //! stage-local camera, health, enemies, checkpoints, wave and timer state.
+//! B04 creates only a frozen pending-stage handoff after Level1A's fade;
+//! it does not load Level1B, start sound #1076 or alter stage identity.
 //!
 //! Metadata is dormant until those later implementation gates. Suppress only
 //! this module's dead-code warnings so no fake runtime usage is introduced.
@@ -35,6 +37,39 @@ pub enum StoryCard {
 pub enum SourceScene {
     Stage(StageId),
     Card(StoryCard),
+}
+
+/// Root-scoped progress transferred between Flash scenes; health, camera,
+/// checkpoints, enemies and animation remain stage-local and are NOT copied.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct RootProgress {
+    pub score: i32,
+    pub lives: i32,
+    pub batarangs: i32,
+}
+
+/// B04: immutable destination intent after the source #34 fade. This is NOT
+/// permission to load a partial B03 stage pack or play its unbaked soundtrack.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PendingStageEntry {
+    pub from: StageId,
+    pub to: StageId,
+    pub progress: RootProgress,
+    /// Source root StartSound tags; the current 1A player uses MusicStop,
+    /// while the new stage cue must remain deferred until assets are complete.
+    pub outgoing_root_sound_id: u16,
+    pub incoming_root_sound_id: u16,
+}
+
+impl PendingStageEntry {
+    pub fn after_source_fade(from: StageId, progress: RootProgress) -> Option<Self> {
+        let SourceScene::Stage(to) = from.next_source_scene() else { return None; };
+        Some(Self {
+            from, to, progress,
+            outgoing_root_sound_id: from.descriptor().root_start_sound_id,
+            incoming_root_sound_id: to.descriptor().root_start_sound_id,
+        })
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
