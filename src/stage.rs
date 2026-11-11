@@ -98,6 +98,26 @@ pub struct StageDescriptor {
     pub root_start_sound_id: u16,
 }
 
+impl SourceCamera {
+    /// Exact cameraLogic() 10%-truncated horizontal correction, applied only
+    /// within the original stage's strict game-local camera bounds.
+    /// Left-facing Batman aims for x=475; right-facing for x=125.
+    /// Kept separate from Level1A's active renderer until Level1B is complete.
+    pub fn horizontal_step(self, player_game_x:f32, camera_x:f32, facing:i8)->f32 {
+        if player_game_x<=self.min_x || player_game_x>=self.max_x {
+            return camera_x;
+        }
+        let target=if facing>0 {125.0} else {475.0};
+        let delta=player_game_x+camera_x-target;
+        if delta.abs()>4.0 { camera_x-(delta/10.0).trunc() } else { camera_x }
+    }
+
+    /// Original jumping camera formula (game-local player position).
+    pub fn jumping_y(self, player_game_y:f32)->f32 {
+        (self.height-player_game_y)/self.jump
+    }
+}
+
 impl StageDescriptor {
     /// Source game-local player placement converted to level-local coordinates.
     /// Does not mutate the running game and does not apply root screen camera.
@@ -359,6 +379,24 @@ mod tests {
             assert!((rx - x).abs() < 0.002, "{id:?}: x={rx} != {x}");
             assert!((ry - y).abs() < 0.002, "{id:?}: y={ry} != {y}");
         }
+    }
+
+    #[test]
+    fn bank_camera_boundaries_spawn_direction_and_jump_are_source_backed() {
+        let stage=StageId::Level1B.descriptor();
+        let camera=stage.camera;
+        assert_eq!((camera.min_x,camera.max_x,camera.height,camera.jump),
+                   (-6220.0,600.0,125.0,3.0));
+        assert_eq!(stage.source_player_direction,-1);
+        // 528.15 + 26.10 - left-facing target 475 = 79.25;
+        // Flash truncates 79.25/10 to 7 before adjusting camera x.
+        let stepped=camera.horizontal_step(528.15,26.10,stage.source_player_direction);
+        assert!((stepped-19.10).abs()<0.0001);
+        assert_eq!(camera.horizontal_step(-6220.0,26.10,-1),26.10);
+        assert_eq!(camera.horizontal_step(600.0,26.10,-1),26.10);
+        assert_eq!(camera.horizontal_step(528.15,-49.15,-1),-49.15);
+        assert!((camera.jumping_y(-18.75)-(143.75/3.0)).abs()<0.0001);
+        assert_eq!(StageId::Level1A.descriptor().camera.height,150.0);
     }
 
     #[test]
