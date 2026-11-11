@@ -1,5 +1,12 @@
 # Batman: The CobbleBot Caper — Native Rust Reimplementation
 
+## Latest checkpoint — 2026-11-11 player-approved Level 1A freeze
+
+The player has tested the native game and reports that everything now looks fine. **Level 1A is finished for now**, not the entire multi-level game. The frozen source is [`49e8fd343e4f37f045ba71f24fff0999211f0f11`](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/commit/49e8fd343e4f37f045ba71f24fff0999211f0f11) on permanent snapshot branch [`release/level1a-v0.2.0`](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/tree/release/level1a-v0.2.0); matching [Windows CI #42936169736](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42936169736) completed SUCCESS (81/81 steps, 21/21 Rust tests). A one-shot release publisher is being configured for [`level1a-v0.2.0`](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/releases/tag/level1a-v0.2.0). **Do not call the release published until that URL displays actual EXE, ZIP and checksum assets.** See [release notes](docs/releases/LEVEL1A_V0.2.0_RELEASE_NOTES.md) and [code-quality report](docs/releases/LEVEL1A_V0.2.0_RELEASE_QUALITY.md).
+
+User acceptance is a practical approval of present gameplay/presentation, **not** proof of exact original-Flash equivalence, real speaker playback, pinned taskbar icon cache or every DPI. Issue #17 remains open for those stricter questions; PR #18 stays draft. No Rust/gameplay modifications were made during this release checkpoint; `main` and all Level1B branches remain untouched. Older below sections are preserved as historic status, not current release blockers.
+
+
 Unofficial high-fidelity native Rust reimplementation of **The Batman: The CobbleBot Caper**, originally released as a Flash game.
 
 The goal is not a loose remake. The project aims to preserve the original game's **visuals, animation timing, controls, camera behavior, collision, UI flow, and feel** while replacing the Flash runtime and ActionScript execution with native Rust wherever practical.

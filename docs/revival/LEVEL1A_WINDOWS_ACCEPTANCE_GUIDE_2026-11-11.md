@@ -1,5 +1,10 @@
 # Level 1A — physical Windows acceptance guide
 
+## 2026-11-11 status correction: user accepted playable Level1A **for now**
+
+The player has now tested the game and reports no obvious remaining issues, and specifically asks to archive Level1A before planning the next level. Accordingly **general current-game acceptance is given**. The older blanket text below that says no manual acceptance has occurred is historical; it continues to accurately describe the **separate strict original-SWF/source and physical-audio/DPI checklist**, whose individual items were not all documented as passed. The [frozen source SHA `49e8fd343e4f37f045ba71f24fff0999211f0f11`](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/commit/49e8fd343e4f37f045ba71f24fff0999211f0f11) is on `release/level1a-v0.2.0`. Publisher target `level1a-v0.2.0` is pending independent release/assets confirmation. Issue #17 tracks strict remaining fidelity questions; PR #18 stays draft, and Level1B can be planned separately without pretending that all hardware checks passed.
+
+
 **Status:** manual acceptance is OPEN, not proven by GitHub CI. This guide is a companion to [issue #17](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/issues/17) and the [mandatory automated testing protocol](../AUTOMATED_WINDOWS_TESTING_PROTOCOL.md). The project is deliberately frozen to Level 1A, PR #18 is draft and Level1B must not start until the player accepts fidelity.
 
 ## 1. Install the most recent verified native EXE

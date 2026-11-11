@@ -1,5 +1,16 @@
 # AI handoff — current recovery checkpoint
 
+## CURRENT — 2026-11-11 RELEASE-FREEZE-12: Level 1A finished *for now*; release verification next
+
+**Player decision:** User tested the game and reports it looks fine; asks for a whole-repo rescan, code-quality/security review, final-for-now Level1A Windows EXE/source release, and future next-level planning. This approves the current player snapshot but not every stricter original-SWF/audio/DPI checkbox. **Frozen source code SHA:** `49e8fd343e4f37f045ba71f24fff0999211f0f11`. **Frozen branch:** `release/level1a-v0.2.0`; code remains unchanged after user's test. **Native Windows [#42936169736](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42936169736):** COMPLETED SUCCESS, 81/81 steps, 21/21 Rust tests, historical 1x 15/15, relocated HQ 20/20, GUI/fullscreen/OS icon, Cargo --locked, render p95 18.3139ms/scenery 21.8377ms under 40ms; artifact 13819117162.
+
+**Release:** `level1a-v0.2.0` is **PENDING until GitHub reports tag and actual EXE/ZIP/SHA256 assets**. Publisher workflow `.github/workflows/publish-level1a-v0.2.0.yml` must verify successful pinned run/SHA and publish at exact code commit, not docs-only HEAD. Latest source review and limits in `docs/releases/LEVEL1A_V0.2.0_RELEASE_QUALITY.md`; notes in `docs/releases/LEVEL1A_V0.2.0_RELEASE_NOTES.md`. Automatic GitHub archives provide source code. Canonical SWF/proprietary content is NOT covered by project MIT license.
+
+**Audit:** RE-20261111-009 / AUD-20261111-009. Non-blocking code-hardening findings L1A-QA-01..06: predictable temp/audio directory, Win32 raw APP lifetime, baked pack parser guards, dev CLI limits, build supply chain and missing executable Cargo security audit; none falsely declared fixed. No actual Cargo or GUI test run in this documentation-only checkpoint—historical complete CI remains source proof.
+
+**Remote policy:** PR #18 OPEN/DRAFT/UNMERGED and issue #17 OPEN as separate stricter fidelity follow-up. Do not touch `main` or Level1B; no Level1B gameplay work now. **Exact next action:** inspect publisher run and release `level1a-v0.2.0`, verify tag SHA/assets and checksums, update PR/issue summary. Then *plan* Level1B (source routes, sprites, collisions, enemies, audio, transitions), in a future separately authorized batch.
+
+
 ## CURRENT — 2026-11-11 MANUAL-ACCEPTANCE-PREP-11 safe Windows evidence collector CI-VERIFIED
 
 **Code SHA** [`a1bcf330`](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/commit/a1bcf330bc6a057069925535f1ee258c3c7a22ce) on `revive/level1a-intro-hud-fidelity-2026-11-09`, PR #18 OPEN/DRAFT, issue #17 OPEN. Actual native Windows [CI #42934164402](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42934164402) COMPLETED **SUCCESS 81/81 steps**: 21/21 Rust release tests, original 1x 15/15 hashes, 20/20 relocated HQ screenshot hashes, actual F/Esc/fullscreen/F8/GUI/title, PE and OS-Shell bat icon at16/32, `--locked` unchanged Cargo, HQ p95 **21.2848ms**, scenery-scroll p95 **26.3051ms** against strict <40ms.
