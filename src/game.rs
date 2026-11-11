@@ -1,4 +1,5 @@
 use crate::collision::CollisionMask;
+use crate::stage::StageId;
 
 pub const LOGICAL_W:usize=600;
 pub const LOGICAL_H:usize=400;
@@ -168,6 +169,8 @@ pub struct Player{
 pub struct Shot{pub x:f32,pub y:f32,pub dir:i32}
 
 pub struct Game{
+    // B02: source-backed identity only. Scene switching is NOT wired here.
+    stage:StageId,
     pub screen:AppScreen,
     /// Original root frame 18 intro sequence, 0-based at 25 fps.
     pub intro_tick:u16,
@@ -201,6 +204,7 @@ pub struct Game{
 impl Game{
     pub fn new()->Self{
         Self{
+            stage:StageId::Level1A,
             screen:AppScreen::Title,
             intro_tick:0,
             intro_fadeout_tick:None,
@@ -223,6 +227,9 @@ impl Game{
             pickups:[false;7],shots:Vec::new(),ticks:0,audio_events:Vec::new(),pit_done:false,respawn_after_fade:false,gameover_after_fade:false,
         }
     }
+
+    /// Source stage identity; intentionally immutable in B02 gameplay.
+    pub fn active_stage(&self)->StageId{self.stage}
 
     pub fn animation_frame(&self)->usize{
         self.player.state.display_tick(self.player.state_tick)
