@@ -1,0 +1,91 @@
+name: b09-original-bank-street-goon-source
+
+on:
+  push:
+    branches:
+      - revive/level2-b09-bank-goon-sprites-2026-11-12
+    paths:
+      - reverse-engineering/tools/b09_bake_bank_goons.py
+      - src/bank_goons.rs
+      - .github/workflows/b09-original-bank-street-goon-source.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: b09-original-bank-street-goons
+  cancel-in-progress: true
+
+jobs:
+  source-bank-props:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install development-only Pillow source rasterizer
+        shell: pwsh
+        run: python -m pip install --disable-pip-version-check "Pillow>=11,<15"
+
+      - name: Download and strictly SHA-verify original canonical SWF
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $url = "https://archive.org/download/the-batman-cobblebot-caper/The%20Batman%20-%20The%20Cobblebot%20Caper.swf"
+          for ($attempt = 1; $attempt -le 4; $attempt++) {
+            try {
+              Invoke-WebRequest -Uri $url -OutFile ".original-b09-download.swf" -ErrorAction Stop
+              break
+            } catch {
+              if ($attempt -eq 4) { throw }
+              Start-Sleep -Seconds (5 * $attempt)
+            }
+          }
+          @'
+          import hashlib,zlib
+          from pathlib import Path
+          src=Path(".original-b09-download.swf").read_bytes()
+          if src[:3]==b"CWS":
+              fws=b"FWS"+src[3:8]+zlib.decompress(src[8:])
+          elif src[:3]==b"FWS":
+              fws=src
+          else:
+              raise SystemExit(f"Invalid SWF header: {src[:3]!r}")
+          sha=hashlib.sha256(fws).hexdigest()
+          if sha!="3d9e1992404313bc2e2652d46a5838160ef721e2ad559fdd7455f3c54f8ac1ed" or len(fws)!=2819100:
+              raise SystemExit(f"Wrong original source {sha}, length {len(fws)}")
+          out=Path(".generated/b09input/canonical_original.swf")
+          out.parent.mkdir(parents=True,exist_ok=True)
+          out.write_bytes(fws)
+          print("B09_CANONICAL_ORIGINAL_FWS_PASS",sha,len(fws))
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { throw "Original canonical source verification FAILED" }
+
+      - name: Extract original symbols and bitmaps for frame-0 prop evidence
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $tools = "reverse-engineering/tools"
+          $swf = ".generated/b09input/canonical_original.swf"
+          New-Item -ItemType Directory -Force ".generated/b09input/reports",".generated/b09input/bitmaps" | Out-Null
+          python "$tools/swf_re.py" "$swf" ".generated/b09input/reports"
+          if ($LASTEXITCODE -ne 0) { throw "Original symbol extraction failed" }
+          python "$tools/extract_bitmaps.py" "$swf" ".generated/b09input/bitmaps"
+          if ($LASTEXITCODE -ne 0) { throw "Original bitmap extraction failed" }
+
+      - name: Validate ten source goon spawns, full 178 original frames and 18 true HQ3x label frames
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          python reverse-engineering/tools/b09_bake_bank_goons.py --swf ".generated/b09input/canonical_original.swf" --symbols ".generated/b09input/reports/symbols.json" --bitmaps ".generated/b09input/bitmaps" --instances "reverse-engineering/manifests/level-instances.json" --spec "reverse-engineering/manifests/level-spec.json" --labels "reverse-engineering/manifests/animation-labels.json" --out ".generated/b09-bank-goon-source"
+          if ($LASTEXITCODE -ne 0) { throw "B09 original goon frame/span/source proof FAILED" }
+
+      - name: Upload B09 partial source-goon frame proof (no full SWF or native actor pack)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: B09-CobbleBot-Original-Bank-Goon-Frames-Source-Proofs
+          path: .generated/b09-bank-goon-source/
+          if-no-files-found: warn
+          retention-days: 30
