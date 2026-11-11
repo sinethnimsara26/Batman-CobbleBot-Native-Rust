@@ -1,0 +1,93 @@
+name: b03-upcoming-stage-source-art-proofs
+
+on:
+  push:
+    branches:
+      - revive/level2-b03-source-asset-proofs-2026-11-11
+    paths:
+      - reverse-engineering/tools/bake_level_tiles.py
+      - reverse-engineering/tools/b03_bake_stage_asset_proofs.py
+      - .github/workflows/b03-upcoming-stage-source-art-proofs.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: b03-original-stage-art-proofs
+  cancel-in-progress: true
+
+jobs:
+  original-source-preview-bake:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install development-only Pillow for original source rasterization
+        shell: pwsh
+        run: python -m pip install --disable-pip-version-check "Pillow>=11,<15"
+
+      - name: Download exactly the canonical original Flash file and verify SHA
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $url = "https://archive.org/download/the-batman-cobblebot-caper/The%20Batman%20-%20The%20Cobblebot%20Caper.swf"
+          for ($attempt = 1; $attempt -le 4; $attempt++) {
+            try {
+              Invoke-WebRequest -Uri $url -OutFile "b03-original-download.swf" -ErrorAction Stop
+              break
+            } catch {
+              if ($attempt -eq 4) { throw }
+              Start-Sleep -Seconds (5 * $attempt)
+            }
+          }
+          @'
+          import hashlib,zlib
+          from pathlib import Path
+          source=Path("b03-original-download.swf").read_bytes()
+          if source[:3]==b"CWS":
+              fws=b"FWS"+source[3:8]+zlib.decompress(source[8:])
+          elif source[:3]==b"FWS":
+              fws=source
+          else:
+              raise SystemExit(f"Original source wrong format: {source[:3]!r}")
+          expected="3d9e1992404313bc2e2652d46a5838160ef721e2ad559fdd7455f3c54f8ac1ed"
+          actual=hashlib.sha256(fws).hexdigest()
+          if actual!=expected or len(fws)!=2819100:
+              raise SystemExit(f"Original-source SHA/size mismatch: {actual}, {len(fws)}")
+          dest=Path(".generated/b03input/canonical_original.swf")
+          dest.parent.mkdir(parents=True,exist_ok=True)
+          dest.write_bytes(fws)
+          print("B03_CANONICAL_SOURCE_FWS_PASS",actual,len(fws))
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { throw "Original source verification failed" }
+
+      - name: Extract source sprite definitions and original bitmap fills
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $tools = "reverse-engineering/tools"
+          $swf = ".generated/b03input/canonical_original.swf"
+          New-Item -ItemType Directory -Force ".generated/b03input/reports", ".generated/b03input/bitmaps" | Out-Null
+          python "$tools/swf_re.py" "$swf" ".generated/b03input/reports"
+          if ($LASTEXITCODE -ne 0) { throw "Source movie/sprite parser failed" }
+          python "$tools/extract_bitmaps.py" "$swf" ".generated/b03input/bitmaps"
+          if ($LASTEXITCODE -ne 0) { throw "Source bitmap extraction failed" }
+
+      - name: Bake source static scene and dynamic sprite proofs for FOUR next stages
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $tools = "reverse-engineering/tools"
+          python "$tools/b03_bake_stage_asset_proofs.py" --swf ".generated/b03input/canonical_original.swf" --symbols ".generated/b03input/reports/symbols.json" --bitmaps ".generated/b03input/bitmaps" --instances "reverse-engineering/manifests/level-instances.json" --spec "reverse-engineering/manifests/level-spec.json" --out ".generated/b03-stage-source-art"
+          if ($LASTEXITCODE -ne 0) { throw "B03 original-source proof gate FAILED" }
+
+      - name: Upload preview-only original art, stage provenance and contact sheet
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: B03-CobbleBot-Future-Stages-Original-Source-Visual-Proofs
+          path: .generated/b03-stage-source-art/
+          if-no-files-found: warn
+          retention-days: 30
