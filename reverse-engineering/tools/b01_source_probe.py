@@ -258,6 +258,78 @@ def main():
             "root_movieclip_placements": root_game,
         }
 
+    # The newer scanner attaches placement color transforms and tag offsets
+    # absent from historical exports. Compare implementation-critical fields
+    # exactly, without silently claiming whole-manifest byte equality.
+    def object_semantics(p):
+        if p is None:
+            return None
+        m = p.get("matrix", {})
+        return {
+            "name": p.get("name"), "character_id": p.get("character_id"),
+            "depth": p.get("depth"), "flags": p.get("flags"), "frame": p.get("frame"),
+            "matrix": {k: m.get(k) for k in ("sx", "sy", "r0", "r1", "tx", "ty")},
+        }
+
+    tracked_instances = read_json(args.tracked_manifests / "level-instances.json")
+    semantic_parity = {}
+    for name, _ in STAGES.items():
+        live = regen_instances[name]
+        historical = tracked_instances[name]
+        def projection(stage):
+            return {
+                "root_frame": stage["root_frame"],
+                "game_symbol_id": stage["game_symbol_id"],
+                "level_symbol_id": stage["level_symbol_id"],
+                "player": object_semantics(stage.get("player")),
+                "ground": object_semantics(stage.get("ground")),
+                "named_game_instances": [
+                    object_semantics(p) for p in stage["named_game_instances"]
+                ],
+                "named_level_instances": [
+                    object_semantics(p) for p in stage["named_level_instances"]
+                ],
+            }
+        same = projection(live) == projection(historical)
+        semantic_parity[name] = {
+            "same_essential_placement_and_level_geometry": same,
+            "named_game_instances": len(live["named_game_instances"]),
+            "named_level_instances": len(live["named_level_instances"]),
+        }
+        if not same:
+            raise AssertionError(f"Actual essential source placement drift in {name}")
+    write_json(args.out / "b01-semantic-stage-parity.json", semantic_parity)
+    print("B01_SEMANTIC_STAGE_PARITY_PASS", json.dumps(semantic_parity))
+
+    def has_push(ops, *needed):
+        return any(op.get("op") == "Push" and all(
+            v in push_values(op) for v in needed) for op in ops)
+
+    # Bytecode-presence gates are factual AVM1 observations; they are not a
+    # simulation of the original event loop or a solved complete control graph.
+    checks = {
+        "level1b_respawn2_installed": has_push(
+            root_trace["level1b"]["blocks"][0]["source_actions"], "respawn2"),
+        "respawn2_contains_level1c_exit": has_push(
+            found["respawn2"]["actions"], "gotoNext", "level1c"),
+        "respawn2_checks_eKills_eight": has_push(
+            found["respawn2"]["actions"], "eKills") and
+            has_push(found["respawn2"]["actions"], 8),
+        "level2b_clockTimer_installed": has_push(
+            root_trace["level2b"]["blocks"][0]["source_actions"], "clockTimer"),
+        "clockTimer_initializes_80_seconds": has_push(
+            found["clockTimer"]["actions"], "secs", 80),
+        "clockTimer_zero_health_on_timeout": has_push(
+            found["clockTimer"]["actions"], "playerHealth", 0.0),
+        "doorOpen_references_open_and_close": has_push(
+            found["doorOpen"]["actions"], "open") and
+            has_push(found["doorOpen"]["actions"], "close"),
+    }
+    if not all(checks.values()):
+        raise AssertionError(f"Critical source bytecode path missing: {checks}")
+    write_json(args.out / "b01-source-route-and-timer-invariants.json", checks)
+    print("B01_ORIGINAL_BEHAVIOR_BYTECODE_INVARIANTS_PASS", json.dumps(checks))
+
     write_json(args.out / "b01-original-root-stage-actions.json", root_trace)
 
     route_details = [r for r in regen_routes if (
@@ -301,6 +373,8 @@ def main():
             "timeline_sound_cues_are": "source-local, NOT observed runtime playback",
         },
         "manifest_reproducibility": parity,
+        "target_stage_semantic_parity": semantic_parity,
+        "critical_bytecode_presence_checks": checks,
         "stages": level_report,
         "source_routing_pushes": route_details,
         "global_functions": {
