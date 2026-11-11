@@ -1,5 +1,5 @@
 use crate::collision::CollisionMask;
-use crate::stage::StageId;
+use crate::stage::{PendingStageEntry,RootProgress,StageId};
 
 pub const LOGICAL_W:usize=600;
 pub const LOGICAL_H:usize=400;
@@ -169,8 +169,9 @@ pub struct Player{
 pub struct Shot{pub x:f32,pub y:f32,pub dir:i32}
 
 pub struct Game{
-    // B02: source-backed identity only. Scene switching is NOT wired here.
+    // B04: real runtime remains 1A; the next scene is only a pending intent.
     stage:StageId,
+    pending_stage_entry:Option<PendingStageEntry>,
     pub screen:AppScreen,
     /// Original root frame 18 intro sequence, 0-based at 25 fps.
     pub intro_tick:u16,
@@ -205,6 +206,7 @@ impl Game{
     pub fn new()->Self{
         Self{
             stage:StageId::Level1A,
+            pending_stage_entry:None,
             screen:AppScreen::Title,
             intro_tick:0,
             intro_fadeout_tick:None,
@@ -228,8 +230,11 @@ impl Game{
         }
     }
 
-    /// Source stage identity; intentionally immutable in B02 gameplay.
+    /// The only loaded stage is 1A until its full successor pack is ready.
     pub fn active_stage(&self)->StageId{self.stage}
+
+    /// B04 readonly handoff; does not make Stage1B playable or start its audio.
+    pub fn pending_stage_entry(&self)->Option<PendingStageEntry>{self.pending_stage_entry}
 
     pub fn animation_frame(&self)->usize{
         self.player.state.display_tick(self.player.state_tick)
@@ -678,7 +683,15 @@ impl Game{
     fn advance_level_exit(&mut self)->bool{
         let Some(t)=self.fadeout_tick else{return false;};
         if t<40{
-            self.fadeout_tick=Some(t+1);
+            let next=t+1;
+            self.fadeout_tick=Some(next);
+            // SWF fadeout sprite #34 (zero-based frame 39) dispatches
+            // StopSounds before root's destination-frame jump at frame 40.
+            // Change only the completed 1A exit: pit/continue paths retain
+            // their established native behavior and regression contract.
+            if next==39 && self.level1a_exit_reached {
+                self.audio_events.push(AudioEvent::MusicStop);
+            }
             return false;
         }
 
@@ -710,7 +723,18 @@ impl Game{
             return true;
         }
 
-        self.audio_events.push(AudioEvent::MusicStop);
+        if self.level1a_exit_reached {
+            // Original root19 sets gotoNext=level1b, then plays #34.
+            // Keep root progress only. The new stage's art, collision,
+            // actor AI and sound #1076 are not yet packable/implemented.
+            self.pending_stage_entry=PendingStageEntry::after_source_fade(
+                self.stage,
+                RootProgress{score:self.score,lives:self.lives,batarangs:self.batarangs},
+            );
+        }else{
+            // Other non-pit terminal fades preserve the old sound behavior.
+            self.audio_events.push(AudioEvent::MusicStop);
+        }
         self.level1a_complete=true;
         true
     }
@@ -793,10 +817,9 @@ impl Game{
         }
 
         if CP_NEXT.hits_player(x,y)&&self.fadeout_tick.is_none(){
-            // Original Level 1A exit: set gotoNext="level1b" and play root
-            // fadeout (symbol 34). Level 1B remains intentionally frozen,
-            // so native Rust stops on the final black frame after the exact
-            // 41-frame transition instead of entering the next stage.
+            // Source gotoNext="level1b" starts fadeout sprite #34. B04
+            // snapshots a pending entry only AFTER the complete 41 frames;
+            // renderer/collision still show the final 1A frame.
             self.level1a_exit_reached=true;
             self.fadeout_tick=Some(0);
             self.player.dx=0.0;
@@ -860,6 +883,87 @@ impl Game{
             self.camera_y+=((target-self.camera_y)/4.0).trunc();
             self.background_y=((player_y/2.0-CAM_HEIGHT/1.5)/CAM_JUMP).trunc()-CAM_OFFSET;
         }
+    }
+}
+
+
+#[cfg(test)]
+mod b04_pending_transition_tests {
+    use super::{AppScreen,AudioEvent,Game,InputState,LEVEL_X,LEVEL_Y};
+    use crate::collision::CollisionMask;
+    use crate::stage::{PendingStageEntry,RootProgress,StageId};
+
+    #[test]
+    fn level1a_exit_has_exact_fade_stop_cue_and_frozen_root_handoff() {
+        let ground=CollisionMask::level1a();
+        let mut game=Game::new();
+        let mut input=InputState::default();
+        game.screen=AppScreen::Playing;
+        game.score=1234;
+        game.lives=3;
+        game.batarangs=17;
+        game.health=42; // Stage-local health MUST NOT travel with the root stats.
+        game.player.x=7600.0-LEVEL_X;
+        game.player.y=520.0-LEVEL_Y;
+        game.tick(&mut input,&ground);
+        assert_eq!(game.fadeout_tick,Some(0));
+        assert!(game.level1a_exit_reached);
+        assert_eq!(game.pending_stage_entry(),None);
+        assert!(game.take_audio_events().is_empty());
+        for i in 1..=38 {
+            game.tick(&mut input,&ground);
+            assert_eq!(game.fadeout_tick,Some(i));
+            assert_eq!(game.pending_stage_entry(),None);
+            assert!(game.take_audio_events().is_empty());
+        }
+        game.tick(&mut input,&ground); // sprite34 frame39 StopSounds
+        assert_eq!(game.fadeout_tick,Some(39));
+        assert_eq!(game.take_audio_events(),vec![AudioEvent::MusicStop]);
+        game.tick(&mut input,&ground); // sprite34 frame40 still draws
+        assert_eq!(game.fadeout_tick,Some(40));
+        assert!(!game.level1a_complete);
+        assert_eq!(game.pending_stage_entry(),None);
+        assert!(game.take_audio_events().is_empty());
+        game.tick(&mut input,&ground); // dispatcher latches next scene
+        assert!(game.level1a_complete);
+        assert_eq!(game.screen,AppScreen::Playing);
+        assert_eq!(game.active_stage(),StageId::Level1A);
+        assert_eq!(game.pending_stage_entry(),Some(PendingStageEntry {
+            from:StageId::Level1A,
+            to:StageId::Level1B,
+            progress:RootProgress{score:1234,lives:3,batarangs:17},
+            outgoing_root_sound_id:751,
+            incoming_root_sound_id:1076,
+        }));
+        assert!(game.take_audio_events().is_empty()); // no premature 1B start
+        for _ in 0..5 {game.tick(&mut input,&ground);}
+        assert_eq!(game.active_stage(),StageId::Level1A);
+        assert_eq!(game.fadeout_tick,Some(40));
+        assert_eq!(game.health,42);
+        assert!(game.take_audio_events().is_empty());
+    }
+
+    #[test]
+    fn death_restart_does_not_schedule_a_new_stage_or_stop_1a_music() {
+        let ground=CollisionMask::level1a();
+        let mut game=Game::new();
+        let mut input=InputState::default();
+        game.screen=AppScreen::Playing;
+        game.lives=2;
+        game.score=77;
+        game.batarangs=9;
+        game.fadeout_tick=Some(38);
+        game.respawn_after_fade=true;
+        game.tick(&mut input,&ground);
+        assert_eq!(game.fadeout_tick,Some(39));
+        assert!(game.take_audio_events().is_empty());
+        game.tick(&mut input,&ground);
+        game.tick(&mut input,&ground);
+        assert_eq!(game.fadeout_tick,None);
+        assert_eq!(game.active_stage(),StageId::Level1A);
+        assert_eq!(game.pending_stage_entry(),None);
+        assert_eq!((game.score,game.lives,game.batarangs),(77,2,9));
+        assert!(game.take_audio_events().is_empty());
     }
 }
 
