@@ -1,5 +1,12 @@
 # Batman native Rust — Level 1B → Penguin → Gotham Labs roadmap
 
+## UPDATE 2026-11-11 — B01 SOURCE GATE COMPLETED AND WINDOWS-VERIFIED
+
+**B01 DONE**, not pending: the [dedicated B01 original source report](LEVEL2_B01_ORIGINAL_SOURCE_GATE_2026-11-11.md), [green source Windows CI #42981445349](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42981445349) and [real artifact #13837522331](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42981445349/artifacts/13837522331) supersede the early plan's “no fresh source” assertions. Final B01 tool SHA ea5e75727703c6cc66584be42559815bebd3d3a9. Source hash, raw 13 original AVM1 functions, four target root stage scripts, five original sprite proofs and source audio tags were verified. The original 1B requires an **eight-goon respawn wave after its initial ten goons** and has enemy-wave-based exit; its biker is separate. The Labs2B clock missing-in-placement discrepancy is **RESOLVED**: root installs clockTimer with real-time **80-second timeout and death/explosion**, not an invented UI device. Source root cues: 1076,1252,1409,1504. Manifest family exact parity five of six, original level-instances metadata drift acknowledged but strict four-stage gameplay object semantics verified. See complete report; visual/live audio/AI playback remains NOT verified.
+
+**Next single batch is B02** StageId/immutable stage descriptors, NOT B01 or B03. Update original B13 scope to include the 8-enemy reactivation and original eKills wave routing; B29 is now source-confirmed 80-second countdown implementation + visual/timer/focus QA, no longer an investigation into whether timer exists. The 32-batch scope estimate remains, subject to test-driven splits. All frozen Level1A release/main/PR18 invariants stay in force.
+
+
 **Date:** 2026-11-11. **Status:** PLANNED ONLY; **no new gameplay implemented**.  
 **Evidence basis:** [original-source evidence inventory](LEVEL2_SOURCE_EVIDENCE_2026-11-11.md), [game specification](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/blob/ba53299c0cf618b20bc418d89973009138b1c7e0/reverse-engineering/GAME_SPEC.md), source-derived manifests and code.  
 **Stable rollback:** [released `level1a-v0.2.0`](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/releases/tag/level1a-v0.2.0) at `49e8fd3`, permanently untouched.  

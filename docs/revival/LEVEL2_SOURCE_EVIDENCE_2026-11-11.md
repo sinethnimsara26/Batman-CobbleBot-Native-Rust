@@ -1,5 +1,10 @@
 # Original Flash source evidence: the route from Level 1A to Gotham Labs
 
+## POST-PLAN VERIFICATION 2026-11-11 — B01 ORIGINAL SOURCE ACTUALLY RECHECKED
+
+The planning inventory below was written before actual B01 source access. It is superseded for newly verified original bytecode and audio by [the complete B01 source report](LEVEL2_B01_ORIGINAL_SOURCE_GATE_2026-11-11.md), [successful Windows original FWS CI #42981445349](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42981445349), and [artifact #13837522331](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/42981445349/artifacts/13837522331). Confirmed canonical FWS hash, original root20/21/23/25 AVM1, stage semantic placements and source library images; older whole level-instances JSON has metadata drift but four stage-critical symbol/transform projections match. Specifically, Level1B has an eight-goon second wave and eKills-conditional Penguin progression, and Labs2B has a root-level 80-second clockTimer which the original game-instance manifest did not list by name. These two former assumptions are corrected in the B01 report. Source clips and sound IDs verified; **original live Flash interactive playback and exact gameplay screenshots are still not claimed**.
+
+
 **Date:** 2026-11-11  
 **Source inspection:** existing source-extracted, verified SWF manifests and Rust code on `ba53299c0cf618b20bc418d89973009138b1c7e0`; **not** a claim that the original SWF was freshly downloaded, executed, or disassembled in this session.  
 **Frozen game release:** `level1a-v0.2.0`, SHA `49e8fd343e4f37f045ba71f24fff0999211f0f11`, UNTOUCHED.  
