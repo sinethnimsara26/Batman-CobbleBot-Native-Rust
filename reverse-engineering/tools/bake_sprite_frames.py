@@ -702,7 +702,11 @@ def _render_gradient(fill, transform, contours_px, canvas, left, top, right, bot
     canvas.alpha_composite(sampled, (left, top))
 
 
-def render_symbol(symbol_id, frame, transform, canvas, symbols, shapes, bitmaps, unsupported, missing, depth=0, excluded_symbols=None):
+def render_symbol(symbol_id, frame, transform, canvas, symbols, shapes, bitmaps, unsupported, missing, depth=0, excluded_symbols=None, root_depth_range=None):
+    # B06 opt-in source proof: select original authored top-level depth bands.
+    # Recursive child timelines retain ALL their own depths and transforms.
+    if root_depth_range is not None and depth != 0:
+        raise ValueError("root depth range may only be supplied to outermost source symbol")
     if depth > 32:
         raise RuntimeError(f"symbol recursion exceeded at character {symbol_id}")
     if symbol_id in shapes:
@@ -824,6 +828,9 @@ def render_symbol(symbol_id, frame, transform, canvas, symbols, shapes, bitmaps,
         if excluded_symbols and child_id in excluded_symbols:
             continue
         placement_depth = placement.get("depth", 0)
+        if depth == 0 and root_depth_range is not None:
+            if not (root_depth_range[0] <= placement_depth <= root_depth_range[1]):
+                continue
         active_masks = [
             (end_depth, mask)
             for end_depth, mask in active_masks
