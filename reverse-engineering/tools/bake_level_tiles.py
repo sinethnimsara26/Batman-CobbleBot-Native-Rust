@@ -44,6 +44,11 @@ def main():
     parser.add_argument("--output-scale", type=int, default=1)
     parser.add_argument("--supersample", type=int, default=1)
     parser.add_argument("--downsample", choices=("none","lanczos"), default="none")
+    parser.add_argument(
+        "--only-tile", nargs=2, type=int, action="append",
+        metavar=("WORLD_X", "WORLD_Y"),
+        help="B03 bounded source-proof tile origins; not a complete level pack (repeatable)",
+    )
     args = parser.parse_args()
     if args.output_scale < 1:
         raise ValueError("--output-scale must be >= 1")
@@ -83,62 +88,83 @@ def main():
     last_x = math.floor(max_x / args.tile_width) * args.tile_width
     last_y = math.floor(max_y / args.tile_height) * args.tile_height
 
+    if args.only_tile is None:
+        tile_origins = [
+            (x, y)
+            for y in range(first_y, last_y + 1, args.tile_height)
+            for x in range(first_x, last_x + 1, args.tile_width)
+        ]
+    else:
+        # Explicit sample mode prevents accidentally rasterizing all >80 million
+        # world pixels of an upcoming Labs scene. The manifest marks this as
+        # INCOMPLETE and is never an acceptable runtime stage asset.
+        requested = [tuple(xy) for xy in args.only_tile]
+        if len(requested) != len(set(requested)):
+            raise ValueError("duplicate --only-tile coordinate pair")
+        for x, y in requested:
+            if x % args.tile_width or y % args.tile_height:
+                raise ValueError("--only-tile origins must align to logical tile size")
+            if not (first_x <= x <= last_x and first_y <= y <= last_y):
+                raise ValueError(
+                    f"--only-tile {(x, y)} is outside original stage bounds"
+                )
+        tile_origins = sorted(requested, key=lambda xy: (xy[1], xy[0]))
+
     args.output.mkdir(parents=True, exist_ok=True)
     missing: set[int] = set()
     records = []
-    for y in range(first_y, last_y + 1, args.tile_height):
-        for x in range(first_x, last_x + 1, args.tile_width):
-            # HQ tiles render with a two-logical-pixel overscan. Lanczos needs
-            # source pixels beyond the final tile boundary; without overscan,
-            # independently filtered neighboring tiles can develop hairline
-            # seams even when the original vectors are continuous.
-            margin = 2 if render_scale > 1 else 0
-            logical_w = args.tile_width + margin * 2
-            logical_h = args.tile_height + margin * 2
-            canvas = Image.new(
-                "RGBA",
-                (logical_w * render_scale, logical_h * render_scale),
-                (0, 0, 0, 0),
+    for x, y in tile_origins:
+        # HQ tiles render with a two-logical-pixel overscan. Lanczos needs
+        # source pixels beyond the final tile boundary; without overscan,
+        # independently filtered neighboring tiles can develop hairline
+        # seams even when the original vectors are continuous.
+        margin = 2 if render_scale > 1 else 0
+        logical_w = args.tile_width + margin * 2
+        logical_h = args.tile_height + margin * 2
+        canvas = Image.new(
+            "RGBA",
+            (logical_w * render_scale, logical_h * render_scale),
+            (0, 0, 0, 0),
+        )
+        transform = (
+            float(render_scale), 0.0, 0.0, float(render_scale),
+            (args.place_x - (x - margin)) * render_scale,
+            (args.place_y - (y - margin)) * render_scale,
+        )
+        render_symbol(
+            args.symbol,
+            0,
+            transform,
+            canvas,
+            symbols,
+            shapes,
+            bitmaps,
+            unsupported,
+            missing,
+            excluded_symbols=excluded_symbols,
+        )
+        if args.downsample == "lanczos":
+            final_size = (
+                logical_w * args.output_scale,
+                logical_h * args.output_scale,
             )
-            transform = (
-                float(render_scale), 0.0, 0.0, float(render_scale),
-                (args.place_x - (x - margin)) * render_scale,
-                (args.place_y - (y - margin)) * render_scale,
+            canvas = (
+                canvas.convert("RGBa")
+                .resize(final_size, Image.Resampling.LANCZOS)
+                .convert("RGBA")
             )
-            render_symbol(
-                args.symbol,
-                0,
-                transform,
-                canvas,
-                symbols,
-                shapes,
-                bitmaps,
-                unsupported,
-                missing,
-                excluded_symbols=excluded_symbols,
-            )
-            if args.downsample == "lanczos":
-                final_size = (
-                    logical_w * args.output_scale,
-                    logical_h * args.output_scale,
-                )
-                canvas = (
-                    canvas.convert("RGBa")
-                    .resize(final_size, Image.Resampling.LANCZOS)
-                    .convert("RGBA")
-                )
-            if margin:
-                m = margin * args.output_scale
-                canvas = canvas.crop((
-                    m, m,
-                    m + args.tile_width * args.output_scale,
-                    m + args.tile_height * args.output_scale,
-                ))
-            if canvas.getchannel("A").getbbox() is None:
-                continue
-            filename = f"x{x:+07d}_y{y:+07d}.png"
-            canvas.save(args.output / filename, optimize=True)
-            records.append({"world_x": x, "world_y": y, "file": filename})
+        if margin:
+            m = margin * args.output_scale
+            canvas = canvas.crop((
+                m, m,
+                m + args.tile_width * args.output_scale,
+                m + args.tile_height * args.output_scale,
+            ))
+        if canvas.getchannel("A").getbbox() is None:
+            continue
+        filename = f"x{x:+07d}_y{y:+07d}.png"
+        canvas.save(args.output / filename, optimize=True)
+        records.append({"world_x": x, "world_y": y, "file": filename})
 
     manifest = {
         "symbol": args.symbol,
@@ -156,6 +182,10 @@ def main():
         "missing_ids": sorted(missing),
         "tiles": records,
     }
+    if args.only_tile is not None:
+        manifest["partial_proof_only"] = True
+        manifest["requested_tile_origins"] = [[x, y] for x, y in tile_origins]
+        manifest["never_embed_as_complete_level"] = True
     (args.output / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     print(json.dumps({
         "symbol": args.symbol,
