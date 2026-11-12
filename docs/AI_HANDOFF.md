@@ -1,5 +1,11 @@
 # AI handoff — current recovery checkpoint
 
+## LIVE AF06 CORRECTION — final candidate e2dee581 / exact-code Windows tests running
+
+- **IMPORTANT supersedes earlier AF06 candidate e790:** latest actual code SHA `e2dee581e0f27a375a891eb2756b31a2bf6e29e7`; later implementation commits `be07f90` fixed false partial-preview marker on verified full-grid depth layers while preserving all actual partial-pack denials; `e2dee58` tightened source depth ranges to exact B06 original `1..385` and `386..1073`. **Current source Windows #43176174161** and **full native Windows #43176174200**, both running at exact final candidate SHA as checked live. Previous source/native on e790 and be07 were cancelled by GitHub concurrency and do not establish pass. Earlier two source jobs failed at newly assumed wrong depth 626 and remain recorded as failures. Tests/artifacts/visual comparison NOT VERIFIED until completed runs inspected.
+- [PR35](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/35) remains DRAFT/UNMERGED based on AF05 docs `6971840`. All source edits offline only, Rust gameplay/release `main` untouched. Next step: inspect exact CI at e2dee58 and any failure artifacts, repair only AF06 scope, final audit/six-file docs and PR body; STOP, do not begin another repair.
+
+
 ## CURRENT — 2026-11-12 AUDIT-FIX-06 complete original Bank HQ3×/depth source gate (CI PENDING)
 
 - **Authorized task:** recover finished AUDIT-FIX-05 (source #43171300111 and full native #43171300209 SUCCESS on prior code `26dad6e`, docs SHA `6971840`) then ONE new audit repair. Parent [draft PR34](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/34) stays open/unmerged. [New draft PR35](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/35) is on `revive/level2-audit-fix-bank-full-hq3x-2026-11-12`, based on AF05 docs SHA `697184060ed552fab9e8dcb80e27c7d0d62950f2`. Exact current **TEST-CANDIDATE CODE SHA** `e790ebc4f2d648de8912155b28710d2579a9c9bf` (not yet a PASS). Docs SHA is the separate later branch HEAD; obtain from live Git.
