@@ -114,7 +114,8 @@ def main():
     if source_definition_tags(args.swf, {758, 771, 774}) != {758:34, 771:34, 774:11}:
         raise AssertionError("original Button2/Text tags changed")
     split = source_depth_split(stage, symbols, set(excluded))
-    if split["original_direct_display_depth_cut"] != 385:
+    if (split["original_direct_display_depth_cut"] != 385
+            or split["lower_band"] != [1, 385] or split["upper_band"] != [386, 1073]):
         raise AssertionError("original Bank authored-depth cut changed")
     args.out.mkdir(parents=True, exist_ok=True)
 
