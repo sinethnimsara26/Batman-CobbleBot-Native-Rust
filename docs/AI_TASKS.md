@@ -1,6 +1,25 @@
 # Persistent development tasks — Batman Rust port
 
 
+## AUDIT-FIX-12 / R-04 — COMPLETED / CommonAssets & StageAssets partitioning (2026-11-12)
+
+**VERIFIED NATIVE WINDOWS REGRESSION, NOT PLAYABLE LEVEL1B.** [Draft, OPEN, UNMERGED PR #41](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/41) on `revive/level2-audit-fix-split-assets-2026-11-12`, based on AF11 docs commit `0fc1ca2`. **Exact Windows-tested code SHA `427da5a`**. Final documentation SHA is the separate later `[skip ci]` commit; this file cannot prestate its own commit ID. Full native Windows [#43317649029](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43317649029) **SUCCESS 82/82 steps** on exact code SHA.
+
+**ENGINEERING & ARCHITECTURE FACTS:**
+1. Split `Assets` into persistent `CommonAssets` (stage-invariant symbols: Batman, HUD, story/intro, title screens, fonts, overlays) and modular `StageAssets` (stage background, 1× tiles, HQ base tiles, HQ detail tiles, and `stage_id`).
+2. Implemented `CommonAssets::load()` for one-time startup initialization and `StageAssets::load(stage_id)` for on-demand stage asset loading, preventing multi-stage memory accumulation.
+3. Implemented `Deref<Target = CommonAssets>` and `DerefMut<Target = CommonAssets>` on `Assets`, allowing all common symbols to be accessed directly as `assets.<field>` without code churn across the engine.
+4. Added `Assets::load_stage(&mut self, stage_id: StageId)` to cleanly swap stage assets at stage transitions.
+5. Implemented `Clone` for `LevelTileSet` to safely allow stage asset duplication without re-reading disk packs.
+6. Three new unit tests added: `common_and_stage_assets_split_invariants`, `stage_assets_load_and_swap_preserves_depth_and_scale`, and `assets_deref_transparent_access`, increasing total Rust tests from 51 to 54.
+
+**NATIVE VERIFIED on exact CODE SHA:** locked MSVC release `cargo test --release --locked` **54/54 passed in 1.10s**, locked build PASS, native legacy 1× image SHA **15/15 identical**, HQ3× smoke **20/20 at 1800×1200**, relocated standalone EXE **20/20 exact HQ hashes**, child exit 0 and no SWF staged. Real Win32 OS capture/start/held Enter/fresh Enter/SKIP, F7/F8 three HUD cases, fullscreen F/Esc, focus visuals, PE and Windows Shell icon PASS. Render p95 **22.2483ms**, scenery scroll p95 **27.7404ms**, both well below unchanged **40ms** gate. Integration QA artifact confirmed child exit 0, 20/20 identical HQ hashes. Hosted WinMM audio device 0 / MCI error 277 remains **BLOCKED** (no hosted speaker endpoint). Live Flash parity and physical audio UNVERIFIED.
+
+**RUST PURITY/AUDIT:** Zero unsafe code, zero new external crates, runtime remains 100% native Rust with documented Win32/GDI/WinMM FFI. [Research RE-20261112-015](REVERSE_ENGINEERING_RESEARCH_LEDGER.md) and [independent AUD-20261112-015](RUST_PURITY_AND_ENGINEERING_AUDIT.md) finalized. Reviewed `AGENTS.md` and both mandatory protocols unchanged. Main and accepted Level1A release preserved.
+
+**STOP. ONE NEXT SEPARATELY AUTHORIZED TASK: B10 enemy AI (`goonAI`) implementation**, preserving existing baseline.
+
+
 ## AUDIT-FIX-11 / R-03 — COMPLETED / zero-allocation rendering & HUD formatting (2026-11-12)
 
 **VERIFIED NATIVE WINDOWS REGRESSION, NOT PLAYABLE LEVEL1B.** [Draft, OPEN, UNMERGED PR #40](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/40) on `revive/level2-audit-fix-render-zero-alloc-2026-11-12`, based on AF10 docs commit `e891293`. **Exact Windows-tested code SHA `9ff54fa`**. Final documentation SHA is the separate later `[skip ci]` commit; this file cannot prestate its own commit ID. Full native Windows [#43311547391](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43311547391) **SUCCESS 82/82 steps** on exact code SHA.

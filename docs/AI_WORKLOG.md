@@ -720,3 +720,23 @@ Do not erase two historical CI failures: documentation-only #42834460076 and ini
   - Fidelity: 15/15 historical 1× screenshots identical, 20/20 relocated standalone EXE HQ3× screenshot hashes identical, child exit 0.
   - Hosted audio: BLOCKED (no hosted audio endpoint, WinMM MCI error 277).
 - **Records & Governance:** RE-20261112-014 and AUD-20261112-014 appended. All six records synchronized. No unsafe code, no external dependencies. PR #40 remains DRAFT/OPEN. STOP.
+
+
+## 2026-11-12 — AUDIT-FIX-12 / R-04 CommonAssets & StageAssets partitioning (VERIFIED)
+
+- **Scope & Context:** AUDIT-FIX-12 / R-04; branch `revive/level2-audit-fix-split-assets-2026-11-12`, draft PR #41 based on AUDIT-FIX-11 docs commit `0fc1ca2`.
+- **Implementation:**
+  1. `src/assets.rs`: Defined `CommonAssets` holding persistent stage-invariant symbols: Batman (`#691` 1× & HQ), HUD (`#716`, numbers, fonts), Root backdrop (sky `#131`, moon `#134` 1× & HQ), Pickups (`#695` 1× & HQ), Batarangs (`#694` 1× & HQ), Overlays (tutorial `#737`, level title, fade in/out), and UI screens (title `#15`, instructions `#16`, story/intro `#18` 180-frame lazy set).
+  2. Defined `StageAssets` holding stage-specific geometry and background (`stage_id`, `background`, `tiles`, `tiles_hq_base`, `detail_tiles_hq`), with on-demand `StageAssets::load(stage_id)` loading.
+  3. Implemented `std::ops::Deref<Target = CommonAssets>` and `DerefMut` on `Assets` to provide zero-cost transparent access to all common symbols across the engine without call-site churn.
+  4. Added `Assets::load_stage(&mut self, stage_id: StageId)` to swap active stage assets on stage transitions.
+  5. Implemented `Clone` for `LevelTileSet` to safely allow stage asset duplication without re-reading disk packs.
+  6. Added 3 new unit tests (`common_and_stage_assets_split_invariants`, `stage_assets_load_and_swap_preserves_depth_and_scale`, `assets_deref_transparent_access`), bringing total Rust tests from 51 to 54.
+  7. Added branch to `.github/workflows/build-level1a-fidelity.yml`.
+- **Native Windows CI Execution:**
+  - Full native Windows run [#43317649029](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43317649029) completed **SUCCESS 82/82 steps** on exact code SHA `427da5a`.
+  - Cargo test: **54/54 passed in 1.10s**.
+  - Performance: Render p95 **22.2483ms**, scenery scroll p95 **27.7404ms** (well below 40.0ms gate).
+  - Fidelity: 15/15 historical 1× screenshots identical, 20/20 relocated standalone EXE HQ3× screenshot hashes identical, child exit 0.
+  - Hosted audio: BLOCKED (no hosted audio endpoint, WinMM MCI error 277).
+- **Records & Governance:** RE-20261112-015 and AUD-20261112-015 appended. All six records synchronized. No unsafe code, no external dependencies. PR #41 remains DRAFT/OPEN. STOP.

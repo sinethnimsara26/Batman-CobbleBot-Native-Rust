@@ -1007,3 +1007,22 @@ Do not erase two historical CI failures: documentation-only #42834460076 and ini
   - **ENGINEERING QUALITY:** PASS (completely eliminated all runtime heap allocations from rendering loop; ~125-150 allocations/sec reduced to 0; 3,600 integer divisions/frame replaced by `.rodata` array indexing).
   - **ORIGINAL-GAME FIDELITY:** VERIFIED FOR TESTED SCOPE (Level 1A gameplay intact; 15/15 1× hashes and 20/20 relocated standalone EXE HQ hashes identical).
   - **HARDWARE SPEAKER AUDIO:** BLOCKED (hosted runner limitation, unchanged).
+
+
+## AUD-20261112-015 — Independent post-code Rust purity/engineering audit of AUDIT-FIX-12 (R-04)
+
+- **Audit Date:** 2026-11-12
+- **Scope:** `src/assets.rs`, `.github/workflows/build-level1a-fidelity.yml`
+- **Code SHA:** `427da5a` on branch `revive/level2-audit-fix-split-assets-2026-11-12` (PR #41).
+- **Actual Changed Code and Engineering Review:**
+  1. Split `Assets` into persistent `CommonAssets` (holding Batman, HUD, UI screens, story/intro, fonts, and overlays) and modular `StageAssets` (holding stage background, 1× tiles, HQ base tiles, HQ detail tiles, and `stage_id`).
+  2. Implemented `CommonAssets::load()` for persistent startup assets and `StageAssets::load(stage_id)` for on-demand stage loading.
+  3. Implemented `std::ops::Deref` and `std::ops::DerefMut` on `Assets` targeting `CommonAssets`, ensuring zero-cost, transparent access to all common symbols without call-site churn.
+  4. Added `Assets::load_stage(&mut self, stage_id: StageId)` to cleanly swap stage assets at stage transitions, preventing multi-stage memory accumulation.
+  5. Implemented `Clone` for `LevelTileSet` to safely allow stage asset duplication without re-reading disk packs.
+  6. Added 3 unit tests (`common_and_stage_assets_split_invariants`, `stage_assets_load_and_swap_preserves_depth_and_scale`, `assets_deref_transparent_access`). Total unit tests increased from 51 to 54.
+- **Verdicts:**
+  - **PURE-RUST RUNTIME COMPLIANCE:** PASS (with existing direct Win32/GDI/WinMM OS FFI qualifications). Zero new crates, zero unsafe blocks.
+  - **ENGINEERING QUALITY:** PASS (clean separation of concerns, zero memory bloat across stages, zero-cost `Deref` abstractions).
+  - **ORIGINAL-GAME FIDELITY:** VERIFIED FOR TESTED SCOPE (Level 1A gameplay intact; 15/15 1× hashes and 20/20 relocated standalone EXE HQ hashes identical).
+  - **HARDWARE SPEAKER AUDIO:** BLOCKED (hosted runner limitation, unchanged).
