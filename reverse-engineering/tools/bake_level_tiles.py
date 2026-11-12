@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import hashlib
 import argparse
 import json
 import math
@@ -53,6 +54,10 @@ def main():
     parser.add_argument("--supersample", type=int, default=1)
     parser.add_argument("--complete-bank-street-1x", action="store_true",
                         help="strict full-stage Bank #783 1x source bake only; requires all 75 SWF-observed non-empty tiles")
+    parser.add_argument("--complete-bank-street-hq3x", action="store_true",
+                        help="strict full-grid #783 true vector 6x-to-3x source bake, flat or source-depth band; development only")
+    parser.add_argument("--bank-depth-band", choices=("flat", "lower", "upper"), default="flat",
+                        help="only meaningful with --complete-bank-street-hq3x; original authored-depth ownership")
     parser.add_argument("--source-over-strokes", action="store_true",
                         help="opt-in source-over Flash vector strokes; legacy Level1A/B05 pixel contract remains default")
     parser.add_argument("--downsample", choices=("none","lanczos"), default="none")
@@ -65,7 +70,7 @@ def main():
     if args.root_depth_range is not None:
         if args.root_depth_range[0] > args.root_depth_range[1]:
             raise ValueError("reversed --root-depth-range")
-        if args.only_tile is None:
+        if args.only_tile is None and not args.complete_bank_street_hq3x:
             raise ValueError("partial root-depth layer may only be baked with --only-tile")
     if args.complete_bank_street_1x:
         if (args.symbol != 783 or args.only_tile is not None or args.root_depth_range is not None
@@ -75,6 +80,25 @@ def main():
                 or not args.include_source_static_text or args.source_over_strokes
                 or not {153, 782, 758, 771}.issubset(args.exclude_symbol)):
             raise ValueError("full Bank #783 1x requires canonical frame-zero geometry, filtered source logic/buttons and legacy B05 raster")
+    if args.complete_bank_street_hq3x:
+        expected_band = {
+            "flat": None, "lower": "lower", "upper": "upper",
+        }[args.bank_depth_band]
+        if (args.complete_bank_street_1x or args.symbol != 783 or args.only_tile is not None
+                or (args.place_x, args.place_y) != (1034.65, 239.25)
+                or (args.tile_width, args.tile_height) != (600, 400)
+                or (args.output_scale, args.supersample, args.downsample) != (3, 2, "lanczos")
+                or not args.include_source_static_text or not args.source_over_strokes
+                or not {153, 782, 758, 771}.issubset(args.exclude_symbol)
+                or (expected_band is None) != (args.root_depth_range is None)):
+            raise ValueError("full Bank #783 HQ3x requires canonical source, true 6x vector filtering and an authenticated depth mode")
+        if args.root_depth_range is not None:
+            lo, hi = args.root_depth_range
+            if not ((expected_band == "lower" and (lo, hi) == (1, 385))
+                    or (expected_band == "upper" and (lo, hi) == (386, 1073))):
+                raise ValueError("Bank depth layer must use original depth cut 385 and an ordered complete band")
+    elif args.bank_depth_band != "flat":
+        raise ValueError("--bank-depth-band is available only for complete Bank HQ3x")
     if args.output_scale < 1:
         raise ValueError("--output-scale must be >= 1")
     if args.supersample < 1:
@@ -140,7 +164,7 @@ def main():
                 )
         tile_origins = sorted(requested, key=lambda xy: (xy[1], xy[0]))
 
-    if args.complete_bank_street_1x and len(tile_origins) != 76:
+    if (args.complete_bank_street_1x or args.complete_bank_street_hq3x) and len(tile_origins) != 76:
         raise ValueError("Bank full-grid must cover 76 original-world candidate positions")
 
     args.output.mkdir(parents=True, exist_ok=True)
@@ -207,6 +231,11 @@ def main():
         if unsupported or missing:
             raise ValueError(f"incomplete canonical Bank source art: unsupported={sorted(unsupported)}, missing={sorted(missing)}")
 
+    if args.complete_bank_street_hq3x:
+        if (args.bank_depth_band == "flat" and len(records) != 75) or not records:
+            raise ValueError(f"Bank source HQ3x full grid unexpectedly contains {len(records)} nonempty tiles")
+        if unsupported or missing:
+            raise ValueError(f"incomplete original Bank HQ source art: unsupported={sorted(unsupported)}, missing={sorted(missing)}")
     manifest = {
         "symbol": args.symbol,
         "source_static_text_enabled": args.include_source_static_text,
@@ -227,8 +256,11 @@ def main():
         "tiles": records,
         "full_grid_candidate_count": len(tile_origins),
         "complete_bank_street_1x": bool(args.complete_bank_street_1x),
+        "complete_bank_street_hq3x": bool(args.complete_bank_street_hq3x),
+        "bank_depth_band": args.bank_depth_band if args.complete_bank_street_hq3x else None,
+        "canonical_bank_fws_sha256": hashlib.sha256(args.swf.read_bytes()).hexdigest() if args.complete_bank_street_hq3x else None,
     }
-    if args.only_tile is not None or args.root_depth_range is not None:
+    if args.only_tile is not None or (args.root_depth_range is not None and not args.complete_bank_street_hq3x):
         manifest["partial_proof_only"] = True
         manifest["requested_tile_origins"] = [[x, y] for x, y in tile_origins]
         manifest["never_embed_as_complete_level"] = True

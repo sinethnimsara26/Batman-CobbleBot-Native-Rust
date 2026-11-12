@@ -46,17 +46,54 @@ def main():
         # A sparse B05/B06 preview must never become a seemingly valid native
         # Level1B scenery pack. Full coverage is explicitly certified by the
         # canonical frame-zero source baker, never inferred from a filename.
-        if not manifest.get("complete_bank_street_1x"):
-            raise ValueError("Bank Street #783 requires verified full-stage 1x provenance before packing")
-        if (len(tiles) != 75 or manifest.get("full_grid_candidate_count", 0) != 76
-                or manifest.get("source_root_depth_range") is not None
-                or manifest.get("source_static_text_enabled") is not True
-                or manifest.get("source_over_strokes") is not False
-                or manifest_scale != 1.0 or args.format_version != 1):
-            raise ValueError("Bank Street #783 full-stage 1x pack source contract failed")
-        coords = [(item["world_x"], item["world_y"]) for item in tiles]
-        if len(set(coords)) != 75:
-            raise ValueError("Bank Street #783 contains duplicate tile origins")
+        if manifest.get("complete_bank_street_hq3x"):
+            if (manifest.get("complete_bank_street_1x")
+                    or manifest.get("canonical_bank_fws_sha256") != "3d9e1992404313bc2e2652d46a5838160ef721e2ad559fdd7455f3c54f8ac1ed"
+                    or manifest.get("placement") != [1034.65, 239.25]
+                    or manifest.get("tile_size") != [1800, 1200]
+                    or manifest.get("logical_tile_size") != [600, 400]
+                    or manifest.get("full_grid_candidate_count") != 76
+                    or not {153, 782, 758, 771}.issubset(set(manifest.get("excluded_symbols", [])))
+                    or manifest.get("source_static_text_enabled") is not True
+                    or manifest.get("source_over_strokes") is not True
+                    or manifest.get("supersample") != 2 or manifest.get("downsample") != "lanczos"
+                    or manifest.get("alpha_filtering") != "premultiplied"
+                    or manifest_scale != 3.0 or args.format_version != 2
+                    or args.crop_transparent):
+                raise ValueError("Bank Street HQ3x pack source certificate/format mismatch")
+            band = manifest.get("bank_depth_band")
+            depths = manifest.get("source_root_depth_range")
+            if (band == "flat" and (depths is not None or len(tiles) != 75)):
+                raise ValueError("Bank Street flat HQ3x must contain all 75 source tiles")
+            if (band == "lower" and not (
+                    isinstance(depths, list) and len(depths) == 2
+                    and depths == [1, 385])):
+                raise ValueError("Bank Street lower HQ3x original depth certificate mismatch")
+            if (band == "upper" and not (
+                    isinstance(depths, list) and len(depths) == 2
+                    and depths == [386, 1073])):
+                raise ValueError("Bank Street upper HQ3x original depth certificate mismatch")
+            if band not in ("flat", "lower", "upper") or not tiles or len(tiles) > 75:
+                raise ValueError("Bank Street HQ3x missing authored-band or tile data")
+            coords = [(item["world_x"], item["world_y"]) for item in tiles]
+            # A complete authored band can contain fewer nonempty tiles; it
+            # must still be a unique subset of the canonical 76-cell grid.
+            allowed = {(x, y) for y in range(-400, 801, 400)
+                       for x in range(-9000, 1801, 600)}
+            if len(set(coords)) != len(coords) or not set(coords).issubset(allowed):
+                raise ValueError("Bank Street HQ3x has duplicate/off-grid tile coordinates")
+        else:
+            if not manifest.get("complete_bank_street_1x"):
+                raise ValueError("Bank Street #783 requires verified full-stage 1x provenance before packing")
+            if (len(tiles) != 75 or manifest.get("full_grid_candidate_count", 0) != 76
+                    or manifest.get("source_root_depth_range") is not None
+                    or manifest.get("source_static_text_enabled") is not True
+                    or manifest.get("source_over_strokes") is not False
+                    or manifest_scale != 1.0 or args.format_version != 1):
+                raise ValueError("Bank Street #783 full-stage 1x pack source contract failed")
+            coords = [(item["world_x"], item["world_y"]) for item in tiles]
+            if len(set(coords)) != 75:
+                raise ValueError("Bank Street #783 contains duplicate tile origins")
     magic = MAGIC_V2 if args.format_version == 2 else MAGIC_V1
     payload = bytearray(magic + struct.pack("<I", len(tiles)))
     if args.format_version == 2:
