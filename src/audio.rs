@@ -59,12 +59,44 @@ impl IntroTransport {
         }
     }
 }
+// The looping Level 1A soundtrack must pause with the fixed-step game when
+// the window loses focus. Stop takes precedence over any pending resume.
+#[derive(Clone,Copy,Debug,Default,PartialEq,Eq)]
+enum MusicTransport {
+    #[default]
+    Stopped,
+    Playing,
+    PausedForFocus,
+}
+impl MusicTransport {
+    fn focus_command(self,active:bool)->Option<&'static str>{
+        match (self,active) {
+            (Self::Playing,false)=>Some("pause bcb_music"),
+            (Self::PausedForFocus,true)=>Some("resume bcb_music"),
+            _=>None,
+        }
+    }
+    fn accept_focus_result(&mut self,active:bool,success:bool){
+        if !success{return;}
+        match (*self,active){
+            (Self::Playing,false)=>*self=Self::PausedForFocus,
+            (Self::PausedForFocus,true)=>*self=Self::Playing,
+            _=>{},
+        }
+    }
+    fn accept_start_result(&mut self,success:bool){
+        *self=if success{Self::Playing}else{Self::Stopped};
+    }
+    fn stop(&mut self){*self=Self::Stopped;}
+}
+
 pub struct Audio {
     dir:PathBuf,
     intro:bool,
     intro_open_error:u32,
     intro_file_written:bool,
     intro_transport:IntroTransport,
+    music_transport:MusicTransport,
     music:bool,
     jump:bool,
     item:bool,
@@ -92,16 +124,24 @@ impl Audio {
         let item=fs::write(&item_path,include_bytes!("../assets/item.mp3")).is_ok()
             && command(&format!("open \"{}\" type mpegvideo alias bcb_item",item_path.display()));
 
-        Self{dir,intro,intro_open_error,intro_file_written,intro_transport:IntroTransport::Stopped,music,jump,item}
+        Self{dir,intro,intro_open_error,intro_file_written,intro_transport:IntroTransport::Stopped,music_transport:MusicTransport::Stopped,music,jump,item}
     }
 
-    /// While Win32 stops the 25Hz simulation off-focus, the original intro
-    /// MCI media must also pause. Other audio is outside this batch's scope.
+    /// Win32 stops the 25Hz simulation off-focus; both continuing MCI
+    /// soundtracks must follow. One-shot jump/item effects remain unchanged.
+    /// Failed MCI commands never fabricate an updated transport state.
     pub fn on_focus_changed(&mut self,active:bool){
-        if !self.intro{return;}
-        if let Some(mci)=self.intro_transport.focus_command(active){
-            let success=command(mci);
-            self.intro_transport.accept_focus_result(active,success);
+        if self.intro {
+            if let Some(mci)=self.intro_transport.focus_command(active){
+                let success=command(mci);
+                self.intro_transport.accept_focus_result(active,success);
+            }
+        }
+        if self.music {
+            if let Some(mci)=self.music_transport.focus_command(active){
+                let success=command(mci);
+                self.music_transport.accept_focus_result(active,success);
+            }
         }
     }
 
@@ -155,9 +195,12 @@ impl Audio {
             AudioEvent::MusicStart if self.music=>{
                 let _=command("stop bcb_music");
                 let _=command("seek bcb_music to start");
-                let _=command("play bcb_music repeat");
+                self.music_transport.accept_start_result(command("play bcb_music repeat"));
             }
             AudioEvent::MusicStop if self.music=>{
+                // Prevent any later focus gain from reviving a stopped song,
+                // even if the MCI stop/seek itself fails.
+                self.music_transport.stop();
                 let _=command("stop bcb_music");
                 let _=command("seek bcb_music to start");
             }
@@ -178,7 +221,49 @@ impl Audio {
 
 #[cfg(test)]
 mod tests {
-    use super::IntroTransport;
+    use super::{IntroTransport,MusicTransport};
+    #[test]
+    fn music_focus_pauses_resumes_only_successful_started_track(){
+        let mut state=MusicTransport::Stopped;
+        assert_eq!(state.focus_command(false),None);
+        state.accept_start_result(false); // no device / failed play
+        assert_eq!(state,MusicTransport::Stopped);
+        assert_eq!(state.focus_command(true),None);
+
+        state.accept_start_result(true);
+        assert_eq!(state,MusicTransport::Playing);
+        assert_eq!(state.focus_command(true),None);
+        assert_eq!(state.focus_command(false),Some("pause bcb_music"));
+        state.accept_focus_result(false,false);
+        assert_eq!(state,MusicTransport::Playing);
+        state.accept_focus_result(false,true);
+        assert_eq!(state,MusicTransport::PausedForFocus);
+        assert_eq!(state.focus_command(false),None);
+        assert_eq!(state.focus_command(true),Some("resume bcb_music"));
+        state.accept_focus_result(true,false);
+        assert_eq!(state,MusicTransport::PausedForFocus);
+        state.accept_focus_result(true,true);
+        assert_eq!(state,MusicTransport::Playing);
+        assert_eq!(state.focus_command(true),None);
+    }
+
+    #[test]
+    fn music_stop_during_focus_pause_never_restores_old_loop(){
+        let mut state=MusicTransport::Stopped;
+        state.accept_start_result(true);
+        state.accept_focus_result(false,true);
+        assert_eq!(state,MusicTransport::PausedForFocus);
+        state.stop();
+        assert_eq!(state.focus_command(true),None);
+        assert_eq!(state,MusicTransport::Stopped);
+        state.accept_start_result(false);
+        assert_eq!(state.focus_command(true),None);
+        state.accept_start_result(true); // new scene/music explicit restart
+        assert_eq!(state.focus_command(false),Some("pause bcb_music"));
+        state.stop();
+        assert_eq!(state.focus_command(true),None);
+    }
+
     #[test]
     fn focus_pause_resume_is_idempotent_and_preserves_media_position(){
         let mut state=IntroTransport::Stopped;
