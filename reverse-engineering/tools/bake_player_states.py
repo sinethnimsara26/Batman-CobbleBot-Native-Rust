@@ -143,7 +143,8 @@ def main():
         })
 
     manifest={
-        "format":"batman-true-child-timelines-v1",
+        "format":("batman-true-child-timelines-v1" if args.symbol == 691
+                  else "source-true-child-timelines-v1"),
         "outer_symbol":args.symbol,
         "frame_count":cursor,
         "size":[final_width,final_height],

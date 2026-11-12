@@ -4,8 +4,11 @@ on:
   push:
     branches:
       - revive/level2-b09-bank-goon-sprites-2026-11-12
+      - revive/level2-audit-fix-goon-true-clips-2026-11-12
     paths:
       - reverse-engineering/tools/b09_bake_bank_goons.py
+      - reverse-engineering/tools/b09_verify_true_child_clips.py
+      - reverse-engineering/tools/bake_player_states.py
       - src/bank_goons.rs
       - .github/workflows/b09-original-bank-street-goon-source.yml
   workflow_dispatch:
@@ -14,7 +17,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: b09-original-bank-street-goons
+  group: b09-original-bank-street-goons-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -80,6 +83,21 @@ jobs:
           $ErrorActionPreference = "Stop"
           python reverse-engineering/tools/b09_bake_bank_goons.py --swf ".generated/b09input/canonical_original.swf" --symbols ".generated/b09input/reports/symbols.json" --bitmaps ".generated/b09input/bitmaps" --instances "reverse-engineering/manifests/level-instances.json" --spec "reverse-engineering/manifests/level-spec.json" --labels "reverse-engineering/manifests/animation-labels.json" --out ".generated/b09-bank-goon-source"
           if ($LASTEXITCODE -ne 0) { throw "B09 original goon frame/span/source proof FAILED" }
+
+      - name: Bake and validate genuine nested source child-clip frames (55 + 66)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $tools = "reverse-engineering/tools"
+          $swf = ".generated/b09input/canonical_original.swf"
+          $symbols = ".generated/b09input/reports/symbols.json"
+          $root = ".generated/b09-bank-goon-source/true_child_1x"
+          foreach ($id in @(880, 964)) {
+            python "$tools/bake_player_states.py" "$swf" "$symbols" "$root/$id" --bitmaps ".generated/b09input/bitmaps" --symbol $id --scale 1 --output-scale 1
+            if ($LASTEXITCODE -ne 0) { throw "Goon child baking failed for $id" }
+          }
+          python "$tools/b09_verify_true_child_clips.py" --symbols "$symbols" --root "$root"
+          if ($LASTEXITCODE -ne 0) { throw "B09 nested goon child source proof failed" }
 
       - name: Upload B09 partial source-goon frame proof (no full SWF or native actor pack)
         if: always()
