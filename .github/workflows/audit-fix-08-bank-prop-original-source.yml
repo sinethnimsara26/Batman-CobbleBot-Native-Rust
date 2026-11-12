@@ -1,0 +1,62 @@
+name: audit-fix-08-bank-prop-original-source
+
+on:
+  push:
+    branches: [revive/level2-audit-fix-bank-prop-logic-2026-11-12]
+    paths:
+      - reverse-engineering/tools/audit_fix_08_bank_prop_logic.py
+      - src/bank_props.rs
+      - .github/workflows/audit-fix-08-bank-prop-original-source.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: af08-bank-props-source
+  cancel-in-progress: true
+
+jobs:
+  windows-source-probe:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Retrieve SHA-verified original FWS
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $url = "https://archive.org/download/the-batman-cobblebot-caper/The%20Batman%20-%20The%20Cobblebot%20Caper.swf"
+          for ($try=1; $try -le 4; $try++) {
+            try { Invoke-WebRequest -Uri $url -OutFile ".af08-source.swf" -ErrorAction Stop; break }
+            catch { if ($try -eq 4) { throw }; Start-Sleep -Seconds (5*$try) }
+          }
+          @'
+          from pathlib import Path
+          import hashlib,zlib
+          b=Path(".af08-source.swf").read_bytes()
+          fws=b"FWS"+b[3:8]+zlib.decompress(b[8:]) if b[:3]==b"CWS" else b
+          digest=hashlib.sha256(fws).hexdigest()
+          assert fws[:3]==b"FWS" and len(fws)==2819100
+          assert digest=="3d9e1992404313bc2e2652d46a5838160ef721e2ad559fdd7455f3c54f8ac1ed"
+          p=Path(".generated/canonical.swf");p.parent.mkdir(parents=True,exist_ok=True);p.write_bytes(fws)
+          print("AF08_CANONICAL_SOURCE_PASS",digest,len(fws))
+          '@ | python -
+      - name: Extract original AVM1 and complete source sprite definitions
+        shell: pwsh
+        run: |
+          python reverse-engineering/tools/swf_re.py ".generated/canonical.swf" ".generated/reports"
+          if ($LASTEXITCODE -ne 0) { throw "Original parser failed" }
+      - name: Prove all Bank props/timelines and original callbacks
+        shell: pwsh
+        run: |
+          python reverse-engineering/tools/audit_fix_08_bank_prop_logic.py --swf ".generated/canonical.swf" --symbols ".generated/reports/symbols.json" --actions ".generated/reports/actions.json" --instances "reverse-engineering/manifests/level-instances.json" --out ".generated/af08"
+          if ($LASTEXITCODE -ne 0) { throw "AF08 original prop proof failed" }
+      - name: Upload ONLY source summary, never SWF
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AF08-Bank-Props-AVM1-Timeline-Source-Evidence
+          path: .generated/af08/
+          if-no-files-found: warn
+          retention-days: 30
