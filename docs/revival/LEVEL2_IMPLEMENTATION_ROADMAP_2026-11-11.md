@@ -1,5 +1,8 @@
 # Batman native Rust — Level 1B → Penguin → Gotham Labs roadmap
 
+## 2026-11-12 pre-B10 audit repair checkpoint — L2-CRIT-01 true child clips
+- [Draft PR30](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/30) / code [`9221aaba`](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/commit/9221aababbde8a65409dfb39faaa60e370bdc41b): source-backed immutable #880=55 / #964=66 nested child frame maps, source-only extra121 frame proof and focused Rust test. Source Windows [#43153083844](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43153083844) SUCCESS, artifact #13913849892. Full native [#43153083852](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43153083852) awaiting definitive result at initial documentation. Prior B09 parent timeline 89f/source library evidence preserved; no 1B gameplay activation. L2-CRIT-02/03, L2-ARCH-04 and R-01..R-06 outstanding (R-05 reentrancy next separate repair). The older B09 roadmap below is historical; do not start B10 without new authorization and resolving audit blockers.
+
 ## 2026-11-12 Independent Full Rescan & Rust Audit (`B01`–`B09`)
 
 See [`LEVEL2_INDEPENDENT_RESCAN_AND_RUST_AUDIT_2026-11-12.md`](LEVEL2_INDEPENDENT_RESCAN_AND_RUST_AUDIT_2026-11-12.md) (**RE-20261112-003**, **AUD-20261112-003**) for the complete independent audit of batches `B01`–`B09`, including:

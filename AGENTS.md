@@ -1,5 +1,10 @@
 # AI agent operating guide — Batman: The CobbleBot Caper
 
+## CURRENT — 2026-11-12 pre-B10 AUDIT-FIX-01 true goon child timeline repair (separate DRAFT PR #30)
+- Prior independent audit `L2-CRIT-01` was **a future runtime/source-asset activation risk, NOT a demonstrated live Level1A gameplay bug**. Latest repair code [`9221aaba`](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/commit/9221aababbde8a65409dfb39faaa60e370bdc41b) on `revive/level2-audit-fix-goon-true-clips-2026-11-12`, [draft unmerged PR #30](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/30), adds exact true nested #880=55 / #964=66 child frame ranges to dormant Rust, and source-only 121-frame bake/proof; preserves all 178 parent frame reference stills.
+- [Original source Windows CI #43153083844](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43153083844) **SUCCESS** on exact code SHA; source artifact [#13913849892](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43153083844/artifacts/13913849892). [Full native Windows CI #43153083852](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43153083852) is the separate definitive regression gate; consult its **live outcome**, not this snapshot. No new playable Level1B, AVM1 or goon AI. Original `main`, accepted Level1A release, PR #29 and historical PRs stay untouched. Details in AI_HANDOFF, RE-20261112-004 and AUD-20261112-004.
+- Remaining L2-CRIT-02, L2-CRIT-03, L2-ARCH-04, R-01..R-06 are **NOT** fixed by this source correction. Audit fixes remain separate bounded tasks before normal B10 feature progression. The 2026-11-12 earlier audit block below is historical and is superseded only for L2-CRIT-01.
+
 ## CURRENT — 2026-11-12 INDEPENDENT FULL RESCAN & RUST AUDIT OF LEVEL 2 (`B01`–`B09`) — READ BEFORE STARTING B10
 
 - **Full Independent Audit Report:** [`docs/revival/LEVEL2_INDEPENDENT_RESCAN_AND_RUST_AUDIT_2026-11-12.md`](docs/revival/LEVEL2_INDEPENDENT_RESCAN_AND_RUST_AUDIT_2026-11-12.md) (cross-referenced in **RE-20261112-003** and **AUD-20261112-003**).
