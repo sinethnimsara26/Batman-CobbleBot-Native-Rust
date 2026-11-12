@@ -6,6 +6,8 @@ use crate::collision::CollisionMask;
 use crate::game::{AppScreen,Game,InputState,FIXED_STEP,LOGICAL_H,LOGICAL_W,VK_A,VK_D,VK_DOWN,VK_ENTER,VK_ESCAPE,VK_I,VK_LEFT,VK_RIGHT,VK_S,VK_SPACE,VK_UP};
 use crate::render;
 use crate::surface::RenderSurface;
+use std::cell::RefCell;
+use std::collections::VecDeque;
 use std::ffi::c_void;
 use std::mem::{size_of,transmute,zeroed};
 use std::ptr::{null,null_mut};
@@ -316,7 +318,72 @@ impl App{
 }
 // Read by reentrant Win32 DPI messages without aliasing an in-flight &mut App.
 static FULLSCREEN_ACTIVE:AtomicBool=AtomicBool::new(false);
-static mut APP:*mut App=null_mut();
+
+// HWND callbacks run on the UI thread, but Win32 APIs (notably SetWindowPos)
+// can synchronously re-enter wndproc before the outer mutable App access ends.
+// Never create aliased &mut App references from a global raw pointer.
+// RefCell::try_borrow_mut skips nested App work without panicking. Focus events
+// are queued in original order and drained after the outer borrow is released,
+// so fullscreen operations cannot silently drop WM_ACTIVATE/WM_KILLFOCUS.
+struct ReentrantUi<T> {
+    app: RefCell<Option<T>>,
+    pending_focus: RefCell<VecDeque<bool>>,
+}
+impl<T> ReentrantUi<T> {
+    fn new() -> Self {
+        Self { app: RefCell::new(None), pending_focus: RefCell::new(VecDeque::new()) }
+    }
+    fn install(&self, app: T) {
+        let mut slot = self.app.borrow_mut();
+        assert!(slot.is_none(), "Win32 UI App installed twice");
+        *slot = Some(app);
+    }
+    fn take(&self) -> Option<T> {
+        self.pending_focus.borrow_mut().clear();
+        self.app.borrow_mut().take()
+    }
+    fn with_mut<R>(&self, action: impl FnOnce(&mut T) -> R, focus: fn(&mut T, bool)) -> Option<R> {
+        let output = match self.app.try_borrow_mut() {
+            Ok(mut slot) => slot.as_mut().map(action),
+            Err(_) => None, // nested WM_PAINT/WM_TIMER: do not alias or panic
+        };
+        self.drain_focus(focus);
+        output
+    }
+    fn enqueue_focus(&self, active: bool, focus: fn(&mut T, bool)) {
+        self.pending_focus.borrow_mut().push_back(active);
+        self.drain_focus(focus);
+    }
+    fn drain_focus(&self, focus: fn(&mut T, bool)) {
+        loop {
+            let next = self.pending_focus.borrow_mut().pop_front();
+            let Some(active) = next else { break; };
+            match self.app.try_borrow_mut() {
+                Ok(mut slot) => {
+                    if let Some(app) = slot.as_mut() {
+                        focus(app, active);
+                    }
+                }
+                Err(_) => {
+                    // An outer callback still owns App. Preserve the exact
+                    // message order until that callback returns.
+                    self.pending_focus.borrow_mut().push_front(active);
+                    break;
+                }
+            }
+        }
+    }
+}
+thread_local! {
+    static UI_APP: ReentrantUi<App> = ReentrantUi::new();
+}
+fn with_app<R>(f: impl FnOnce(&mut App) -> R) -> Option<R> {
+    UI_APP.with(|ui| ui.with_mut(f, App::set_active))
+}
+fn queue_focus(active: bool) {
+    UI_APP.with(|ui| ui.enqueue_focus(active, App::set_active));
+}
+
 fn wide(s:&str)->Vec<u16>{s.encode_utf16().chain(Some(0)).collect()}
 
 unsafe fn enable_best_dpi_awareness()->bool{
@@ -360,55 +427,183 @@ fn hit_intro_skip(cw:i32,ch:i32,px:i32,py:i32)->bool{
     ).unwrap_or(false)
 }
 unsafe fn viewport(hwnd:HWND)->(i32,i32,i32,i32){let mut r:RECT=zeroed();GetClientRect(hwnd,&mut r);viewport_for_client(r.right-r.left,r.bottom-r.top)}
-unsafe extern "system" fn wndproc(hwnd:HWND,msg:u32,w:WPARAM,l:LPARAM)->LRESULT{match msg{
- WM_ERASEBKGND=>1,
- WM_PAINT=>{let mut ps:PAINTSTRUCT=zeroed();let hdc=BeginPaint(hwnd,&mut ps);if !APP.is_null(){let app=&mut*APP;app.render();let mut r:RECT=zeroed();GetClientRect(hwnd,&mut r);let cw=(r.right-r.left).max(1);let ch=(r.bottom-r.top).max(1);let(vx,vy,vw,vh)=viewport(hwnd);if vy>0{PatBlt(hdc,0,0,cw,vy,BLACKNESS);PatBlt(hdc,0,vy+vh,cw,ch-vy-vh,BLACKNESS);}if vx>0{PatBlt(hdc,0,vy,vx,vh,BLACKNESS);PatBlt(hdc,vx+vw,vy,cw-vx-vw,vh,BLACKNESS);}let bmi=BITMAPINFO{bmiHeader:BITMAPINFOHEADER{biSize:size_of::<BITMAPINFOHEADER>()as u32,biWidth:app.fb.w as i32,biHeight:-(app.fb.h as i32),biPlanes:1,biBitCount:32,biCompression:BI_RGB,biSizeImage:app.fb.byte_len() as u32,biXPelsPerMeter:0,biYPelsPerMeter:0,biClrUsed:0,biClrImportant:0},bmiColors:[RGBQUAD{rgbBlue:0,rgbGreen:0,rgbRed:0,rgbReserved:0}]};/* Phase 1 HQ proof retained: high-quality final GDI presentation. Phase 2 makes source dimensions explicit without changing them yet. */SetStretchBltMode(hdc,HALFTONE);SetBrushOrgEx(hdc,0,0,null_mut());StretchDIBits(hdc,vx,vy,vw,vh,0,0,app.fb.w as i32,app.fb.h as i32,app.fb.pixels.as_ptr()as*const c_void,&bmi,DIB_RGB_COLORS,SRCCOPY);}EndPaint(hwnd,&ps);0},
- WM_TIMER=>{if !APP.is_null()&&(&mut*APP).timer(hwnd){InvalidateRect(hwnd,null(),0);}0},
- WM_SETFOCUS=>{if !APP.is_null(){(&mut*APP).set_active(true);}0},
- WM_KILLFOCUS=>{if !APP.is_null(){(&mut*APP).set_active(false);}0},
- WM_ACTIVATE=>{if !APP.is_null(){(&mut*APP).set_active((w&0xffff)!=WA_INACTIVE);}0},
- WM_LBUTTONDOWN=>{
-    SetActiveWindow(hwnd);SetFocus(hwnd);
-    if !APP.is_null(){
-      let app=&mut*APP;
-      let mx=(l as u32 & 0xffff) as u16 as i16 as i32;
-      let my=((l as u32 >> 16) & 0xffff) as u16 as i16 as i32;
-      let mut client:RECT=zeroed();GetClientRect(hwnd,&mut client);
-      // Source ButtonCondAction is release-inside, never mouse-down.
-      app.intro_skip_armed=app.game.screen==AppScreen::Intro
-         &&app.game.intro_fadeout_tick.is_none()
-         &&hit_intro_skip(client.right-client.left,client.bottom-client.top,mx,my);
+unsafe extern "system" fn wndproc(hwnd:HWND,msg:u32,w:WPARAM,l:LPARAM)->LRESULT {
+ match msg {
+  WM_ERASEBKGND=>1,
+  WM_PAINT=>{
+   let mut ps:PAINTSTRUCT=zeroed();
+   let hdc=BeginPaint(hwnd,&mut ps);
+   let painted=with_app(|app|{
+    app.render();
+    let mut r:RECT=zeroed();
+    GetClientRect(hwnd,&mut r);
+    let cw=(r.right-r.left).max(1);
+    let ch=(r.bottom-r.top).max(1);
+    let(vx,vy,vw,vh)=viewport(hwnd);
+    if vy>0{
+     PatBlt(hdc,0,0,cw,vy,BLACKNESS);
+     PatBlt(hdc,0,vy+vh,cw,ch-vy-vh,BLACKNESS);
     }
-    0
-  },
- WM_LBUTTONUP=>{
-    if !APP.is_null(){
-      let app=&mut*APP;
-      let armed=app.intro_skip_armed;
-      app.intro_skip_armed=false;
-      if armed&&app.game.screen==AppScreen::Intro{
-        let mx=(l as u32 & 0xffff) as u16 as i16 as i32;
-        let my=((l as u32 >> 16) & 0xffff) as u16 as i16 as i32;
-        let mut client:RECT=zeroed();GetClientRect(hwnd,&mut client);
-        if hit_intro_skip(client.right-client.left,client.bottom-client.top,mx,my)
-           &&app.game.skip_intro(){
-          InvalidateRect(hwnd,null(),0);
-        }
-      }
+    if vx>0{
+     PatBlt(hdc,0,vy,vx,vh,BLACKNESS);
+     PatBlt(hdc,vx+vw,vy,cw-vx-vw,vh,BLACKNESS);
     }
-    0
+    let bmi=BITMAPINFO{
+     bmiHeader:BITMAPINFOHEADER{
+      biSize:size_of::<BITMAPINFOHEADER>() as u32,
+      biWidth:app.fb.w as i32,biHeight:-(app.fb.h as i32),
+      biPlanes:1,biBitCount:32,biCompression:BI_RGB,
+      biSizeImage:app.fb.byte_len() as u32,
+      biXPelsPerMeter:0,biYPelsPerMeter:0,biClrUsed:0,biClrImportant:0
+     },
+     bmiColors:[RGBQUAD{rgbBlue:0,rgbGreen:0,rgbRed:0,rgbReserved:0}]
+    };
+    SetStretchBltMode(hdc,HALFTONE);
+    SetBrushOrgEx(hdc,0,0,null_mut());
+    StretchDIBits(hdc,vx,vy,vw,vh,0,0,
+      app.fb.w as i32,app.fb.h as i32,
+      app.fb.pixels.as_ptr() as *const c_void,&bmi,DIB_RGB_COLORS,SRCCOPY);
+   });
+   EndPaint(hwnd,&ps);
+   // A nested paint could not borrow App; request the next real paint.
+   if painted.is_none(){InvalidateRect(hwnd,null(),0);}
+   0
   },
-  WM_DPICHANGED=>{if FULLSCREEN_ACTIVE.load(Ordering::Relaxed){InvalidateRect(hwnd,null(),0);return 0;}if l!=0{let r=&*(l as *const RECT);let width=(r.right-r.left).max(1);let height=(r.bottom-r.top).max(1);SetWindowPos(hwnd,null_mut(),r.left,r.top,width,height,SWP_NOZORDER|SWP_NOACTIVATE);}InvalidateRect(hwnd,null(),0);0},
- WM_CLOSE=>{DestroyWindow(hwnd);0}, WM_DESTROY=>{KillTimer(hwnd,1);PostQuitMessage(0);0}, _=>DefWindowProcW(hwnd,msg,w,l)}}
+  WM_TIMER=>{
+   if with_app(|app|app.timer(hwnd)).unwrap_or(false){
+    InvalidateRect(hwnd,null(),0);
+   }
+   0
+  },
+  WM_SETFOCUS=>{queue_focus(true);0},
+  WM_KILLFOCUS=>{queue_focus(false);0},
+  WM_ACTIVATE=>{queue_focus((w&0xffff)!=WA_INACTIVE);0},
+  WM_LBUTTONDOWN=>{
+   SetActiveWindow(hwnd);
+   SetFocus(hwnd);
+   let mx=(l as u32&0xffff) as u16 as i16 as i32;
+   let my=((l as u32>>16)&0xffff) as u16 as i16 as i32;
+   let mut client:RECT=zeroed();
+   GetClientRect(hwnd,&mut client);
+   with_app(|app|{
+    // Source ButtonCondAction is release-inside, never mouse-down.
+    app.intro_skip_armed=app.game.screen==AppScreen::Intro
+      &&app.game.intro_fadeout_tick.is_none()
+      &&hit_intro_skip(client.right-client.left,client.bottom-client.top,mx,my);
+   });
+   0
+  },
+  WM_LBUTTONUP=>{
+   let mx=(l as u32&0xffff) as u16 as i16 as i32;
+   let my=((l as u32>>16)&0xffff) as u16 as i16 as i32;
+   let mut client:RECT=zeroed();
+   GetClientRect(hwnd,&mut client);
+   let skipped=with_app(|app|{
+    let armed=app.intro_skip_armed;
+    app.intro_skip_armed=false;
+    armed&&app.game.screen==AppScreen::Intro
+      &&hit_intro_skip(client.right-client.left,client.bottom-client.top,mx,my)
+      &&app.game.skip_intro()
+   }).unwrap_or(false);
+   if skipped{InvalidateRect(hwnd,null(),0);}
+   0
+  },
+  WM_DPICHANGED=>{
+   if FULLSCREEN_ACTIVE.load(Ordering::Relaxed){
+    InvalidateRect(hwnd,null(),0);
+    return 0;
+   }
+   if l!=0{
+    let r=&*(l as *const RECT);
+    let width=(r.right-r.left).max(1);
+    let height=(r.bottom-r.top).max(1);
+    SetWindowPos(hwnd,null_mut(),r.left,r.top,width,height,
+       SWP_NOZORDER|SWP_NOACTIVATE);
+   }
+   InvalidateRect(hwnd,null(),0);
+   0
+  },
+  WM_CLOSE=>{DestroyWindow(hwnd);0},
+  WM_DESTROY=>{KillTimer(hwnd,1);PostQuitMessage(0);0},
+  _=>DefWindowProcW(hwnd,msg,w,l),
+ }
+}
 
-pub fn run(qa_navigation:bool){unsafe{let _dpi_aware=enable_best_dpi_awareness();APP=Box::into_raw(Box::new(App::new(qa_navigation)));let inst=GetModuleHandleW(null());let cls=wide("BatmanCobbleBotLevel1AFidelity");let title=wide("The Batman - CobbleBot Caper - Level 1A Fidelity Slice");let wc=WNDCLASSW{style:CS_HREDRAW|CS_VREDRAW,lpfnWndProc:Some(wndproc),cbClsExtra:0,cbWndExtra:0,hInstance:inst,hIcon:LoadIconW(inst,101_usize as *const u16),hCursor:LoadCursorW(null_mut(),IDC_ARROW),hbrBackground:null_mut(),lpszMenuName:null(),lpszClassName:cls.as_ptr()};if RegisterClassW(&wc)==0{return;}let hwnd=CreateWindowExW(0,cls.as_ptr(),title.as_ptr(),WS_OVERLAPPEDWINDOW|WS_VISIBLE,CW_USEDEFAULT,CW_USEDEFAULT,930,660,null_mut(),null_mut(),inst,null_mut());if hwnd.is_null(){return;}ShowWindow(hwnd,SW_SHOW);SetActiveWindow(hwnd);SetForegroundWindow(hwnd);SetFocus(hwnd);UpdateWindow(hwnd);SetTimer(hwnd,1,8,null());let mut msg:MSG=zeroed();while GetMessageW(&mut msg,null_mut(),0,0)>0{TranslateMessage(&msg);DispatchMessageW(&msg);}let _=Box::from_raw(APP);APP=null_mut();}}
+pub fn run(qa_navigation:bool){
+ unsafe {
+  let _dpi_aware=enable_best_dpi_awareness();
+  UI_APP.with(|ui|ui.install(App::new(qa_navigation)));
+  let inst=GetModuleHandleW(null());
+  let cls=wide("BatmanCobbleBotLevel1AFidelity");
+  let title=wide("The Batman - CobbleBot Caper - Level 1A Fidelity Slice");
+  let wc=WNDCLASSW{
+   style:CS_HREDRAW|CS_VREDRAW,lpfnWndProc:Some(wndproc),
+   cbClsExtra:0,cbWndExtra:0,hInstance:inst,
+   hIcon:LoadIconW(inst,101_usize as *const u16),
+   hCursor:LoadCursorW(null_mut(),IDC_ARROW),
+   hbrBackground:null_mut(),lpszMenuName:null(),lpszClassName:cls.as_ptr()
+  };
+  if RegisterClassW(&wc)==0 {
+   drop(UI_APP.with(|ui|ui.take()));
+   return;
+  }
+  let hwnd=CreateWindowExW(0,cls.as_ptr(),title.as_ptr(),
+    WS_OVERLAPPEDWINDOW|WS_VISIBLE,CW_USEDEFAULT,CW_USEDEFAULT,930,660,
+    null_mut(),null_mut(),inst,null_mut());
+  if hwnd.is_null(){
+   drop(UI_APP.with(|ui|ui.take()));
+   return;
+  }
+  ShowWindow(hwnd,SW_SHOW);
+  SetActiveWindow(hwnd);
+  SetForegroundWindow(hwnd);
+  SetFocus(hwnd);
+  UpdateWindow(hwnd);
+  SetTimer(hwnd,1,8,null());
+  let mut msg:MSG=zeroed();
+  while GetMessageW(&mut msg,null_mut(),0,0)>0{
+   TranslateMessage(&msg);
+   DispatchMessageW(&msg);
+  }
+  // Return ownership only after the window has stopped dispatching messages.
+  drop(UI_APP.with(|ui|ui.take()));
+ }
+}
 
 #[cfg(test)]
 mod tests{
-  use super::{viewport_for_client,client_to_stage,hit_intro_skip,INTRO_SKIP_RECT,QA_HUD_CASES,QA_SCENE_KEYS,TitleStartGate,FullscreenHotkeys,FullscreenCommand,resume_media_then_reset_visual_clock};
+  use super::{viewport_for_client,client_to_stage,hit_intro_skip,INTRO_SKIP_RECT,QA_HUD_CASES,QA_SCENE_KEYS,TitleStartGate,FullscreenHotkeys,FullscreenCommand,resume_media_then_reset_visual_clock,ReentrantUi};
   use std::time::{Duration,Instant};
   use crate::game::{AppScreen,Game,InputState,VK_ENTER,VK_SPACE};
   use crate::collision::CollisionMask;
+
+
+  #[test]
+  fn nested_win32_callback_cannot_alias_app_and_focus_events_keep_order(){
+    #[derive(Default)]
+    struct FakeUi{ticks:usize,focus:Vec<bool>}
+    fn apply_focus(ui:&mut FakeUi,active:bool){ui.focus.push(active);}
+    let ui=ReentrantUi::new();
+    ui.install(FakeUi::default());
+    assert_eq!(ui.with_mut(|outer|{
+      outer.ticks+=1;
+      // Simulate synchronous SetWindowPos -> WM_KILLFOCUS / WM_SETFOCUS.
+      ui.enqueue_focus(false,apply_focus);
+      assert!(ui.with_mut(|inner|inner.ticks+=100,apply_focus).is_none());
+      ui.enqueue_focus(true,apply_focus);
+      assert!(outer.focus.is_empty()); // handled after outer borrow ends
+      outer.ticks
+    },apply_focus),Some(1));
+    assert_eq!(
+      ui.with_mut(|app|(app.ticks,app.focus.clone()),apply_focus),
+      Some((1,vec![false,true]))
+    );
+    ui.enqueue_focus(false,apply_focus);
+    let final_app=ui.take().expect("one UI owner");
+    assert_eq!(final_app.focus,vec![false,true,false]);
+    assert_eq!(final_app.ticks,1);
+    assert!(ui.take().is_none());
+  }
 
   #[test]
   fn focus_resume_discards_media_driver_delay_and_old_visual_accumulator(){
