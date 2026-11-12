@@ -76,7 +76,7 @@ jobs:
           python "$tools/extract_bitmaps.py" "$swf" ".generated/af05input/bitmaps"
           if ($LASTEXITCODE -ne 0) { throw "Source bitmap extraction FAILED" }
 
-      - name: Prove 48 nonempty 1x Bank tiles, nine historical hashes and complete binary pack
+      - name: Prove 75 nonempty 1x Bank tiles, nine historical hashes and complete binary pack
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"

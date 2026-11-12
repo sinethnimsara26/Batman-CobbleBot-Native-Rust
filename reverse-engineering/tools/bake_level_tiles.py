@@ -52,7 +52,7 @@ def main():
     parser.add_argument("--output-scale", type=int, default=1)
     parser.add_argument("--supersample", type=int, default=1)
     parser.add_argument("--complete-bank-street-1x", action="store_true",
-                        help="strict full-stage Bank #783 1x source bake only; requires all 48 non-empty tiles")
+                        help="strict full-stage Bank #783 1x source bake only; requires all 75 SWF-observed non-empty tiles")
     parser.add_argument("--source-over-strokes", action="store_true",
                         help="opt-in source-over Flash vector strokes; legacy Level1A/B05 pixel contract remains default")
     parser.add_argument("--downsample", choices=("none","lanczos"), default="none")
@@ -140,8 +140,8 @@ def main():
                 )
         tile_origins = sorted(requested, key=lambda xy: (xy[1], xy[0]))
 
-    if args.complete_bank_street_1x and len(tile_origins) > 100:
-        raise ValueError("Bank full-grid candidate count exceeded bounded source contract")
+    if args.complete_bank_street_1x and len(tile_origins) != 76:
+        raise ValueError("Bank full-grid must cover 76 original-world candidate positions")
 
     args.output.mkdir(parents=True, exist_ok=True)
     missing: set[int] = set()
@@ -202,8 +202,8 @@ def main():
         records.append({"world_x": x, "world_y": y, "file": filename})
 
     if args.complete_bank_street_1x:
-        if len(records) != 48:
-            raise ValueError(f"canonical Bank #783 must have 48 non-empty 1x tiles, rendered {len(records)}")
+        if len(records) != 75:
+            raise ValueError(f"canonical Bank #783 must have 75 non-empty 1x tiles, rendered {len(records)}")
         if unsupported or missing:
             raise ValueError(f"incomplete canonical Bank source art: unsupported={sorted(unsupported)}, missing={sorted(missing)}")
 

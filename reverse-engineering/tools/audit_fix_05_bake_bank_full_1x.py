@@ -94,7 +94,7 @@ def main() -> None:
             manifest.get("partial_proof_only") or
             manifest.get("never_embed_as_complete_level") or
             manifest.get("missing_ids") or manifest.get("unsupported_fills") or
-            len(manifest["tiles"]) != 48):
+            len(manifest["tiles"]) != 75):
         raise AssertionError("full Bank manifest is incomplete, noncanonical or not safe to pack")
 
     records = {}
@@ -114,7 +114,7 @@ def main() -> None:
             "file_sha256": sha(encoded), "decoded_rgba_sha256": rgba,
         }
 
-    if len(records) != 48 or not set(B05_RGBA).issubset(records):
+    if len(records) != 75 or not set(B05_RGBA).issubset(records):
         raise AssertionError("full original Bank street tile set misses a baseline source view")
     for xy, expected in B05_RGBA.items():
         if records[xy]["decoded_rgba_sha256"] != expected:
@@ -129,17 +129,17 @@ def main() -> None:
                   for y in range(math.floor(y0 / 400) * 400, math.floor(y1 / 400) * 400 + 1, 400)
                   for x in range(math.floor(x0 / 600) * 600, math.floor(x1 / 600) * 600 + 1, 600)}
     if (len(candidates) != manifest["full_grid_candidate_count"] or
-            not set(records).issubset(candidates) or len(candidates) > 100):
+            not set(records).issubset(candidates) or len(candidates) != 76):
         raise AssertionError("Bank full-grid scan does not match original geometry-derived bounds")
 
     packed = args.out / "bank_street_complete_1x.BCLVT001.bin"
     run(sys.executable, Path(__file__).with_name("pack_level_tiles.py"), tilesdir, packed)
     content = packed.read_bytes()
-    if content[:8] != MAGIC_V1 or struct.unpack_from("<I", content, 8)[0] != 48:
-        raise AssertionError("BCLVT001 header/count do not describe 48 source tiles")
+    if content[:8] != MAGIC_V1 or struct.unpack_from("<I", content, 8)[0] != 75:
+        raise AssertionError("BCLVT001 header/count do not describe 75 source tiles")
     pos = 12
     packed_positions = set()
-    for _ in range(48):
+    for _ in range(75):
         x, y, size = struct.unpack_from("<iiI", content, pos)
         pos += 12
         payload = content[pos:pos + size]
