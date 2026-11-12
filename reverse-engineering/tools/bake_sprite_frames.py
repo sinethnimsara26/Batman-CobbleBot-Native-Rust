@@ -702,7 +702,33 @@ def _render_gradient(fill, transform, contours_px, canvas, left, top, right, bot
     canvas.alpha_composite(sampled, (left, top))
 
 
-def render_symbol(symbol_id, frame, transform, canvas, symbols, shapes, bitmaps, unsupported, missing, depth=0, excluded_symbols=None, root_depth_range=None):
+def _draw_strokes_source_over(canvas, stroke_paths, color, width):
+    """Composite one Flash line style's paths as a single RGBA source-over layer.
+
+    ImageDraw.line on the destination overwrites its alpha. Use a clipped
+    temporary image so a translucent stroke retains the background's alpha;
+    combine all same-style segments before compositing to avoid doubling
+    opacity where contiguous path segments join.
+    """
+    if not stroke_paths:
+        return
+    margin = (width + 1) // 2 + 2
+    xs = [x for points in stroke_paths for x, _ in points]
+    ys = [y for points in stroke_paths for _, y in points]
+    left = max(0, min(xs) - margin)
+    top = max(0, min(ys) - margin)
+    right = min(canvas.width - 1, max(xs) + margin)
+    bottom = min(canvas.height - 1, max(ys) + margin)
+    if left > right or top > bottom:
+        return
+    ink = Image.new("RGBA", (right - left + 1, bottom - top + 1), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(ink)
+    for points in stroke_paths:
+        draw.line([(x - left, y - top) for x, y in points], fill=color, width=width)
+    canvas.alpha_composite(ink, (left, top))
+
+
+def render_symbol(symbol_id, frame, transform, canvas, symbols, shapes, bitmaps, unsupported, missing, depth=0, excluded_symbols=None, root_depth_range=None, stroke_source_over=False):
     # B06 opt-in source proof: select original authored top-level depth bands.
     # Recursive child timelines retain ALL their own depths and transforms.
     if root_depth_range is not None and depth != 0:
@@ -795,17 +821,20 @@ def render_symbol(symbol_id, frame, transform, canvas, symbols, shapes, bitmaps,
                     continue
                 style = lines[line_index]
                 width = max(1, round(style["width"] * matrix_scale))
+                stroke_paths = []
                 for segment in segments:
                     points = [
                         point(transform, (x / 20.0, y / 20.0))
                         for x, y in segment
                     ]
                     if len(points) >= 2:
-                        draw.line(
-                            [(round(x), round(y)) for x, y in points],
-                            fill=style["color"],
-                            width=width,
-                        )
+                        stroke_paths.append([(round(x), round(y)) for x, y in points])
+                if stroke_source_over:
+                    _draw_strokes_source_over(canvas, stroke_paths, style["color"], width)
+                else:
+                    # Retain historic 1x/HQ legacy bake pixel hashes by default.
+                    for points in stroke_paths:
+                        draw.line(points, fill=style["color"], width=width)
         return
 
     if symbol_id in TEXT_DEFS:
@@ -852,6 +881,7 @@ def render_symbol(symbol_id, frame, transform, canvas, symbols, shapes, bitmaps,
                 missing,
                 depth + 1,
                 excluded_symbols,
+                stroke_source_over=stroke_source_over,
             )
 
         clip_depth = placement.get("clip_depth")
@@ -946,6 +976,8 @@ def main():
     parser.add_argument("--bitmaps", type=Path, help="directory produced by extract_bitmaps.py (defaults beside the SWF source directory)")
     parser.add_argument("--all-frames", action="store_true", help="bake the whole symbol timeline into a directory plus manifest")
     parser.add_argument("--native-bounds", action="store_true", help="size the single-frame PNG to the symbol's native transformed bounds")
+    parser.add_argument("--source-over-strokes", action="store_true",
+                        help="opt-in corrected RGBA stroke compositing; legacy assets unchanged")
     parser.add_argument("--bounds-symbols-json", type=Path,
                         help="optional ORIGINAL source symbols for image bounds/anchor; rasterize from positional symbols_json")
     parser.add_argument("--clip-stage-width", type=float, help="for --all-frames, crop rendering to this logical stage width")
@@ -1048,7 +1080,8 @@ def main():
         for frame in range(frame_count):
             canvas = Image.new("RGBA", (width, height), background)
             missing: set[int] = set()
-            render_symbol(args.symbol, frame, transform, canvas, symbols, shapes, bitmaps, unsupported, missing)
+            render_symbol(args.symbol, frame, transform, canvas, symbols, shapes, bitmaps, unsupported, missing,
+                          stroke_source_over=args.source_over_strokes)
             all_missing.update(missing)
             filename = f"{frame:03}.png"
             canvas.save(outdir / filename)
@@ -1091,7 +1124,8 @@ def main():
         ty = (out_height - (source_bounds[1] + source_bounds[3]) * args.scale) / 2.0
     canvas = Image.new("RGBA", (out_width, out_height), background)
     transform = (args.scale, 0.0, 0.0, args.scale, tx, ty)
-    render_symbol(args.symbol, args.frame, transform, canvas, symbols, shapes, bitmaps, unsupported, missing)
+    render_symbol(args.symbol, args.frame, transform, canvas, symbols, shapes, bitmaps, unsupported, missing,
+                  stroke_source_over=args.source_over_strokes)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     canvas.save(args.output)
     origin = [-tx / args.scale, -ty / args.scale]

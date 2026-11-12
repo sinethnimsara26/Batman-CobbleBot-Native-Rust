@@ -188,17 +188,20 @@ def capture(user32, hwnd, path, report, label):
 
 
 def audio_services_preflight():
-    """Report hosted-VM audio availability; attempt benign service starts.
+    """Read-only hosted-VM audio-service and WinMM device evidence.
 
-    This is strictly CI-only, never used or needed by normal game users.
-    A missing driver/device does NOT turn the strict real MCI test into a pass.
+    The old PowerShell Get-PnpDevice CIM query sometimes blocks the hosted
+    runner for 35 seconds, hiding otherwise verified Win32 focus evidence.
+    Native waveOutGetNumDevs is the relevant bounded WinMM output probe.
+    Zero WAVE output devices is a BLOCKED audio proof, never a playback PASS;
+    any unavailable/ambiguous probe fails closed.
     """
     script = r'''
 $ErrorActionPreference = 'Continue'
 $result = [ordered]@{
     os = [System.Environment]::OSVersion.VersionString
     services = [ordered]@{}
-    audio_endpoints = @()
+    audio_endpoints = $null
     mci_mpegvideo = ''
     diagnostics = @()
 }
@@ -206,14 +209,8 @@ foreach ($n in @('AudioEndpointBuilder', 'Audiosrv')) {
     try {
         $svc = Get-Service -Name $n -ErrorAction Stop
         $before = $svc.Status.ToString()
-        if ($svc.Status -ne 'Running') {
-            try {
-                Start-Service -Name $n -ErrorAction Stop
-                Start-Sleep -Milliseconds 250
-            } catch {
-                $result.diagnostics += ('Start-Service ' + $n + ': ' + $_.Exception.Message)
-            }
-        }
+        # Keep the preflight read-only. A stopped service is a strict failure,
+        # not permission to infer a missing physical endpoint.
         $after = (Get-Service -Name $n -ErrorAction Stop).Status.ToString()
         $result.services[$n] = [ordered]@{
             before = $before
@@ -223,14 +220,6 @@ foreach ($n in @('AudioEndpointBuilder', 'Audiosrv')) {
     } catch {
         $result.services[$n] = [ordered]@{ error = $_.Exception.Message }
     }
-}
-try {
-    $endpoints = @(Get-PnpDevice -Class AudioEndpoint -PresentOnly -ErrorAction Stop)
-    $result.audio_endpoints = @($endpoints | ForEach-Object {
-        [ordered]@{ name = $_.FriendlyName; status = $_.Status }
-    })
-} catch {
-    $result.diagnostics += ('AudioEndpoint enumeration: ' + $_.Exception.Message)
 }
 try {
     $reg = Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\MCI32' -ErrorAction Stop
@@ -245,9 +234,31 @@ $result | ConvertTo-Json -Compress -Depth 5
             ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script],
             capture_output=True, text=True, timeout=35, check=False,
         )
+        values = json.loads(result.stdout.strip()) if result.stdout.strip().startswith("{") else None
+        if result.returncode == 0 and isinstance(values, dict):
+            # No WMI/CIM hangs: inspect output devices through the actual
+            # Windows multimedia API whose MCI failure we are classifying.
+            try:
+                winmm = ctypes.WinDLL("winmm.dll", use_last_error=True)
+                count_fn = winmm.waveOutGetNumDevs
+                count_fn.argtypes = []
+                count_fn.restype = ctypes.c_uint
+                count = int(count_fn())
+                values["wave_out_device_count"] = count
+                values["audio_endpoint_evidence"] = "WinMM waveOutGetNumDevs"
+                values["audio_endpoints"] = (
+                    [] if count == 0 else
+                    [{"name": "WinMM waveform output", "status": f"{count} device(s) present"}]
+                )
+            except Exception as exc:
+                # Never convert an unverified/failed device query to [].
+                values["audio_endpoints"] = None
+                values.setdefault("diagnostics", []).append(
+                    "WinMM waveOut device probe: " + type(exc).__name__ + ": " + str(exc)
+                )
         return {
             "exit_code": result.returncode,
-            "values": json.loads(result.stdout.strip()) if result.stdout.strip().startswith("{") else None,
+            "values": values,
             "stdout_tail": result.stdout[-1000:],
             "stderr_tail": result.stderr[-2000:],
         }
@@ -269,6 +280,8 @@ def hosted_vm_lacks_audio_endpoint(report, before_status):
         and before_status.get("open_error") == "277"
         and before_status.get("file_written") == "1"
         and preflight.get("audio_endpoints") == []
+        and preflight.get("wave_out_device_count") == 0
+        and preflight.get("audio_endpoint_evidence") == "WinMM waveOutGetNumDevs"
         and all(
             (services.get(name) or {}).get("after") == "Running"
             for name in ("AudioEndpointBuilder", "Audiosrv")

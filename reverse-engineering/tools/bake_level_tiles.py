@@ -51,6 +51,8 @@ def main():
     parser.add_argument("--tile-height", type=int, default=400)
     parser.add_argument("--output-scale", type=int, default=1)
     parser.add_argument("--supersample", type=int, default=1)
+    parser.add_argument("--source-over-strokes", action="store_true",
+                        help="opt-in source-over Flash vector strokes; legacy Level1A/B05 pixel contract remains default")
     parser.add_argument("--downsample", choices=("none","lanczos"), default="none")
     parser.add_argument(
         "--only-tile", nargs=2, type=int, action="append",
@@ -161,6 +163,7 @@ def main():
             missing,
             excluded_symbols=excluded_symbols,
             root_depth_range=args.root_depth_range,
+            stroke_source_over=args.source_over_strokes,
         )
         if args.downsample == "lanczos":
             final_size = (
@@ -188,6 +191,7 @@ def main():
     manifest = {
         "symbol": args.symbol,
         "source_static_text_enabled": args.include_source_static_text,
+        "source_over_strokes": args.source_over_strokes,
         "source_root_depth_range": args.root_depth_range,
         "excluded_symbols": sorted(excluded_symbols),
         "placement": [args.place_x, args.place_y],

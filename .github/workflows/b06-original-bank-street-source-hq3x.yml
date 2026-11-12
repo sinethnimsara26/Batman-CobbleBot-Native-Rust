@@ -4,8 +4,10 @@ on:
   push:
     branches:
       - revive/level2-b06-bank-street-hq3x-2026-11-11
+      - revive/level2-audit-fix-stroke-alpha-2026-11-12
     paths:
       - reverse-engineering/tools/b06_bake_bank_street_hq3x.py
+      - reverse-engineering/tools/audit_fix_04_verify_stroke_alpha.py
       - reverse-engineering/tools/bake_sprite_frames.py
       - reverse-engineering/tools/bake_level_tiles.py
       - reverse-engineering/tools/b05_bake_bank_street_1x.py
@@ -30,6 +32,12 @@ jobs:
       - name: Install offline-only Pillow original source rasterizer
         shell: pwsh
         run: python -m pip install --disable-pip-version-check "Pillow>=11,<15"
+
+      - name: Verify corrected source-over stroke math and legacy compatibility
+        shell: pwsh
+        run: |
+          python "reverse-engineering/tools/audit_fix_04_verify_stroke_alpha.py"
+          if ($LASTEXITCODE -ne 0) { throw "Source-over stroke regression FAILED" }
 
       - name: Re-download canonical original FWS and SHA-verify exact bytes
         shell: pwsh

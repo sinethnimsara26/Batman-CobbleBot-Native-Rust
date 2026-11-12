@@ -95,7 +95,7 @@ def source_depth_split(stage, symbols, excluded):
         "selection_basis": "SWF #783 frame0 authored direct placement depths; child timelines preserved",
     }
 
-def run_bake(args, out: Path, origins, *, scale=1, hq=False, depth_range=None):
+def run_bake(args, out: Path, origins, *, scale=1, hq=False, depth_range=None, source_over_strokes=False):
     tool = Path(__file__).with_name("bake_level_tiles.py")
     command = [sys.executable, str(tool), str(args.swf), str(args.symbols),
                str(out), "--bitmaps", str(args.bitmaps), "--symbol", "783",
@@ -103,6 +103,8 @@ def run_bake(args, out: Path, origins, *, scale=1, hq=False, depth_range=None):
                "--output-scale", str(scale), "--include-source-static-text"]
     if hq:
         command.extend(("--supersample", "2", "--downsample", "lanczos"))
+    if source_over_strokes:
+        command.append("--source-over-strokes")
     if depth_range is not None:
         command.extend(("--root-depth-range", *(str(d) for d in depth_range)))
     for cid in args.excludes:
@@ -118,7 +120,8 @@ def run_bake(args, out: Path, origins, *, scale=1, hq=False, depth_range=None):
             or manifest["excluded_symbols"] != args.excludes
             or manifest["source_static_text_enabled"] is not True
             or manifest.get("partial_proof_only") is not True
-            or manifest.get("never_embed_as_complete_level") is not True):
+            or manifest.get("never_embed_as_complete_level") is not True
+            or manifest.get("source_over_strokes") is not source_over_strokes):
         raise AssertionError("Original Bank source/partial-pack manifest contract violated")
     if manifest["requested_tile_origins"] != [list(x) for x in sorted(origins, key=lambda p:(p[1],p[0]))]:
         raise AssertionError("Original fixed world positions shifted")
@@ -225,7 +228,7 @@ def main():
 
     # True 3x original source rerasterization with 6x intermediates.
     hq_dir = args.out/"source_hq3x"
-    m3,t3=run_bake(args,hq_dir,VIEWS,scale=3,hq=True)
+    m3,t3=run_bake(args,hq_dir,VIEWS,scale=3,hq=True,source_over_strokes=True)
     hq=index_tiles(m3,hq_dir,(TILE_W*3,TILE_H*3))
     if set(hq)!=set(reference):
         raise AssertionError("HQ source tile origins do not match original 1x")
@@ -257,12 +260,12 @@ def main():
     low=tuple(split["lower_band"]); high=tuple(split["upper_band"])
     for label,band in (("lower",low),("upper",high)):
         sub=layer_dir/label
-        manifest,elapsed=run_bake(args,sub,DEPTH_VIEWPOINTS,scale=3,depth_range=band)
+        manifest,elapsed=run_bake(args,sub,DEPTH_VIEWPOINTS,scale=3,depth_range=band,source_over_strokes=True)
         ensure_not_packable(sub,"DANGER_B06_"+label+"_MUST_NOT_PACK.bin")
         entries=index_tiles(manifest,sub,(1800,1200))
         parts.append((label,entries,elapsed))
     plain_dir=layer_dir/"flat_3x_comparison"
-    flat_manifest,elapsed_flat=run_bake(args,plain_dir,DEPTH_VIEWPOINTS,scale=3)
+    flat_manifest,elapsed_flat=run_bake(args,plain_dir,DEPTH_VIEWPOINTS,scale=3,source_over_strokes=True)
     ensure_not_packable(plain_dir,"DANGER_B06_FLAT_MUST_NOT_PACK.bin")
     flat=index_tiles(flat_manifest,plain_dir,(1800,1200))
     comparisons=[]
@@ -280,17 +283,14 @@ def main():
                 layers.append(Image.new("RGBA",(1800,1200),(0,0,0,0)))
         with Image.open(plain_dir/flat[xy]["file"]) as opened:
             expected=opened.convert("RGBA")
-        # The existing source renderer overwrites direct ImageDraw shape pixels
-        # (even semi-transparent RGBA) rather than alpha-compositing them.
-        # CI artifact #13876348846 showed 22,382 false over-blend differences
-        # at -4200; binary nontransparent replacement recovers ZERO difference.
-        # This tests deterministic *source rasterizer* parity, not GPU
-        # alpha behavior during actual original Flash gameplay.
+        # Corrected source-over stroke rasterization now permits legitimate
+        # Porter-Duff depth recomposition. The historic binary paste was
+        # compensating for ImageDraw overwriting destination alpha; it also
+        # left false translucent holes above the underlying street layer.
+        # This checks offline source-rasterizer consistency, NOT Flash-live
+        # player pixel equivalence or native Level1B runtime footage.
         combined=layers[0].copy()
-        binary_mask=layers[1].getchannel("A").point(
-            lambda alpha: 255 if alpha else 0
-        )
-        combined.paste(layers[1],(0,0),binary_mask)
+        combined.alpha_composite(layers[1])
         diff=ImageChops.difference(expected,combined)
         bbox=diff.getbbox()
         raw=diff.tobytes() if bbox else b""
@@ -322,6 +322,8 @@ def main():
         "b05_1x_pixel_hashes_identical_all_nine":True,
         "one_x_sha256_inputs":[{"world_x":xy[0],"world_y":xy[1],**samples[xy]} for xy in VIEWS],
         "hq_true_original_source_rerasterized_not_bilinear_count":independent_hq,
+        "source_over_strokes_hq_and_depth":True,
+        "historic_b05_1x_stroke_mode":"legacy-overwrite (hashes unchanged)",
         "hq_source_render_scale":6,
         "hq_output_scale":3,
         "hq_filter":"premultiplied Lanczos with 2px source overscan",
