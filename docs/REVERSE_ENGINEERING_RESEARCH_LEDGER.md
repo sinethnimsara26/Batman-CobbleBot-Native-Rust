@@ -1179,3 +1179,22 @@ Tested original source fixed CODE SHA `26dad6e07ef3dc1ca860aa98b4a8ccfb12912f72`
   - Added compile-time type enforcement while maintaining `PartialEq` and `From`/`Into` compatibility with legacy tuple queries.
   - Round-trip transformation tests verify `to_game_pos(to_level_pos(pos)) == pos` across all 5 canonical stages.
 - **Confidence:** HIGH for coordinate transformation math and compile-time type invariants.
+
+
+## RE-20261112-014 — Zero-Allocation Rendering in src/render.rs (R-03 / AUDIT-FIX-11)
+
+- **Batch/Context:** AUDIT-FIX-11 / R-03; branch `revive/level2-audit-fix-render-zero-alloc-2026-11-12`, draft PR #40 based on AUDIT-FIX-10 docs commit `e891293`.
+- **Target Subsystem:** `src/render.rs`.
+- **Original Architecture & Findings:**
+  1. In `src/render.rs`, `upscale_opaque_base` and `upscale_alpha_layer` previously allocated a `Vec::with_capacity(dst.w)` (`1,800` tuples = `28.8 KB`) on the heap every single frame (50 heap allocations/sec at 25 Hz), recomputing 1,800 `div_euclid` and `rem_euclid` operations, despite `LOGICAL_W = 600` and `HQ_W = 1800` being fixed constants.
+  2. In `src/render.rs`, `draw_number_hq_1to1` and `draw_number_centered` called `value.to_string()`, and `draw_hud_hq` called `score.to_string().len()`, generating 75–100 heap `String` allocations every second during gameplay.
+  3. Precomputed the `600 -> 1800` bilinear horizontal lookup table at compile time:
+     `const XMAP_600_TO_1800: [(usize, usize, u32, u32); HQ_W] = compute_xmap_600_to_1800();`
+     placed in `.rodata`, completely eliminating per-frame heap `Vec` allocations and 3,600 integer divisions per frame.
+  4. Introduced `format_u32_digits(val, buf: &mut [u8; 16]) -> &[u8]` and `digit_count(val) -> usize`, formatting all HUD numbers and measuring column budgets in stack buffers without heap allocation.
+- **Verification Evidence:**
+  - Rust unit tests increased from 49 to 51:
+    - `xmap_600_to_1800_matches_runtime_formula`: exact tuple match across all 1,800 entries against runtime bilinear formula.
+    - `format_u32_digits_and_digit_count_match_standard_formatting`: exact character match and digit counts across boundary integers (`0`, `1`, `9`, `10`, `42`, `99`, `100`, `1234`, `999999`, `2147483647`).
+  - Windows CI run `43311547391`: 51/51 Rust tests passed in 0.19s, render p95 `24.8706ms`, scenery scroll p95 `24.0489ms` (< 40ms gate), 15/15 historical 1× screenshots identical, 20/20 relocated standalone EXE HQ hashes identical, child exit 0.
+- **Confidence:** HIGH for bilinear mapping equivalence, zero-allocation invariants, and rendering performance.

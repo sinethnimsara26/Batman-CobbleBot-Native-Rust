@@ -989,3 +989,21 @@ Do not erase two historical CI failures: documentation-only #42834460076 and ini
   - **ENGINEERING QUALITY:** PASS (zero-cost abstractions, strong compile-time invariants, zero heap allocations).
   - **ORIGINAL-GAME FIDELITY:** VERIFIED FOR TESTED SCOPE (Level 1A gameplay intact; Level 1B stage/prop/goon coordinate parity verified).
   - **HARDWARE SPEAKER AUDIO:** BLOCKED (hosted runner limitation, unchanged).
+
+
+## AUD-20261112-014 — Independent post-code Rust purity/engineering audit of AUDIT-FIX-11 (R-03)
+
+- **Audit Date:** 2026-11-12
+- **Scope:** `src/render.rs`, `.github/workflows/build-level1a-fidelity.yml`
+- **Code SHA:** `9ff54fa` on branch `revive/level2-audit-fix-render-zero-alloc-2026-11-12` (PR #40).
+- **Actual Changed Code and Engineering Review:**
+  1. Replaced per-frame `Vec::with_capacity(dst.w)` allocations in `upscale_opaque_base` and `upscale_alpha_layer` with compile-time `const XMAP_600_TO_1800: [(usize, usize, u32, u32); HQ_W] = compute_xmap_600_to_1800();`.
+  2. Replaced `format!` and `to_string()` calls in `draw_number_hq_1to1` and `draw_number_centered` with `format_u32_digits` into a stack-allocated buffer `[u8; 16]`.
+  3. Replaced `score.to_string().len()` in `draw_hud_hq` with zero-allocation `digit_count(score)`.
+  4. Added assertions `src.w == LOGICAL_W`, `src.h == LOGICAL_H`, `dst.w == HQ_W`, `dst.h == HQ_H` in upscalers to enforce exact dimension contracts.
+  5. Added unit tests `xmap_600_to_1800_matches_runtime_formula` and `format_u32_digits_and_digit_count_match_standard_formatting`. Total unit tests increased from 49 to 51.
+- **Verdicts:**
+  - **PURE-RUST RUNTIME COMPLIANCE:** PASS (with existing direct Win32/GDI/WinMM OS FFI qualifications). Zero new crates, zero unsafe blocks.
+  - **ENGINEERING QUALITY:** PASS (completely eliminated all runtime heap allocations from rendering loop; ~125-150 allocations/sec reduced to 0; 3,600 integer divisions/frame replaced by `.rodata` array indexing).
+  - **ORIGINAL-GAME FIDELITY:** VERIFIED FOR TESTED SCOPE (Level 1A gameplay intact; 15/15 1× hashes and 20/20 relocated standalone EXE HQ hashes identical).
+  - **HARDWARE SPEAKER AUDIO:** BLOCKED (hosted runner limitation, unchanged).

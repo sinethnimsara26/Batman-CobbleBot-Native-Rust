@@ -6,6 +6,67 @@ pub const HQ_SCALE:usize=3;
 pub const HQ_W:usize=LOGICAL_W*HQ_SCALE;
 pub const HQ_H:usize=LOGICAL_H*HQ_SCALE;
 
+const fn clamp_isize(val: isize, min: isize, max: isize) -> isize {
+    if val < min {
+        min
+    } else if val > max {
+        max
+    } else {
+        val
+    }
+}
+
+pub const fn compute_xmap_600_to_1800() -> [(usize, usize, u32, u32); HQ_W] {
+    let mut map = [(0, 0, 0, 0); HQ_W];
+    let mut dx = 0;
+    while dx < HQ_W {
+        let xn = dx as isize - 1;
+        let xq = xn.div_euclid(3);
+        let xr = xn.rem_euclid(3) as u32;
+        let x0 = clamp_isize(xq, 0, LOGICAL_W as isize - 1) as usize;
+        let x1 = clamp_isize(xq + 1, 0, LOGICAL_W as isize - 1) as usize;
+        map[dx] = (x0, x1, 3 - xr, xr);
+        dx += 1;
+    }
+    map
+}
+
+pub const XMAP_600_TO_1800: [(usize, usize, u32, u32); HQ_W] = compute_xmap_600_to_1800();
+
+#[inline]
+pub fn format_u32_digits(mut val: u32, buf: &mut [u8; 16]) -> &[u8] {
+    if val == 0 {
+        buf[0] = b'0';
+        return &buf[..1];
+    }
+    let mut len = 0;
+    let mut temp = val;
+    while temp > 0 {
+        len += 1;
+        temp /= 10;
+    }
+    let mut pos = len;
+    while val > 0 {
+        pos -= 1;
+        buf[pos] = b'0' + (val % 10) as u8;
+        val /= 10;
+    }
+    &buf[..len]
+}
+
+#[inline]
+pub fn digit_count(mut n: i32) -> usize {
+    if n <= 0 {
+        return 1;
+    }
+    let mut count = 0;
+    while n > 0 {
+        count += 1;
+        n /= 10;
+    }
+    count
+}
+
 // Generated from one offline HUD manifest, never parsed at game runtime.
 mod hud_hq_layout { include!("../assets/hud_hq_layout.rs"); }
 
@@ -97,26 +158,18 @@ pub fn upscale_opaque_base(src:&RenderSurface,dst:&mut RenderSurface){
     assert_eq!(dst.w,src.w*HQ_SCALE);
     assert_eq!(dst.h,src.h*HQ_SCALE);
     assert_eq!(HQ_SCALE,3,"Round 3 bilinear kernel is specialized for 3x");
+    assert_eq!(src.w,LOGICAL_W);
+    assert_eq!(src.h,LOGICAL_H);
+    assert_eq!(dst.w,HQ_W);
+    assert_eq!(dst.h,HQ_H);
 
     // Pixel-center bilinear resampling. For an exact 3x scale, destination
     // pixel (3*x+1,3*y+1) lands exactly on source pixel (x,y), which gives us
     // a strong no-drift CI invariant while smoothing the two pixels between
     // neighboring logical samples.
     //
-    // Precompute the horizontal lookup/weights once. The original proof
-    // kernel recomputed div_euclid/clamping for every one of the 2.16M output
-    // pixels; this keeps those divisions out of the hot inner loop while
-    // preserving the exact same integer-weighted result.
-    let mut xmap=Vec::with_capacity(dst.w);
-    for dx in 0..dst.w{
-        let xn=dx as isize-1;
-        let xq=xn.div_euclid(3);
-        let xr=xn.rem_euclid(3) as u32;
-        let x0=xq.clamp(0,src.w as isize-1) as usize;
-        let x1=(xq+1).clamp(0,src.w as isize-1) as usize;
-        xmap.push((x0,x1,3-xr,xr));
-    }
-
+    // Uses compile-time precomputed XMAP_600_TO_1800 to eliminate per-frame
+    // heap allocations and integer divisions from the inner loop.
     for dy in 0..dst.h{
         let yn=dy as isize-1;
         let yq=yn.div_euclid(3);
@@ -129,7 +182,7 @@ pub fn upscale_opaque_base(src:&RenderSurface,dst:&mut RenderSurface){
         let row1=y1*src.w;
         let dst_row=dy*dst.w;
 
-        for (dx,&(x0,x1,wx0,wx1)) in xmap.iter().enumerate(){
+        for (dx,&(x0,x1,wx0,wx1)) in XMAP_600_TO_1800.iter().enumerate(){
             let p00=src.pixels[row0+x0];
             let p10=src.pixels[row0+x1];
             let p01=src.pixels[row1+x0];
@@ -153,16 +206,10 @@ fn upscale_alpha_layer(src:&RenderSurface,dst:&mut RenderSurface){
     assert_eq!(dst.w,src.w*HQ_SCALE);
     assert_eq!(dst.h,src.h*HQ_SCALE);
     assert_eq!(HQ_SCALE,3,"Round 11 alpha promotion is specialized for 3x");
-
-    let mut xmap=Vec::with_capacity(dst.w);
-    for dx in 0..dst.w{
-        let xn=dx as isize-1;
-        let xq=xn.div_euclid(3);
-        let xr=xn.rem_euclid(3) as u32;
-        let x0=xq.clamp(0,src.w as isize-1) as usize;
-        let x1=(xq+1).clamp(0,src.w as isize-1) as usize;
-        xmap.push((x0,x1,3-xr,xr));
-    }
+    assert_eq!(src.w,LOGICAL_W);
+    assert_eq!(src.h,LOGICAL_H);
+    assert_eq!(dst.w,HQ_W);
+    assert_eq!(dst.h,HQ_H);
 
     for dy in 0..dst.h{
         let yn=dy as isize-1;
@@ -176,7 +223,7 @@ fn upscale_alpha_layer(src:&RenderSurface,dst:&mut RenderSurface){
         let row1=y1*src.w;
         let dst_row=dy*dst.w;
 
-        for (dx,&(x0,x1,wx0,wx1)) in xmap.iter().enumerate(){
+        for (dx,&(x0,x1,wx0,wx1)) in XMAP_600_TO_1800.iter().enumerate(){
             blend_bilinear_premul_3x(
                 &mut dst.pixels[dst_row+dx],
                 src.pixels[row0+x0],
@@ -457,7 +504,7 @@ fn draw_hud_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     let large_cell=assets.hud_digits_large_hq.w/10;
     // Preserve true-3x pixels: use the already-baked small atlas when a
     // multi-digit score cannot fit the large glyphs into its column.
-    let use_small_score=large_cell*score.to_string().len()>score_budget as usize;
+    let use_small_score=large_cell*digit_count(score)>score_budget as usize;
     let score_atlas=if use_small_score{
         &assets.hud_digits_small_hq
     }else{
@@ -518,13 +565,14 @@ fn draw_number_hq_1to1(
     if atlas.w<10||atlas.h==0{return;}
     let cell_w=(atlas.w/10) as i32;
     if cell_w<=0{return;}
-    let digits=value.max(0).to_string();
+    let mut digit_buf=[0u8;16];
+    let digits=format_u32_digits(value.max(0) as u32,&mut digit_buf);
     let (advance,total)=hud_digit_step_width(
         cell_w,digits.len(),max_width,preferred_advance
     );
     let x=if centered{ax-total/2}else{ax};
     let y=cy-atlas.h as i32/2;
-    for (i,byte) in digits.bytes().enumerate(){
+    for (i,&byte) in digits.iter().enumerate(){
         let digit=(byte-b'0') as usize;
         blit_region_1to1(
             fb,atlas,digit*cell_w as usize,0,
@@ -655,11 +703,12 @@ fn draw_number_centered(fb:&mut RenderSurface,atlas:&Image,cx:i32,cy:i32,value:i
     if atlas.w<10 || atlas.h==0{return;}
     let cell_w=atlas.w/10;
     if cell_w==0{return;}
-    let text=value.to_string();
+    let mut digit_buf=[0u8;16];
+    let text=format_u32_digits(value.max(0) as u32,&mut digit_buf);
     let total=(cell_w*text.len()) as i32;
     let mut x=cx-total/2;
     let y=cy-atlas.h as i32/2;
-    for byte in text.bytes(){
+    for &byte in text{
         if !(b'0'..=b'9').contains(&byte){continue;}
         let digit=(byte-b'0') as usize;
         blit_region(
@@ -865,7 +914,10 @@ fn blit(dst:&mut RenderSurface,src:&Image,x:i32,y:i32,rw:i32,rh:i32,flip:bool){i
 
 #[cfg(test)]
 mod tests{
-    use super::{blend,blend_rgba,blit,blit_tile_hq_1to1,hud_digit_step_width,hud_hq_layout,HQ_SCALE};
+    use super::{
+        blend,blend_rgba,blit,blit_tile_hq_1to1,digit_count,format_u32_digits,
+        hud_digit_step_width,hud_hq_layout,HQ_SCALE,HQ_W,LOGICAL_W,XMAP_600_TO_1800,
+    };
     use crate::assets::Image;
     use crate::surface::RenderSurface;
 
@@ -983,5 +1035,33 @@ mod tests{
             blend_rgba(&mut dst,src);
             assert_eq!(dst,src);
         }
+    }
+
+    #[test]
+    fn xmap_600_to_1800_matches_runtime_formula(){
+        assert_eq!(XMAP_600_TO_1800.len(), HQ_W);
+        for dx in 0..HQ_W {
+            let xn = dx as isize - 1;
+            let xq = xn.div_euclid(3);
+            let xr = xn.rem_euclid(3) as u32;
+            let x0 = xq.clamp(0, LOGICAL_W as isize - 1) as usize;
+            let x1 = (xq + 1).clamp(0, LOGICAL_W as isize - 1) as usize;
+            let expected = (x0, x1, 3 - xr, xr);
+            assert_eq!(XMAP_600_TO_1800[dx], expected, "Mismatch at dx = {dx}");
+        }
+    }
+
+    #[test]
+    fn format_u32_digits_and_digit_count_match_standard_formatting(){
+        let test_values: [i32; 10] = [0, 1, 9, 10, 42, 99, 100, 1234, 999999, 2147483647];
+        let mut buf = [0u8; 16];
+        for &val in &test_values {
+            let expected_str = val.to_string();
+            assert_eq!(digit_count(val), expected_str.len(), "digit_count mismatch for {val}");
+            let formatted = format_u32_digits(val as u32, &mut buf);
+            assert_eq!(formatted, expected_str.as_bytes(), "format_u32_digits mismatch for {val}");
+        }
+        assert_eq!(digit_count(-1), 1);
+        assert_eq!(digit_count(-999), 1);
     }
 }
