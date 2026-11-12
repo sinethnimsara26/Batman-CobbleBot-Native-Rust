@@ -51,6 +51,8 @@ def main():
     parser.add_argument("--tile-height", type=int, default=400)
     parser.add_argument("--output-scale", type=int, default=1)
     parser.add_argument("--supersample", type=int, default=1)
+    parser.add_argument("--complete-bank-street-1x", action="store_true",
+                        help="strict full-stage Bank #783 1x source bake only; requires all 75 SWF-observed non-empty tiles")
     parser.add_argument("--source-over-strokes", action="store_true",
                         help="opt-in source-over Flash vector strokes; legacy Level1A/B05 pixel contract remains default")
     parser.add_argument("--downsample", choices=("none","lanczos"), default="none")
@@ -65,6 +67,14 @@ def main():
             raise ValueError("reversed --root-depth-range")
         if args.only_tile is None:
             raise ValueError("partial root-depth layer may only be baked with --only-tile")
+    if args.complete_bank_street_1x:
+        if (args.symbol != 783 or args.only_tile is not None or args.root_depth_range is not None
+                or (args.place_x, args.place_y) != (1034.65, 239.25)
+                or (args.tile_width, args.tile_height) != (600, 400)
+                or (args.output_scale, args.supersample, args.downsample) != (1, 1, "none")
+                or not args.include_source_static_text or args.source_over_strokes
+                or not {153, 782, 758, 771}.issubset(args.exclude_symbol)):
+            raise ValueError("full Bank #783 1x requires canonical frame-zero geometry, filtered source logic/buttons and legacy B05 raster")
     if args.output_scale < 1:
         raise ValueError("--output-scale must be >= 1")
     if args.supersample < 1:
@@ -130,6 +140,9 @@ def main():
                 )
         tile_origins = sorted(requested, key=lambda xy: (xy[1], xy[0]))
 
+    if args.complete_bank_street_1x and len(tile_origins) != 76:
+        raise ValueError("Bank full-grid must cover 76 original-world candidate positions")
+
     args.output.mkdir(parents=True, exist_ok=True)
     missing: set[int] = set()
     records = []
@@ -188,6 +201,12 @@ def main():
         canvas.save(args.output / filename, optimize=True)
         records.append({"world_x": x, "world_y": y, "file": filename})
 
+    if args.complete_bank_street_1x:
+        if len(records) != 75:
+            raise ValueError(f"canonical Bank #783 must have 75 non-empty 1x tiles, rendered {len(records)}")
+        if unsupported or missing:
+            raise ValueError(f"incomplete canonical Bank source art: unsupported={sorted(unsupported)}, missing={sorted(missing)}")
+
     manifest = {
         "symbol": args.symbol,
         "source_static_text_enabled": args.include_source_static_text,
@@ -206,6 +225,8 @@ def main():
         "unsupported_fills": sorted(unsupported),
         "missing_ids": sorted(missing),
         "tiles": records,
+        "full_grid_candidate_count": len(tile_origins),
+        "complete_bank_street_1x": bool(args.complete_bank_street_1x),
     }
     if args.only_tile is not None or args.root_depth_range is not None:
         manifest["partial_proof_only"] = True

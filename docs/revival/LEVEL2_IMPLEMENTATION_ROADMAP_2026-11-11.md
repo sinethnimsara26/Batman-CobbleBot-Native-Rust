@@ -1,5 +1,17 @@
 # Batman native Rust — Level 1B → Penguin → Gotham Labs roadmap
 
+
+## AUDIT-FIX-05 FINAL 2026-11-12 — full Bank 1× source evidence VERIFIED; next HQ only separately
+
+[Source CI #43171300111](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43171300111) SUCCESS and [native Windows #43171300209](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43171300209) **SUCCESS 82/82 at tested CODE SHA `26dad6e07ef3dc1ca860aa98b4a8ccfb12912f72`**, PR34 OPEN/DRAFT/UNMERGED. Earlier 48 estimate was disproved: true original #783 1× static full grid has **75 nonempty out of 76**. Complete development-only BCLVT001 75 PNG source pack and nine old B05 hashes verified, native Level1A 42 tests, 15 1× hash, 20 HQ and standalone-copy20 parity, p95 20.84/26.1223ms <40; hosted speaker audio remains BLOCKED. **DO NOT mark Level1B playable/fully pack-ready**: full true 3× authored depth staging and Rust integration still prerequisite. **Next single approval-dependent AUDIT-FIX-06 complete 75-tile HQ3× source/depth proofs**, no B10/B13.
+
+
+## 2026-11-12 L2-CRIT-02 provenance correction — full 1× stage evidence, HQ and runtime still blockers
+
+- [Source Windows #43171300111](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43171300111) PASS at code `26dad6e`, [DRAFT PR34](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/34). Contrary to the earlier unaudited **48 nonempty** estimate in this document and the independent rescan, full canonical #783 source frame0 generates **75 nonempty 600×400 1× tiles out of 76 grid candidate positions**. Historic B05 9/9 decoded source RGBA hashes unchanged; a complete development-only BCLVT001 test pack is 253090 bytes/75 tiles, negative incomplete-pack guards PASS. **No shipped Rust Level1B assets/gameplay, no full 3× art.** Exact separate native run [#43171300209](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43171300209) pending. Original historical estimates retained below as provenance, superseded by the real source test.
+- **PRE-B13 HARD DEPENDENCY:** before any Level1B entry, complete 75-tile HQ3× authored-depth scenery proof and stage-aware pack/render integration with original actor/collision ordering and full native QA. A future separate AUDIT-FIX-06 may cover **HQ3× complete source/packer only**, without changing numbered B10–B13 roadmap without approval. No B10 initiated by this repair.
+
+
 ## 2026-11-12 — AUDIT-FIX-02 R-05 Win32 reentrancy (pending native verification)
 - [code `3b50f0b3`](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/commit/3b50f0b3c6f69fe906f7db60eaf032369019aaad) / [DRAFT PR31](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/31) removes raw `static mut APP` and adds checked UI-thread RefCell access with FIFO deferred focus and regression test; full strict [Windows CI #43156927621](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43156927621) pending at initial documentation, do not count it as pass. Scope only Win32 mutable ownership; gameplay music focus handling and all other independent audit items remain open. B10 NOT started, main/release and PRs protected.
 
