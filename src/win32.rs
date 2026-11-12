@@ -517,8 +517,7 @@ unsafe extern "system" fn wndproc(hwnd:HWND,msg:u32,w:WPARAM,l:LPARAM)->LRESULT 
     let r=&*(l as *const RECT);
     let width=(r.right-r.left).max(1);
     let height=(r.bottom-r.top).max(1);
-    SetWindowPos(hwnd,null_mut(),r.left,r.top,width,height,
-       SWP_NOZORDER|SWP_NOACTIVATE);
+    SetWindowPos(hwnd,null_mut(),r.left,r.top,width,height,SWP_NOZORDER|SWP_NOACTIVATE);
    }
    InvalidateRect(hwnd,null(),0);
    0
