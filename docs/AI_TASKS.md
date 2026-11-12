@@ -1,6 +1,25 @@
 # Persistent development tasks — Batman Rust port
 
 
+## AUDIT-FIX-11 / R-03 — COMPLETED / zero-allocation rendering & HUD formatting (2026-11-12)
+
+**VERIFIED NATIVE WINDOWS REGRESSION, NOT PLAYABLE LEVEL1B.** [Draft, OPEN, UNMERGED PR #40](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/40) on `revive/level2-audit-fix-render-zero-alloc-2026-11-12`, based on AF10 docs commit `e891293`. **Exact Windows-tested code SHA `9ff54fa`**. Final documentation SHA is the separate later `[skip ci]` commit; this file cannot prestate its own commit ID. Full native Windows [#43311547391](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43311547391) **SUCCESS 82/82 steps** on exact code SHA.
+
+**ENGINEERING & ARCHITECTURE FACTS:**
+1. Replaced per-frame `Vec::with_capacity(dst.w)` allocations in `upscale_opaque_base` and `upscale_alpha_layer` (`src/render.rs`) with compile-time precomputed `const XMAP_600_TO_1800: [(usize, usize, u32, u32); HQ_W] = compute_xmap_600_to_1800();`.
+2. Eliminates 3,600 runtime `div_euclid` and `rem_euclid` operations per frame, replacing them with direct array indexing from `.rodata`.
+3. Replaced `value.to_string()` in `draw_number_hq_1to1` and `draw_number_centered` with zero-allocation `format_u32_digits(val, buf: &mut [u8; 16])`.
+4. Replaced `score.to_string().len()` in `draw_hud_hq` with zero-allocation `digit_count(score)`.
+5. Added runtime dimension contract assertions `src.w == LOGICAL_W`, `src.h == LOGICAL_H`, `dst.w == HQ_W`, `dst.h == HQ_H` in upscalers.
+6. Two new unit tests added: `xmap_600_to_1800_matches_runtime_formula` and `format_u32_digits_and_digit_count_match_standard_formatting`, increasing total Rust tests from 49 to 51.
+
+**NATIVE VERIFIED on exact CODE SHA:** locked MSVC release `cargo test --release --locked` **51/51 passed in 0.19s**, locked build PASS, native legacy 1× image SHA **15/15 identical**, HQ3× smoke **20/20 at 1800×1200**, relocated standalone EXE **20/20 exact HQ hashes**, child exit 0 and no SWF staged. Real Win32 OS capture/start/held Enter/fresh Enter/SKIP, F7/F8 three HUD cases, fullscreen F/Esc, focus visuals, PE and Windows Shell icon PASS. Render p95 **24.8706ms**, scenery scroll p95 **24.0489ms**, both well below unchanged **40ms** gate. Integration QA artifact confirmed child exit 0, 20/20 identical HQ hashes. Hosted WinMM audio device 0 / MCI error 277 remains **BLOCKED** (no hosted speaker endpoint). Live Flash parity and physical audio UNVERIFIED.
+
+**RUST PURITY/AUDIT:** Zero unsafe code, zero new external crates, runtime remains 100% native Rust with documented Win32/GDI/WinMM FFI. [Research RE-20261112-014](REVERSE_ENGINEERING_RESEARCH_LEDGER.md) and [independent AUD-20261112-014](RUST_PURITY_AND_ENGINEERING_AUDIT.md) finalized. Reviewed `AGENTS.md` and both mandatory protocols unchanged. Main and accepted Level1A release preserved.
+
+**STOP. ONE NEXT SEPARATELY AUTHORIZED TASK: R-04 / split Assets into CommonAssets and lazy StageAssets in `src/assets.rs`**, preserving existing baseline.
+
+
 ## AUDIT-FIX-10 / R-02 — COMPLETED / zero-cost coordinate & depth type safety (2026-11-12)
 
 **VERIFIED NATIVE WINDOWS REGRESSION, NOT PLAYABLE LEVEL1B.** [Draft, OPEN, UNMERGED PR #39](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/39) on `revive/level2-audit-fix-coordinate-types-2026-11-12`, based on AF09 docs commit `184ed92`. **Exact Windows-tested code SHA `1ed5c1a2dd6946002f23cf565ecbf2b8bf5fb2b3`**. Final documentation SHA is the separate later `[skip ci]` commit; this file cannot prestate its own commit ID. Full native Windows [#43304552453](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43304552453) **SUCCESS 82/82 steps** on exact code SHA.

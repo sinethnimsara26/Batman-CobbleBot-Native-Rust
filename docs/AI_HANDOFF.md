@@ -1,6 +1,15 @@
 # AI handoff — current recovery checkpoint
 
 
+## FINAL VERIFIED — AUDIT-FIX-11 (R-03) zero-allocation rendering & HUD formatting; STOP (2026-11-12)
+
+- **Live recovery:** feature branch `revive/level2-audit-fix-render-zero-alloc-2026-11-12`, draft [PR #40](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/40) OPEN/UNMERGED based on previous AF10 docs commit `e891293`. **TESTED CODE SHA `9ff54fa`**; **separate final docs SHA is the subsequent documentation-only branch HEAD, inspect GitHub after push**. Do not treat docs SHA as Windows-tested implementation.
+- **NATIVE WINDOWS PASS:** exact-code [#43311547391](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43311547391) **SUCCESS 82/82**, locked release Rust **51/51 tests in 0.19s**, Cargo lock unchanged, 1× legacy golden **15/15**, HQ3× **20/20 1800×1200**, relocated independent installed EXE **20/20 identical**, exit 0, no source SWF staged. Genuine OS Windows GUI/Enter title/start/skip/F7/F8 20/10/1234 and further fixtures, F/Esc fullscreen, focus visuals, PE/Shell icon/integration PASS; render p95 **24.8706ms**/scenery scroll **24.0489ms** vs <40ms unchanged. Verified installed EXE QA report with child exit 0, 20/20 identical HQ hashes. Audio/focus reports visual focus PASS, hardware audio BLOCKED WinMM waveOut 0, MCI 277; original Flash-player runtime fidelity UNVERIFIED.
+- **Scoped code/workflow paths:** `src/render.rs` defines compile-time `const XMAP_600_TO_1800: [(usize, usize, u32, u32); HQ_W] = compute_xmap_600_to_1800();`, eliminating per-frame `Vec` allocations in `upscale_opaque_base` and `upscale_alpha_layer`; formats HUD numbers via zero-allocation `format_u32_digits(&mut [u8; 16])` and `digit_count(score)`; 2 new unit tests added (49→51); `.github/workflows/build-level1a-fidelity.yml` adds only the feature branch trigger. No other runtime files modified.
+- **All mandatory records:** AGENTS and both protocols READ/unchanged; AI_TASKS, AI_HANDOFF, AI_WORKLOG, RE research **RE-20261112-014**, post-change Rust engineering audit **AUD-20261112-014** updated. Native Rust runtime purity PASS with pre-existing platform FFI qualifiers. Protected `main`, frozen Level1A release SHA `49e8fd343e4f37f045ba71f24fff0999211f0f11`, earlier draft PRs unchanged; PR40 stays DRAFT/OPEN/UNMERGED.
+- **STOP. Exactly ONE NEXT independently authorized batch: R-04 split Assets into CommonAssets and lazy StageAssets in `src/assets.rs`**; do NOT start B10/B13, merge, or release.
+
+
 ## FINAL VERIFIED — AUDIT-FIX-10 (R-02) coordinate and depth type safety; STOP (2026-11-12)
 
 - **Live recovery:** feature branch `revive/level2-audit-fix-coordinate-types-2026-11-12`, draft [PR #39](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/39) OPEN/UNMERGED based on previous AF09 docs commit `184ed92`. **TESTED CODE SHA `1ed5c1a2dd6946002f23cf565ecbf2b8bf5fb2b3`**; **separate final docs SHA is the subsequent documentation-only branch HEAD, inspect GitHub after push**. Do not treat docs SHA as Windows-tested implementation.

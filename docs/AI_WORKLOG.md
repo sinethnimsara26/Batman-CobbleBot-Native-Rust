@@ -701,3 +701,22 @@ Do not erase two historical CI failures: documentation-only #42834460076 and ini
   - Fidelity: 15/15 historical 1× screenshots identical, 20/20 relocated standalone EXE HQ3× screenshot hashes identical, child exit 0.
   - Hosted audio: BLOCKED (no hosted audio endpoint, WinMM MCI error 277).
 - **Records & Governance:** RE-20261112-013 and AUD-20261112-013 appended. All six records synchronized. No unsafe code, no external dependencies. PR #39 remains DRAFT/OPEN. STOP.
+
+
+## 2026-11-12 — AUDIT-FIX-11 / R-03 zero-allocation rendering & HUD formatting (VERIFIED)
+
+- **Scope & Context:** AUDIT-FIX-11 / R-03; branch `revive/level2-audit-fix-render-zero-alloc-2026-11-12`, draft PR #40 based on AUDIT-FIX-10 docs commit `e891293`.
+- **Implementation:**
+  1. `src/render.rs`: Defined compile-time `const XMAP_600_TO_1800: [(usize, usize, u32, u32); HQ_W] = compute_xmap_600_to_1800();` in `.rodata`.
+  2. Replaced per-frame `Vec::with_capacity(dst.w)` allocations in `upscale_opaque_base` and `upscale_alpha_layer` with direct iterations over `XMAP_600_TO_1800`, eliminating 3,600 integer divisions per frame and 50 heap allocations/sec.
+  3. Formatted HUD dynamic integers (`batarangs`, `lives`, `score`) into stack buffer `[u8; 16]` via `format_u32_digits`, and computed column budgets via `digit_count(score)`, eliminating 75–100 heap `String` allocations/sec.
+  4. Added dimension contract assertions `src.w == LOGICAL_W`, `src.h == LOGICAL_H`, `dst.w == HQ_W`, `dst.h == HQ_H` in upscalers.
+  5. Added 2 new unit tests (`xmap_600_to_1800_matches_runtime_formula`, `format_u32_digits_and_digit_count_match_standard_formatting`), bringing total Rust tests from 49 to 51.
+  6. Added branch to `.github/workflows/build-level1a-fidelity.yml`.
+- **Native Windows CI Execution:**
+  - Full native Windows run [#43311547391](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43311547391) completed **SUCCESS 82/82 steps** on exact code SHA `9ff54fa`.
+  - Cargo test: **51/51 passed in 0.19s**.
+  - Performance: Render p95 **24.8706ms**, scenery scroll p95 **24.0489ms** (well below 40.0ms gate).
+  - Fidelity: 15/15 historical 1× screenshots identical, 20/20 relocated standalone EXE HQ3× screenshot hashes identical, child exit 0.
+  - Hosted audio: BLOCKED (no hosted audio endpoint, WinMM MCI error 277).
+- **Records & Governance:** RE-20261112-014 and AUD-20261112-014 appended. All six records synchronized. No unsafe code, no external dependencies. PR #40 remains DRAFT/OPEN. STOP.
