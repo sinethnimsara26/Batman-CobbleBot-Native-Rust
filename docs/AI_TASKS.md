@@ -1,6 +1,25 @@
 # Persistent development tasks — Batman Rust port
 
 
+## AUDIT-FIX-10 / R-02 — COMPLETED / zero-cost coordinate & depth type safety (2026-11-12)
+
+**VERIFIED NATIVE WINDOWS REGRESSION, NOT PLAYABLE LEVEL1B.** [Draft, OPEN, UNMERGED PR #39](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/39) on `revive/level2-audit-fix-coordinate-types-2026-11-12`, based on AF09 docs commit `184ed92`. **Exact Windows-tested code SHA `1ed5c1a2dd6946002f23cf565ecbf2b8bf5fb2b3`**. Final documentation SHA is the separate later `[skip ci]` commit; this file cannot prestate its own commit ID. Full native Windows [#43304552453](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43304552453) **SUCCESS 82/82 steps** on exact code SHA.
+
+**ENGINEERING & ARCHITECTURE FACTS:**
+1. Defined zero-cost newtypes in `src/stage.rs`: `GamePos`, `LevelPos`, `GameDepth(pub u16)`, `LevelDepth(pub u16)`.
+2. Flash hierarchy nests level geometry inside parent GAME sprite `#1075` at `(1034.65, 239.25)` for Level 1B (`#696` at `(2467.65, 239.25)` for Level 1A). Passing GAME-local coordinates to `CollisionMask` causes silent desynchronization or bounds violations. `GamePos` and `LevelPos` prevent this at compile time.
+3. Added `StageDescriptor::to_level_pos` and `StageDescriptor::to_game_pos` conversion methods. Updated `BankStreetProp::origin_level_pos`, `BankGoonSpawn::level_pos`, and `CollisionMask::solid_level_pos`.
+4. Display list depths for props (`1077..1097`) and goons (`1105..1123`) strongly typed via `GameDepth`, distinguishing them from level-local tile depths (`1..1073`).
+5. Implemented `From`, `Into`, `PartialEq`, and `PartialOrd` traits for backwards compatibility with raw tuples and numeric assertions.
+6. One new unit test added: `coordinate_and_depth_newtypes_preserve_round_trip_and_ordering`, increasing total Rust tests from 48 to 49.
+
+**NATIVE VERIFIED on exact CODE SHA:** locked MSVC release `cargo test --release --locked` **49/49 passed in 0.20s**, locked build PASS, native legacy 1× image SHA **15/15 identical**, HQ3× smoke **20/20 at 1800×1200**, relocated standalone EXE **20/20 exact HQ hashes**, child exit 0 and no SWF staged. Real Win32 OS capture/start/held Enter/fresh Enter/SKIP, F7/F8 three HUD cases, fullscreen F/Esc, focus visuals, PE and Windows Shell icon PASS. Render p95 **19.9585ms**, scenery scroll p95 **21.4615ms**, both well below unchanged **40ms** gate. Integration QA artifact confirmed child exit 0, 20/20 identical HQ hashes. Hosted WinMM audio device 0 / MCI error 277 remains **BLOCKED** (no hosted speaker endpoint). Live Flash parity and physical audio UNVERIFIED.
+
+**RUST PURITY/AUDIT:** Zero unsafe code, zero new external crates, runtime remains 100% native Rust with documented Win32/GDI/WinMM FFI. [Research RE-20261112-013](REVERSE_ENGINEERING_RESEARCH_LEDGER.md) and [independent AUD-20261112-013](RUST_PURITY_AND_ENGINEERING_AUDIT.md) finalized. Reviewed `AGENTS.md` and both mandatory protocols unchanged. Main and accepted Level1A release preserved.
+
+**STOP. ONE NEXT SEPARATELY AUTHORIZED TASK: R-03 / zero-allocation rendering in `src/render.rs`** (lookup tables and stack buffers), preserving existing baseline.
+
+
 ## AUDIT-FIX-09 / R-01 — COMPLETED / collision-mask bit-packing and non-recursive probes (2026-11-12)
 
 **VERIFIED NATIVE WINDOWS REGRESSION, NOT PLAYABLE LEVEL1B.** [Draft, OPEN, UNMERGED PR #38](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/38) on `revive/level2-audit-fix-collision-bitpack-2026-11-12`, based on AF08 docs commit `cd011f00ac2d4f1b4eea309f6e45438131008a9a`. **Exact Windows-tested code SHA `68e94f6e1f0e42d733c5b9ba89f2a24fa68ff118`**. Final documentation SHA is the separate later `[skip ci]` commit; this file cannot prestate its own commit ID. Full native Windows [#43290698060](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43290698060) **SUCCESS 82/82 steps** on exact code SHA.

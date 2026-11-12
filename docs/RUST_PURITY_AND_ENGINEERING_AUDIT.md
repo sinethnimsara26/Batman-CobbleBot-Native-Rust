@@ -971,3 +971,21 @@ Do not erase two historical CI failures: documentation-only #42834460076 and ini
   - **ENGINEERING QUALITY:** PASS (8× memory reduction, bounded iterative loops, zero unsafe code).
   - **ORIGINAL-GAME FIDELITY:** VERIFIED FOR TESTED SCOPE (Level 1A gameplay intact; Level 1B collision probe parity verified).
   - **HARDWARE SPEAKER AUDIO:** BLOCKED (hosted runner limitation, unchanged).
+
+
+## AUD-20261112-013 — Independent post-code Rust purity/engineering audit of AUDIT-FIX-10 (R-02)
+
+- **Audit Date:** 2026-11-12
+- **Scope:** `src/stage.rs`, `src/bank_props.rs`, `src/bank_goons.rs`, `src/collision.rs`, `.github/workflows/build-level1a-fidelity.yml`
+- **Code SHA:** `1ed5c1a` on branch `revive/level2-audit-fix-coordinate-types-2026-11-12` (PR #39).
+- **Actual Changed Code and Engineering Review:**
+  1. Defined zero-cost newtypes `GamePos`, `LevelPos`, `GameDepth`, and `LevelDepth` in `src/stage.rs`.
+  2. Implemented `From`, `Into`, `PartialEq`, and `PartialOrd` traits for seamless backwards compatibility with raw `(f32, f32)` tuples and `u16` depths.
+  3. Added compile-time checked conversion methods `to_level_pos` and `to_game_pos` to `StageDescriptor`, eliminating the risk of passing game-local coordinates into level-local collision probes.
+  4. Updated `StageDescriptor`, `BankStreetProp`, `BankGoonSpawn`, and `CollisionMask` to use `GamePos`, `LevelPos`, and `GameDepth`.
+  5. Added comprehensive round-trip and ordering unit test `coordinate_and_depth_newtypes_preserve_round_trip_and_ordering`. Total unit tests increased from 48 to 49.
+- **Verdicts:**
+  - **PURE-RUST RUNTIME COMPLIANCE:** PASS (with existing direct Win32/GDI/WinMM OS FFI qualifications). Zero new crates, zero unsafe blocks.
+  - **ENGINEERING QUALITY:** PASS (zero-cost abstractions, strong compile-time invariants, zero heap allocations).
+  - **ORIGINAL-GAME FIDELITY:** VERIFIED FOR TESTED SCOPE (Level 1A gameplay intact; Level 1B stage/prop/goon coordinate parity verified).
+  - **HARDWARE SPEAKER AUDIO:** BLOCKED (hosted runner limitation, unchanged).

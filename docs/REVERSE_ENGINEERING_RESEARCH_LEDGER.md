@@ -1158,3 +1158,24 @@ Tested original source fixed CODE SHA `26dad6e07ef3dc1ca860aa98b4a8ccfb12912f72`
   - Unit tests confirm `memory_usage_bytes() < (raw_pixels / 7)` across both Level 1A and Level 1B masks, zero mutations on non-colliding air coordinates (`-11197.0, 0.0`), and proper boundary clamping.
   - All existing Bank Street ground probes (`bank_ground_dimensions_and_spawn_space_match_source`, `bank_street_walk_jump_fall_and_wall_probes_use_original_ground`) pass identically.
 - **Confidence:** HIGH for bit-packing math, memory reduction, and parity with legacy collision queries; UNVERIFIED for live original Flash hitTest polygon edge cases.
+
+
+## RE-20261112-013 — Zero-Cost Coordinate & Depth Type Safety (R-02 / AUDIT-FIX-10)
+
+- **Batch/Context:** AUDIT-FIX-10 / R-02; branch `revive/level2-audit-fix-coordinate-types-2026-11-12`, draft PR #39 based on AUDIT-FIX-09 docs commit `184ed92`.
+- **Target Subsystem:** `src/stage.rs`, `src/bank_props.rs`, `src/bank_goons.rs`, `src/collision.rs`.
+- **Original Architecture & Findings:**
+  1. The Flash authoring hierarchy nests the level geometry inside the parent GAME sprite `#1075` at offset `(1034.65, 239.25)` for Level 1B (and `#696` at `(2467.65, 239.25)` for Level 1A).
+  2. Previously, player spawn, prop placements, and enemy spawns were stored as raw `(f32, f32)` tuples, creating a severe risk of conflating GAME-local coordinates (e.g. `528.15, -18.75`) with LEVEL-local coordinates (e.g. `-506.5, -258.0`) when probing `CollisionMask`.
+  3. Furthermore, display list depths for props (`1077..1097`) and goons (`1105..1123`) were untyped `u16`, risking accidental confusion with level-local tile depths (`1..1073`).
+  4. Introduced zero-cost newtypes:
+     - `GamePos`: coordinates in GAME sprite space.
+     - `LevelPos`: coordinates in LEVEL sprite space.
+     - `GameDepth`: display list depth in GAME sprite space.
+     - `LevelDepth`: display list depth inside a LEVEL sprite space.
+  5. Implemented type-safe conversion functions `StageDescriptor::to_level_pos` and `StageDescriptor::to_game_pos`, and updated `BankStreetProp`, `BankGoonSpawn`, and `CollisionMask` to use the typed coordinates.
+- **Verification Evidence:**
+  - Rust unit tests increased from 48 to 49 with `coordinate_and_depth_newtypes_preserve_round_trip_and_ordering`.
+  - Added compile-time type enforcement while maintaining `PartialEq` and `From`/`Into` compatibility with legacy tuple queries.
+  - Round-trip transformation tests verify `to_game_pos(to_level_pos(pos)) == pos` across all 5 canonical stages.
+- **Confidence:** HIGH for coordinate transformation math and compile-time type invariants.
