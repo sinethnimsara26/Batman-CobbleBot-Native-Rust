@@ -519,7 +519,7 @@ impl StoryCard {
 
 #[cfg(test)]
 mod tests {
-    use super::{SourceScene, StageId, StoryCard, STAGES};
+    use super::{GameDepth, GamePos, LevelDepth, LevelPos, SourceScene, StageId, StoryCard, STAGES};
     use crate::game::{AppScreen, Game, LEVEL_X, LEVEL_Y};
 
     #[test]
