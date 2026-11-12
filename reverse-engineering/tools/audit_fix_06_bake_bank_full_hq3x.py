@@ -15,7 +15,7 @@ import struct
 import subprocess
 import sys
 
-from PIL import Image, ImageChops
+from PIL import Image
 
 from b03_bake_stage_asset_proofs import expect_original_source, static_filter, validate_stage
 from b05_bake_bank_street_1x import source_depth_audit, source_definition_tags
@@ -215,9 +215,8 @@ def main():
         combo.alpha_composite(layers[1])
         with Image.open(controls["flat"][xy]) as opened:
             flat = opened.convert("RGBA")
-        bbox = ImageChops.difference(flat, combo).getbbox()
-        if bbox is not None:
-            raise AssertionError(f"source-authored depth recomposition differs at {xy}: {bbox}")
+        if flat.tobytes() != combo.tobytes():
+            raise AssertionError(f"source-authored RGBA depth recomposition differs at {xy}")
         comparisons.append({"world_origin": list(xy), "different_rgba_pixels": 0})
     print("AF06_AUTHOR_DEPTH_CONTROL_RECOMPOSITION_PASS", comparisons, flush=True)
 
