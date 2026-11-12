@@ -12,6 +12,11 @@ FAMILIES={"can":(785,"bgTouch",741856,741895,4),
           "mailbox":(793,"bgHit",742010,742049,1)}
 FUNCTIONS={"bgTouch":(147901,85,["hitTest","hit","play","onEnterFrame"]),
            "bgHit":(148009,125,["hitTest","hit","play","onEnterFrame","playerAttacking","metal1"])}
+EXPECTED_PROP_TIMELINES={
+    785:(7,[0,6],[784],7),
+    790:(11,[0,10],[780,786,787,789],12),
+    793:(3,[0,2],[779,792],3),
+}
 NAMES={"can_03":(785,1077),"can_02":(785,1079),"can_01":(785,1081),
        "can_04":(785,1083),"trash_01":(790,1085),"trash_02":(790,1088),
        "trash_03":(790,1091),"trash_04":(790,1094),"mailbox_01":(793,1097)}
@@ -90,11 +95,26 @@ def sprite_graph(symbols,actions,roots):
                     "DoAction_count":len(scripts),
                     "DoAction_frames_zero_based":[b["frame"] for b in scripts],
                     "DoAction_tag_offsets":[b["tag_offset"] for b in scripts],
-                    "direct_DoAction_strings":sorted({str(v) for b in scripts for v in b.get("strings",[])})}
+                    "direct_DoAction_strings":sorted({str(v) for b in scripts for v in b.get("strings",[])}),
+                    "direct_DoAction_opcodes":[
+                        {"frame_zero_based":b["frame"],"tag_offset":b["tag_offset"],
+                         "ops":[{"offset":a.get("offset"),"op":a["op"],
+                                 **({"push":push(a)} if a["op"]=="Push" else {})}
+                                for a in b["actions"]]}
+                        for b in scripts]}
         for kid in kids:visit(kid,parents+(cid,))
     for cid in roots:visit(cid)
     assert all(cid in graph for cid in roots)
     return graph
+def exact_timeline_contract(graph):
+    for cid,(frames,action_frames,children,placements) in EXPECTED_PROP_TIMELINES.items():
+        prop=graph[cid]
+        assert prop["declared_frames"]==frames,(cid,"wrong full original timeline")
+        assert prop["DoAction_frames_zero_based"]==action_frames,(cid,"missing frame scripts")
+        assert prop["child_ids"]==children,(cid,"nested original sprites drift")
+        assert prop["placement_count"]==placements,(cid,"placement timeline drift")
+    return "PASS_SOURCE_COMPLETE_TIMELINE_AND_CHILD_IDS"
+
 def main():
     ap=argparse.ArgumentParser()
     for n in ("swf","symbols","actions","instances","out"):ap.add_argument("--"+n,type=Path,required=True)
@@ -108,6 +128,11 @@ def main():
     for name,(sid,d) in NAMES.items():assert (named[name]["character_id"],named[name]["depth"],named[name]["frame"])==(sid,d,0)
     bindings=dispatch(actions);functions=callback_functions(actions)
     graph=sprite_graph(symbols,actions,[785,790,793])
+    timeline_pass=exact_timeline_contract(graph)
+    forged=copy.deepcopy(graph);forged[790]["declared_frames"]=10
+    try:exact_timeline_contract(forged)
+    except AssertionError:forged_pass="PASS_TRUNCATED_TRASH_SOURCE_TIMELINE_REJECTED"
+    else:raise AssertionError("truncated trash movieclip falsely accepted")
     broken=copy.deepcopy(actions)
     for b in broken:
         if b["context"]=="root" and b["frame"]==20 and b["tag_offset"]==740341:
@@ -123,11 +148,14 @@ def main():
             "nine_original_prop_instances":[{"name":n,"symbol_id":sid,"game_depth":d} for n,(sid,d) in NAMES.items()],
             "family_handlers":bindings,"global_callbacks":functions,
             "reachable_source_sprite_definitions":{str(k):v for k,v in sorted(graph.items())},
-            "negative_test":negative,"playable_level1b":False,
+            "complete_parent_timeline_contract":timeline_pass,
+            "negative_test":negative,"negative_truncated_timeline_test":forged_pass,
+            "playable_level1b":False,
             "warning":"Original function bytecode observed; hitTest live results, sprite advance and actor collisions remain unverified."}
     args.out.mkdir(parents=True,exist_ok=True)
     (args.out/"AF08_ORIGINAL_BANK_PROP_AVM1_AND_TIMELINES.json").write_text(json.dumps(report,indent=2)+"\n")
     print("AF08_ORIGINAL_SOURCE_PASS",[(k,v["source_on_enter_frame"]) for k,v in bindings.items()])
     print("AF08_SOURCE_PROP_TIMELINES",[(k,graph[k]["declared_frames"],graph[k]["DoAction_count"]) for k in (785,790,793)])
     print("AF08_NEGATIVE_MUTATED_CALLBACK_REJECTED")
+    print("AF08_COMPLETE_TIMELINE_AND_NEGATIVE_TRUNCATION_PASS")
 if __name__=="__main__":main()

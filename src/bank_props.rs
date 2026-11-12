@@ -9,7 +9,10 @@
 //!
 //! This immutable model is deliberately DORMANT. No visual asset is loaded,
 //! no stage transition occurs, and no physical/scripted collision is assumed.
-//! Whether these props trigger original AVM1 hitTest or actions is UNVERIFIED.
+//! AF08: canonical source verified root20 assigns bgTouch to can_* and bgHit
+//! to trash_*/mailbox_*, and their complete parent source clip lengths
+//! (7/11/3), with frame scripts at first and terminal zero-based frames.
+//! Their live Flash hitTest outcomes and native playback remain UNVERIFIED.
 #![allow(dead_code)]
 use crate::stage::StageId;
 
@@ -32,6 +35,50 @@ pub struct BankStreetProp {
     pub kind: PropKind,
     /// Original Flash GAME-local placement transform, not root pixels.
     pub source_game_matrix: SourceMatrix,
+}
+
+/// AF08: immutable original parent MovieClip timelines and AVM1 onEnterFrame
+/// handler identities. The two action frame indices use ZERO-BASED source
+/// sprite frames (distinct from zero-based ROOT scene frame 20).
+/// This is source metadata only; it does not schedule native frame advance.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SourcePropHandler { BgTouch, BgHit }
+
+impl SourcePropHandler {
+    pub const fn original_avm1_name(self) -> &'static str {
+        match self {
+            Self::BgTouch => "bgTouch",
+            Self::BgHit => "bgHit",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SourcePropTimeline {
+    pub total_frames: u8,
+    pub action_frames_zero_based: [u8; 2],
+    pub handler: SourcePropHandler,
+}
+
+impl PropKind {
+    /// Original SHA-verified symbols #785/#790/#793 and original root20
+    /// name-prefix dispatch; NOT an implementation of Flash hitTest or damage.
+    pub const fn source_timeline(self) -> SourcePropTimeline {
+        match self {
+            Self::Can => SourcePropTimeline {
+                total_frames: 7, action_frames_zero_based: [0, 6],
+                handler: SourcePropHandler::BgTouch,
+            },
+            Self::Trash => SourcePropTimeline {
+                total_frames: 11, action_frames_zero_based: [0, 10],
+                handler: SourcePropHandler::BgHit,
+            },
+            Self::Mailbox => SourcePropTimeline {
+                total_frames: 3, action_frames_zero_based: [0, 2],
+                handler: SourcePropHandler::BgHit,
+            },
+        }
+    }
 }
 
 impl BankStreetProp {
@@ -58,7 +105,7 @@ pub const BANK_STREET_PROPS: [BankStreetProp;9] = [
 
 #[cfg(test)]
 mod tests {
-    use super::{BANK_STREET_PROPS,PropKind};
+    use super::{BANK_STREET_PROPS,PropKind,SourcePropHandler};
     use crate::stage::StageId;
 
     #[test]
@@ -100,11 +147,51 @@ mod tests {
     }
 
     #[test]
+    fn original_bank_prop_timelines_include_terminal_frame_actions() {
+        let expected = [
+            (PropKind::Can, 7, [0, 6]),
+            (PropKind::Trash, 11, [0, 10]),
+            (PropKind::Mailbox, 3, [0, 2]),
+        ];
+        for (kind, frames, actions) in expected {
+            let source = kind.source_timeline();
+            assert_eq!(source.total_frames, frames);
+            assert_eq!(source.action_frames_zero_based, actions);
+            assert!(source.action_frames_zero_based[1] < source.total_frames);
+        }
+        for prop in BANK_STREET_PROPS {
+            let source=prop.kind.source_timeline();
+            assert!(source.total_frames > 1);
+            assert_eq!(source.action_frames_zero_based[0], 0);
+            assert_eq!(source.action_frames_zero_based[1], source.total_frames - 1);
+        }
+    }
+
+    #[test]
+    fn source_root20_binds_touch_for_cans_and_hit_for_trash_and_mailbox() {
+        for prop in BANK_STREET_PROPS {
+            let handler = prop.kind.source_timeline().handler;
+            let expected = match prop.kind {
+                PropKind::Can => SourcePropHandler::BgTouch,
+                PropKind::Trash | PropKind::Mailbox => SourcePropHandler::BgHit,
+            };
+            assert_eq!(handler, expected, "source callback changed: {}", prop.name);
+            assert_eq!(handler.original_avm1_name(), match expected {
+                SourcePropHandler::BgTouch => "bgTouch",
+                SourcePropHandler::BgHit => "bgHit",
+            });
+        }
+        // Source bgHit references hitTest + playerAttacking + metal1; the
+        // runtime does NOT yet call it or model a native hit/damage response.
+    }
+
+    #[test]
     fn current_player_remains_level1a_and_props_are_not_game_collision() {
         let game=crate::game::Game::new();
         assert_eq!(game.active_stage(),StageId::Level1A);
         assert!(BANK_STREET_PROPS.iter().all(|p|p.symbol_id!=782 && p.symbol_id!=153));
         // There is intentionally no physics/AI/visible object path to these
-        // metadata records: scripted prop interaction is a later source gate.
+        // metadata records: callbacks are now source-verified, but scheduling
+        // them in a playable native Level1B is still a separate future gate.
     }
 }
