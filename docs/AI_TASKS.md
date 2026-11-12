@@ -1,6 +1,23 @@
 # Persistent development tasks — Batman Rust port
 
 
+## AUDIT-FIX-09 / R-01 — COMPLETED / collision-mask bit-packing and non-recursive probes (2026-11-12)
+
+**VERIFIED NATIVE WINDOWS REGRESSION, NOT PLAYABLE LEVEL1B.** [Draft, OPEN, UNMERGED PR #38](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/38) on `revive/level2-audit-fix-collision-bitpack-2026-11-12`, based on AF08 docs commit `cd011f00ac2d4f1b4eea309f6e45438131008a9a`. **Exact Windows-tested code SHA `68e94f6e1f0e42d733c5b9ba89f2a24fa68ff118`**. Final documentation SHA is the separate later `[skip ci]` commit; this file cannot prestate its own commit ID. Full native Windows [#43290698060](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43290698060) **SUCCESS 82/82 steps** on exact code SHA.
+
+**ENGINEERING & ARCHITECTURE FACTS:**
+1. Replaced `solid: Vec<u8>` (1 byte per pixel) in `CollisionMask` (`src/collision.rs`) with `words: Box<[u64]>` (1 bit per pixel), delivering an exact 8× (87.5%) heap memory reduction across all collision masks (1A: 11.5 MB -> 1.44 MB; 1B: 17.1 MB -> 2.14 MB; future Labs 2A/2B: 88.3 MB -> 11.04 MB each).
+2. Bit indexing formula: `idx >> 6` (word) and `idx & 63` (bit offset). Fast constant-time query: `(self.words[idx >> 6] & (1u64 << (idx & 63))) != 0`.
+3. Non-recursive push-out loops: `check_ground` and `check_ceiling` replace recursive stack calls (`loop_count + 1`) with bounded iterative loops (`0..15`), maintaining exact 16-pixel push-out resolution with zero call stack allocation.
+4. Two new unit tests added: `collision_mask_bitpack_memory_savings_and_queries` and `check_ground_and_ceiling_iterative_loop_bounds`, increasing total Rust tests from 46 to 48.
+
+**NATIVE VERIFIED on exact CODE SHA:** locked MSVC release `cargo test --release --locked` **48/48**, locked build PASS, native legacy 1× image SHA **15/15 identical**, HQ3× smoke **20/20 at 1800×1200**, relocated standalone EXE **20/20 exact HQ hashes**, child exit0 and no SWF staged. Real Win32 OS capture/start/held Enter/fresh Enter/SKIP, F7/F8 three HUD cases, fullscreen F/Esc, focus visuals, PE and Windows Shell icon PASS. Render p95 **16.7676ms**, scenery scroll p95 **20.8336ms**, both well below unchanged **40ms** gate. Downloaded and verified integration QA report (`batch08-integration-report.json`), child exit0, 20/20 identical HQ hashes. Hosted WinMM audio device 0 / MCI error 277 remains **BLOCKED** (no hosted speaker endpoint). Live Flash parity and physical audio UNVERIFIED.
+
+**RUST PURITY/AUDIT:** Zero unsafe code, zero new external crates, runtime remains 100% native Rust with documented Win32/GDI/WinMM FFI. [Research RE-20261112-012](REVERSE_ENGINEERING_RESEARCH_LEDGER.md) and [independent AUD-20261112-012](RUST_PURITY_AND_ENGINEERING_AUDIT.md) finalized. Reviewed `AGENTS.md` and both mandatory protocols unchanged. Main and accepted Level1A release preserved.
+
+**STOP. ONE NEXT SEPARATELY AUTHORIZED TASK: R-02 / coordinate and depth type safety** (or next pre-B10 engineering improvement), preserving existing baseline.
+
+
 ## AUDIT-FIX-08 / L2-ARCH-05 — COMPLETED / original Bank Street prop callbacks and timelines (2026-11-12)
 
 **VERIFIED OFFLINE ORIGINAL SOURCE + NATIVE WINDOWS REGRESSION, NOT PLAYABLE LEVEL1B.** [Draft, OPEN, UNMERGED PR #37](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/37) on `revive/level2-audit-fix-bank-prop-logic-2026-11-12`, based on AF07 docs `e3a1dc24d417a555875e10b97224dd6cf80581b5`. **Exact Windows-tested code SHA `a6ca67faaac09287c90bc8cd134f1981c41877fd`**. Final documentation SHA is the separate later `[skip ci]` commit; this file cannot prestate its own commit ID. Original-source Windows [#43201444729](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43201444729) **SUCCESS 8/8 steps**, full native Windows [#43201444703](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43201444703) **SUCCESS 82/82 steps**, both at identical CODE SHA.
