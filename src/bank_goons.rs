@@ -651,11 +651,11 @@ mod tests {
         // Wall check ahead on flat street is clear
         assert!(!check_goon_wall(&ground, goon.x, goon.y, 0.0));
 
-        // Far off in the void (x = 1000.0, well past street boundary), edge check returns false
-        assert!(!check_goon_edge(&ground, 1000.0, goon.y, 0.0));
+        // Far off in the void past street boundary (x = 2500.0), edge check returns false
+        assert!(!check_goon_edge(&ground, 2500.0, goon.y, 0.0));
 
-        // When a goon in Walk state reaches a ledge (no ground ahead), it turns around
-        goon.x = 800.0; // position near/over boundary where edge check fails
+        // When a goon in Walk state reaches near the right edge (x = 1930.0), ground ahead (1980.0) is missing
+        goon.x = 1930.0;
         goon.state = GoonState::Walk;
         goon.dir = 1;
         goon.tick_noncombat(goon.x + 200.0, goon.y, &ground, &mut rng);
