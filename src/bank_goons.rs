@@ -31,6 +31,47 @@ pub const GOON_LABELS: [SourceGoonLabel; 9] = [
     SourceGoonLabel { name: "intro", first_frame_zero_based: 79, end_frame_exclusive: 89 },
 ];
 
+/// Original depth-1 child movie clip within a labeled 89-frame parent.
+/// Ranges index separately baked family frames, not 89-frame parent snapshots.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SourceGoonChildClip {
+    pub name: &'static str,
+    pub source_child_symbol_id: u16,
+    pub first_frame_inclusive: u16,
+    pub end_frame_exclusive: u16,
+}
+impl SourceGoonChildClip {
+    pub const fn frame_count(self) -> u16 {
+        self.end_frame_exclusive - self.first_frame_inclusive
+    }
+}
+
+/// Original source child frames for family A; NOT game ticks or AI durations.
+pub const GOON_A_CLIPS: [SourceGoonChildClip; 9] = [
+    SourceGoonChildClip { name: "stand", source_child_symbol_id: 799, first_frame_inclusive: 0, end_frame_exclusive: 1 },
+    SourceGoonChildClip { name: "walk", source_child_symbol_id: 824, first_frame_inclusive: 1, end_frame_exclusive: 11 },
+    SourceGoonChildClip { name: "retreat", source_child_symbol_id: 834, first_frame_inclusive: 11, end_frame_exclusive: 21 },
+    SourceGoonChildClip { name: "attack", source_child_symbol_id: 847, first_frame_inclusive: 21, end_frame_exclusive: 31 },
+    SourceGoonChildClip { name: "hurt", source_child_symbol_id: 854, first_frame_inclusive: 31, end_frame_exclusive: 37 },
+    SourceGoonChildClip { name: "fall", source_child_symbol_id: 873, first_frame_inclusive: 37, end_frame_exclusive: 45 },
+    SourceGoonChildClip { name: "die", source_child_symbol_id: 879, first_frame_inclusive: 45, end_frame_exclusive: 53 },
+    SourceGoonChildClip { name: "idle", source_child_symbol_id: 799, first_frame_inclusive: 53, end_frame_exclusive: 54 },
+    SourceGoonChildClip { name: "intro", source_child_symbol_id: 799, first_frame_inclusive: 54, end_frame_exclusive: 55 },
+];
+
+/// Original source child frames for family B; NOT game ticks or AI durations.
+pub const GOON_B_CLIPS: [SourceGoonChildClip; 9] = [
+    SourceGoonChildClip { name: "stand", source_child_symbol_id: 883, first_frame_inclusive: 0, end_frame_exclusive: 1 },
+    SourceGoonChildClip { name: "walk", source_child_symbol_id: 915, first_frame_inclusive: 1, end_frame_exclusive: 12 },
+    SourceGoonChildClip { name: "retreat", source_child_symbol_id: 923, first_frame_inclusive: 12, end_frame_exclusive: 23 },
+    SourceGoonChildClip { name: "attack", source_child_symbol_id: 939, first_frame_inclusive: 23, end_frame_exclusive: 33 },
+    SourceGoonChildClip { name: "hurt", source_child_symbol_id: 944, first_frame_inclusive: 33, end_frame_exclusive: 39 },
+    SourceGoonChildClip { name: "fall", source_child_symbol_id: 959, first_frame_inclusive: 39, end_frame_exclusive: 47 },
+    SourceGoonChildClip { name: "die", source_child_symbol_id: 963, first_frame_inclusive: 47, end_frame_exclusive: 55 },
+    SourceGoonChildClip { name: "idle", source_child_symbol_id: 883, first_frame_inclusive: 55, end_frame_exclusive: 56 },
+    SourceGoonChildClip { name: "intro", source_child_symbol_id: 939, first_frame_inclusive: 56, end_frame_exclusive: 66 },
+];
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct GoonSourceTimeline {
     pub source_symbol_id: u16,
@@ -43,6 +84,16 @@ pub const GOON_TIMELINES: [GoonSourceTimeline; 2] = [
 ];
 
 impl GoonSourceTimeline {
+    /// True source child selected by this outer label, not a playback policy.
+    pub fn source_child_clip(self, name: &str) -> Option<SourceGoonChildClip> {
+        let clips: &[SourceGoonChildClip; 9] = match self.source_symbol_id {
+            880 => &GOON_A_CLIPS,
+            964 => &GOON_B_CLIPS,
+            _ => return None,
+        };
+        clips.iter().copied().find(|clip| clip.name == name)
+    }
+
     /// Timeline lookup only. The original script controls actual looping,
     /// playback rates, state selection and individual child clip timing.
     pub fn source_label(self, frame_zero_based: u16) -> Option<SourceGoonLabel> {
@@ -89,7 +140,7 @@ pub const BANK_GOON_SPAWNS: [BankGoonSpawn; 10] = [
 
 #[cfg(test)]
 mod tests {
-    use super::{BANK_GOON_SPAWNS,GOON_LABELS,GOON_TIMELINES};
+    use super::{BANK_GOON_SPAWNS, GOON_A_CLIPS, GOON_B_CLIPS, GOON_LABELS, GOON_TIMELINES};
     use crate::stage::StageId;
 
     #[test]
@@ -135,6 +186,35 @@ mod tests {
         assert_eq!(families,[4,6]);
         assert_eq!((BANK_GOON_SPAWNS[0].x_game,BANK_GOON_SPAWNS[9].x_game),
                    (-1086.15_f32,-6110.45_f32));
+    }
+
+
+    #[test]
+    fn original_nested_goon_child_clips_are_complete_and_never_parent_wrapped() {
+        let a = [(799,1),(824,10),(834,10),(847,10),(854,6),(873,8),(879,8),(799,1),(799,1)];
+        let b = [(883,1),(915,11),(923,11),(939,10),(944,6),(959,8),(963,8),(883,1),(939,10)];
+        for (outer, clips, expected, total) in [
+            (GOON_TIMELINES[0], &GOON_A_CLIPS, &a, 55),
+            (GOON_TIMELINES[1], &GOON_B_CLIPS, &b, 66),
+        ] {
+            let mut cursor = 0;
+            for (i, clip) in clips.iter().enumerate() {
+                assert_eq!(clip.name, GOON_LABELS[i].name);
+                assert_eq!(clip.first_frame_inclusive, cursor);
+                assert_eq!((clip.source_child_symbol_id, clip.frame_count()), expected[i]);
+                assert_eq!(outer.source_child_clip(clip.name), Some(*clip));
+                cursor = clip.end_frame_exclusive;
+            }
+            assert_eq!(cursor, total);
+            assert_eq!(outer.source_child_clip("unknown"), None);
+        }
+        // B's 11th walk/retreat frame must not be lost at parent-label end.
+        assert_eq!(GOON_B_CLIPS[1].frame_count(), 11);
+        assert_eq!(GOON_B_CLIPS[2].frame_count(), 11);
+        // Hurt, fall, die stop at their child end; no modulo parent-wrap.
+        for clips in [&GOON_A_CLIPS, &GOON_B_CLIPS] {
+            assert_eq!([clips[4].frame_count(), clips[5].frame_count(), clips[6].frame_count()], [6,8,8]);
+        }
     }
 
     #[test]
