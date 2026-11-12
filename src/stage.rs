@@ -72,6 +72,182 @@ impl PendingStageEntry {
     }
 }
 
+/// Strongly typed coordinates in GAME-local space (child of GAME sprite #1075 / #696 / etc.).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GamePos {
+    pub x: f32,
+    pub y: f32,
+}
+
+impl GamePos {
+    #[inline]
+    pub const fn new(x: f32, y: f32) -> Self {
+        Self { x, y }
+    }
+}
+
+/// Strongly typed coordinates in LEVEL-local space (relative to the stage's level sprite origin).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct LevelPos {
+    pub x: f32,
+    pub y: f32,
+}
+
+impl LevelPos {
+    #[inline]
+    pub const fn new(x: f32, y: f32) -> Self {
+        Self { x, y }
+    }
+}
+
+/// Strongly typed display list depth in GAME sprite space.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub struct GameDepth(pub u16);
+
+/// Strongly typed display list depth inside a LEVEL sprite space.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub struct LevelDepth(pub u16);
+
+impl From<(f32, f32)> for GamePos {
+    #[inline]
+    fn from((x, y): (f32, f32)) -> Self {
+        Self { x, y }
+    }
+}
+
+impl From<GamePos> for (f32, f32) {
+    #[inline]
+    fn from(p: GamePos) -> Self {
+        (p.x, p.y)
+    }
+}
+
+impl PartialEq<(f32, f32)> for GamePos {
+    #[inline]
+    fn eq(&self, other: &(f32, f32)) -> bool {
+        self.x == other.0 && self.y == other.1
+    }
+}
+
+impl PartialEq<GamePos> for (f32, f32) {
+    #[inline]
+    fn eq(&self, other: &GamePos) -> bool {
+        self.0 == other.x && self.1 == other.y
+    }
+}
+
+impl From<(f32, f32)> for LevelPos {
+    #[inline]
+    fn from((x, y): (f32, f32)) -> Self {
+        Self { x, y }
+    }
+}
+
+impl From<LevelPos> for (f32, f32) {
+    #[inline]
+    fn from(p: LevelPos) -> Self {
+        (p.x, p.y)
+    }
+}
+
+impl PartialEq<(f32, f32)> for LevelPos {
+    #[inline]
+    fn eq(&self, other: &(f32, f32)) -> bool {
+        self.x == other.0 && self.y == other.1
+    }
+}
+
+impl PartialEq<LevelPos> for (f32, f32) {
+    #[inline]
+    fn eq(&self, other: &LevelPos) -> bool {
+        self.0 == other.x && self.1 == other.y
+    }
+}
+
+impl From<u16> for GameDepth {
+    #[inline]
+    fn from(d: u16) -> Self {
+        Self(d)
+    }
+}
+
+impl From<GameDepth> for u16 {
+    #[inline]
+    fn from(d: GameDepth) -> Self {
+        d.0
+    }
+}
+
+impl PartialEq<u16> for GameDepth {
+    #[inline]
+    fn eq(&self, other: &u16) -> bool {
+        self.0 == *other
+    }
+}
+
+impl PartialEq<GameDepth> for u16 {
+    #[inline]
+    fn eq(&self, other: &GameDepth) -> bool {
+        *self == other.0
+    }
+}
+
+impl PartialOrd<u16> for GameDepth {
+    #[inline]
+    fn partial_cmp(&self, other: &u16) -> Option<std::cmp::Ordering> {
+        self.0.partial_cmp(other)
+    }
+}
+
+impl PartialOrd<GameDepth> for u16 {
+    #[inline]
+    fn partial_cmp(&self, other: &GameDepth) -> Option<std::cmp::Ordering> {
+        self.partial_cmp(&other.0)
+    }
+}
+
+impl From<u16> for LevelDepth {
+    #[inline]
+    fn from(d: u16) -> Self {
+        Self(d)
+    }
+}
+
+impl From<LevelDepth> for u16 {
+    #[inline]
+    fn from(d: LevelDepth) -> Self {
+        d.0
+    }
+}
+
+impl PartialEq<u16> for LevelDepth {
+    #[inline]
+    fn eq(&self, other: &u16) -> bool {
+        self.0 == *other
+    }
+}
+
+impl PartialEq<LevelDepth> for u16 {
+    #[inline]
+    fn eq(&self, other: &LevelDepth) -> bool {
+        *self == other.0
+    }
+}
+
+impl PartialOrd<u16> for LevelDepth {
+    #[inline]
+    fn partial_cmp(&self, other: &u16) -> Option<std::cmp::Ordering> {
+        self.0.partial_cmp(other)
+    }
+}
+
+impl PartialOrd<LevelDepth> for u16 {
+    #[inline]
+    fn partial_cmp(&self, other: &LevelDepth) -> Option<std::cmp::Ordering> {
+        self.partial_cmp(&other.0)
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SourceCamera {
     pub height: f32,
@@ -89,9 +265,9 @@ pub struct StageDescriptor {
     pub level_symbol: u16,
     pub ground_symbol: u16,
     /// Game-local origin of the placed "level" sprite; not screen pixels.
-    pub level_origin_game_local: (f32, f32),
+    pub level_origin_game_local: GamePos,
     /// Player placement is relative to the "game" sprite (NOT the level).
-    pub player_spawn_game_local: (f32, f32),
+    pub player_spawn_game_local: GamePos,
     pub source_player_direction: i8,
     pub camera: SourceCamera,
     /// Original root StartSound ID. A tag does not establish loop semantics.
@@ -136,16 +312,47 @@ impl SourceCamera {
         };
         (new_y,new_y-camera_y)
     }
+
+    #[inline]
+    pub fn horizontal_step_pos(self, player_pos: GamePos, camera_x: f32, facing: i8) -> f32 {
+        self.horizontal_step(player_pos.x, camera_x, facing)
+    }
+
+    #[inline]
+    pub fn vertical_step_pos(self, player_pos: GamePos, camera_y: f32, jumping: bool) -> (f32, f32) {
+        self.vertical_step(player_pos.y, camera_y, jumping)
+    }
 }
 
 impl StageDescriptor {
+    /// Convert a GAME-local position into LEVEL-local space.
+    #[inline]
+    pub const fn to_level_pos(&self, pos: GamePos) -> LevelPos {
+        LevelPos {
+            x: pos.x - self.level_origin_game_local.x,
+            y: pos.y - self.level_origin_game_local.y,
+        }
+    }
+
+    /// Convert a LEVEL-local position into GAME-local space.
+    #[inline]
+    pub const fn to_game_pos(&self, pos: LevelPos) -> GamePos {
+        GamePos {
+            x: pos.x + self.level_origin_game_local.x,
+            y: pos.y + self.level_origin_game_local.y,
+        }
+    }
+
     /// Source game-local player placement converted to level-local coordinates.
     /// Does not mutate the running game and does not apply root screen camera.
     pub fn player_spawn_level_local(&self) -> (f32, f32) {
-        (
-            self.player_spawn_game_local.0 - self.level_origin_game_local.0,
-            self.player_spawn_game_local.1 - self.level_origin_game_local.1,
-        )
+        let p = self.to_level_pos(self.player_spawn_game_local);
+        (p.x, p.y)
+    }
+
+    /// Type-safe player spawn position in level-local space.
+    pub const fn player_spawn_level_pos(&self) -> LevelPos {
+        self.to_level_pos(self.player_spawn_game_local)
     }
 }
 
@@ -156,8 +363,8 @@ pub const STAGES: [StageDescriptor; 5] = [
         game_symbol: 696,
         level_symbol: 152,
         ground_symbol: 151,
-        level_origin_game_local: (2467.65, 239.25),
-        player_spawn_game_local: (284.95, -661.5),
+        level_origin_game_local: GamePos { x: 2467.65, y: 239.25 },
+        player_spawn_game_local: GamePos { x: 284.95, y: -661.5 },
         source_player_direction: 1,
         camera: SourceCamera { height: 150.0, jump: 1.25, min_x: -1350.0, max_x: 7650.0 },
         root_start_sound_id: 751,
@@ -168,8 +375,8 @@ pub const STAGES: [StageDescriptor; 5] = [
         game_symbol: 1075,
         level_symbol: 783,
         ground_symbol: 782,
-        level_origin_game_local: (1034.65, 239.25),
-        player_spawn_game_local: (528.15, -18.75),
+        level_origin_game_local: GamePos { x: 1034.65, y: 239.25 },
+        player_spawn_game_local: GamePos { x: 528.15, y: -18.75 },
         source_player_direction: -1,
         camera: SourceCamera { height: 125.0, jump: 3.0, min_x: -6220.0, max_x: 600.0 },
         root_start_sound_id: 1076,
@@ -180,8 +387,8 @@ pub const STAGES: [StageDescriptor; 5] = [
         game_symbol: 1251,
         level_symbol: 1095,
         ground_symbol: 1094,
-        level_origin_game_local: (1485.65, 239.25),
-        player_spawn_game_local: (122.05, 281.25),
+        level_origin_game_local: GamePos { x: 1485.65, y: 239.25 },
+        player_spawn_game_local: GamePos { x: 122.05, y: 281.25 },
         source_player_direction: 1,
         camera: SourceCamera { height: 270.0, jump: 4.0, min_x: 250.0, max_x: 2150.0 },
         root_start_sound_id: 1252,
@@ -192,8 +399,8 @@ pub const STAGES: [StageDescriptor; 5] = [
         game_symbol: 1402,
         level_symbol: 1317,
         ground_symbol: 1316,
-        level_origin_game_local: (1210.1, 238.25),
-        player_spawn_game_local: (227.2, 115.4),
+        level_origin_game_local: GamePos { x: 1210.1, y: 238.25 },
+        player_spawn_game_local: GamePos { x: 227.2, y: 115.4 },
         source_player_direction: -1,
         camera: SourceCamera { height: 275.0, jump: 3.0, min_x: 200.0, max_x: 55252.0 },
         root_start_sound_id: 1409,
@@ -204,8 +411,8 @@ pub const STAGES: [StageDescriptor; 5] = [
         game_symbol: 1496,
         level_symbol: 1485,
         ground_symbol: 1484,
-        level_origin_game_local: (1210.1, 238.25),
-        player_spawn_game_local: (4413.7, 6854.3),
+        level_origin_game_local: GamePos { x: 1210.1, y: 238.25 },
+        player_spawn_game_local: GamePos { x: 4413.7, y: 6854.3 },
         source_player_direction: 1,
         camera: SourceCamera { height: 275.0, jump: 3.0, min_x: 250.0, max_x: 55252.0 },
         root_start_sound_id: 1504,
@@ -473,5 +680,41 @@ mod tests {
         assert!((game.player.y - y).abs() < 0.002);
         assert!(game.shots.is_empty());
         assert!(!game.level1a_complete);
+    }
+
+    #[test]
+    fn coordinate_and_depth_newtypes_preserve_round_trip_and_ordering() {
+        let stage = StageId::Level1B.descriptor();
+        let game_pos = stage.player_spawn_game_local;
+        let level_pos = stage.to_level_pos(game_pos);
+        assert_eq!(stage.player_spawn_level_pos(), level_pos);
+        let back_to_game = stage.to_game_pos(level_pos);
+        assert!((back_to_game.x - game_pos.x).abs() < 0.0001);
+        assert!((back_to_game.y - game_pos.y).abs() < 0.0001);
+
+        // Tuple conversion and PartialEq traits
+        let tuple_gp: (f32, f32) = game_pos.into();
+        assert_eq!(tuple_gp, (game_pos.x, game_pos.y));
+        assert_eq!(game_pos, (game_pos.x, game_pos.y));
+        assert_eq!((game_pos.x, game_pos.y), game_pos);
+
+        let tuple_lp: (f32, f32) = level_pos.into();
+        assert_eq!(tuple_lp, (level_pos.x, level_pos.y));
+        assert_eq!(level_pos, (level_pos.x, level_pos.y));
+        assert_eq!((level_pos.x, level_pos.y), level_pos);
+
+        // Depth types and ordering
+        let d_prop = GameDepth(1077);
+        let d_actor = GameDepth(1127);
+        assert!(d_prop < d_actor);
+        assert_eq!(d_prop, 1077u16);
+        assert_eq!(1077u16, d_prop);
+        assert!(d_prop < 1127u16);
+        assert!(1077u16 < d_actor);
+        assert_eq!(u16::from(d_prop), 1077);
+
+        let l_ground = LevelDepth(1);
+        assert_eq!(l_ground, 1u16);
+        assert_eq!(u16::from(l_ground), 1);
     }
 }

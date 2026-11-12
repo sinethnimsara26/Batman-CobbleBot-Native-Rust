@@ -42,6 +42,11 @@ impl CollisionMask {
         }
     }
 
+    #[inline]
+    pub fn solid_level_pos(&self, pos: crate::stage::LevelPos) -> bool {
+        self.solid(pos.x, pos.y)
+    }
+
     pub fn check_ground(&self, x: f32, y: &mut f32, height: f32, dy: &mut f32, _loop_count: u8) -> bool {
         if !self.solid(x, *y + height) {
             return false;
@@ -153,6 +158,9 @@ mod bank_street_source_probes {
         assert_eq!(stage.source_player_direction, -1);
         assert_eq!(stage.player_spawn_game_local, (528.15, -18.75));
         let (px, py) = stage.player_spawn_level_local();
+        let spawn_pos = stage.player_spawn_level_pos();
+        assert_eq!((spawn_pos.x, spawn_pos.y), (px, py));
+        assert_eq!(ground.solid_level_pos(spawn_pos), ground.solid(px, py));
         assert!((px + 506.5).abs() < 0.001 && (py + 258.0).abs() < 0.001);
         assert!(!ground.solid(-11197.0, 0.0));
         assert!(!ground.solid(906.0, 0.0));
