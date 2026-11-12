@@ -1,0 +1,93 @@
+name: audit-fix-05-bank-full-1x
+
+on:
+  push:
+    branches:
+      - revive/level2-audit-fix-bank-full-1x-2026-11-12
+    paths:
+      - reverse-engineering/tools/audit_fix_05_bake_bank_full_1x.py
+      - reverse-engineering/tools/bake_level_tiles.py
+      - reverse-engineering/tools/pack_level_tiles.py
+      - .github/workflows/audit-fix-05-bank-full-1x.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: audit-fix-05-bank-full-1x
+  cancel-in-progress: true
+
+jobs:
+  canonical-bank-1x:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install offline-only original-vector rasterizer
+        shell: pwsh
+        run: python -m pip install --disable-pip-version-check "Pillow>=11,<15"
+
+      - name: Download SHA-verified canonical original FWS
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $url = "https://archive.org/download/the-batman-cobblebot-caper/The%20Batman%20-%20The%20Cobblebot%20Caper.swf"
+          for ($attempt = 1; $attempt -le 4; $attempt++) {
+            try {
+              Invoke-WebRequest -Uri $url -OutFile ".original-af05-download.swf" -ErrorAction Stop
+              break
+            } catch {
+              if ($attempt -eq 4) { throw }
+              Start-Sleep -Seconds (5 * $attempt)
+            }
+          }
+          @'
+          import hashlib,zlib
+          from pathlib import Path
+          src=Path(".original-af05-download.swf").read_bytes()
+          if src[:3]==b"CWS":
+              fws=b"FWS"+src[3:8]+zlib.decompress(src[8:])
+          elif src[:3]==b"FWS":
+              fws=src
+          else:
+              raise SystemExit("Non-SWF input")
+          got=hashlib.sha256(fws).hexdigest()
+          expected="3d9e1992404313bc2e2652d46a5838160ef721e2ad559fdd7455f3c54f8ac1ed"
+          if got!=expected or len(fws)!=2819100:
+              raise SystemExit(f"Original FWS mismatch: {got} {len(fws)}")
+          target=Path(".generated/af05input/canonical_original.swf")
+          target.parent.mkdir(parents=True,exist_ok=True)
+          target.write_bytes(fws)
+          print("AF05_CANONICAL_FWS_PASS",got)
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { throw "Canonical source proof FAILED" }
+
+      - name: Extract original timeline symbols and bitmaps
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $tools = "reverse-engineering/tools"
+          $swf = ".generated/af05input/canonical_original.swf"
+          New-Item -ItemType Directory -Force ".generated/af05input/reports",".generated/af05input/bitmaps" | Out-Null
+          python "$tools/swf_re.py" "$swf" ".generated/af05input/reports"
+          if ($LASTEXITCODE -ne 0) { throw "SWF symbol extraction FAILED" }
+          python "$tools/extract_bitmaps.py" "$swf" ".generated/af05input/bitmaps"
+          if ($LASTEXITCODE -ne 0) { throw "Source bitmap extraction FAILED" }
+
+      - name: Prove 48 nonempty 1x Bank tiles, nine historical hashes and complete binary pack
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          python "reverse-engineering/tools/audit_fix_05_bake_bank_full_1x.py" --swf ".generated/af05input/canonical_original.swf" --symbols ".generated/af05input/reports/symbols.json" --bitmaps ".generated/af05input/bitmaps" --instances "reverse-engineering/manifests/level-instances.json" --spec "reverse-engineering/manifests/level-spec.json" --out ".generated/audit-fix-05-bank-full-1x"
+          if ($LASTEXITCODE -ne 0) { throw "Complete original Bank 1x pack proof FAILED" }
+
+      - name: Upload complete source-only Bank proof and packed 1x test output (never ship)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AF05-Bank-Street-Complete-Source-1x-Development-Only
+          path: .generated/audit-fix-05-bank-full-1x/
+          if-no-files-found: warn
+          retention-days: 30

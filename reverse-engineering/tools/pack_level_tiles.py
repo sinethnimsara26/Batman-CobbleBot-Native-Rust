@@ -42,6 +42,21 @@ def main():
             f"--logical-pixel-scale {args.logical_pixel_scale}"
         )
     tiles = sorted(manifest["tiles"], key=lambda item: (item["world_y"], item["world_x"]))
+    if manifest.get("symbol") == 783:
+        # A sparse B05/B06 preview must never become a seemingly valid native
+        # Level1B scenery pack. Full coverage is explicitly certified by the
+        # canonical frame-zero source baker, never inferred from a filename.
+        if not manifest.get("complete_bank_street_1x"):
+            raise ValueError("Bank Street #783 requires verified full-stage 1x provenance before packing")
+        if (len(tiles) != 48 or manifest.get("full_grid_candidate_count", 0) < 48
+                or manifest.get("source_root_depth_range") is not None
+                or manifest.get("source_static_text_enabled") is not True
+                or manifest.get("source_over_strokes") is not False
+                or manifest_scale != 1.0 or args.format_version != 1):
+            raise ValueError("Bank Street #783 full-stage 1x pack source contract failed")
+        coords = [(item["world_x"], item["world_y"]) for item in tiles]
+        if len(set(coords)) != 48:
+            raise ValueError("Bank Street #783 contains duplicate tile origins")
     magic = MAGIC_V2 if args.format_version == 2 else MAGIC_V1
     payload = bytearray(magic + struct.pack("<I", len(tiles)))
     if args.format_version == 2:
