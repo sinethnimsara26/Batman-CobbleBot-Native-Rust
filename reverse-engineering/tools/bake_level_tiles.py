@@ -260,7 +260,7 @@ def main():
         "bank_depth_band": args.bank_depth_band if args.complete_bank_street_hq3x else None,
         "canonical_bank_fws_sha256": hashlib.sha256(args.swf.read_bytes()).hexdigest() if args.complete_bank_street_hq3x else None,
     }
-    if args.only_tile is not None or args.root_depth_range is not None:
+    if args.only_tile is not None or (args.root_depth_range is not None and not args.complete_bank_street_hq3x):
         manifest["partial_proof_only"] = True
         manifest["requested_tile_origins"] = [[x, y] for x, y in tile_origins]
         manifest["never_embed_as_complete_level"] = True
