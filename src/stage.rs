@@ -112,9 +112,29 @@ impl SourceCamera {
         if delta.abs()>4.0 { camera_x-(delta/10.0).trunc() } else { camera_x }
     }
 
-    /// Original jumping camera formula (game-local player position).
+    /// Original cameraLogic() jumping target (game-local player position).
     pub fn jumping_y(self, player_game_y:f32)->f32 {
         (self.height-player_game_y)/self.jump
+    }
+
+    /// Original AVM1 cameraLogic() Y update, not the separate cameraLogic2().
+    ///
+    /// Verified original bytecode: jumping assigns (camHeight-player._y)/
+    /// camJump; grounded checks abs(game._y+player._y-150)>1, then adds
+    /// ToInteger(((camHeight-player._y)/camJump-game._y)/4).
+    /// The grounded guard's literal 150 is SOURCE-AUTHENTIC even for Bank
+    /// Street (camHeight=125); do not substitute self.height there.
+    /// Returns (new game-camera Y, camera Y delta), NOT backdrop parallax.
+    /// This helper is dormant: active Level1A Game::update_camera is intact.
+    pub fn vertical_step(self, player_game_y:f32, camera_y:f32, jumping:bool)->(f32,f32) {
+        let new_y=if jumping {
+            self.jumping_y(player_game_y)
+        } else if (camera_y+player_game_y-150.0).abs()>1.0 {
+            camera_y+((self.jumping_y(player_game_y)-camera_y)/4.0).trunc()
+        } else {
+            camera_y
+        };
+        (new_y,new_y-camera_y)
     }
 }
 
@@ -397,6 +417,46 @@ mod tests {
         assert_eq!(camera.horizontal_step(528.15,-49.15,-1),-49.15);
         assert!((camera.jumping_y(-18.75)-(143.75/3.0)).abs()<0.0001);
         assert_eq!(StageId::Level1A.descriptor().camera.height,150.0);
+    }
+
+    #[test]
+    fn original_camera_logic_vertical_target_and_truncated_grounded_return() {
+        // SHA-verified B01 original AVM1 cameraLogic(), body offset 102517:
+        // 103229..103265 jumping target and 103409..103473 grounded ease.
+        let cases=[
+            (StageId::Level1A,135.0_f32),
+            (StageId::Level1B,47.9166667_f32),
+            (StageId::Level1C,72.1875_f32),
+        ];
+        for (id,expected_target) in cases {
+            let camera=id.descriptor().camera;
+            let (jump_y,jump_delta)=camera.vertical_step(-18.75,26.1,true);
+            assert!((jump_y-expected_target).abs()<0.0001,"{id:?} jump {jump_y}");
+            assert!((jump_delta-(jump_y-26.1)).abs()<0.0001);
+            let (ground_y,ground_delta)=camera.vertical_step(-18.75,26.1,false);
+            let expected_ease=((expected_target-26.1)/4.0).trunc();
+            assert!((ground_delta-expected_ease).abs()<0.0001,"{id:?} grounded delta {ground_delta}");
+            assert!((ground_y-(26.1+expected_ease)).abs()<0.0001);
+        }
+        let bank=StageId::Level1B.descriptor().camera;
+        // Flash ToInteger truncates toward zero; it does NOT floor negatives.
+        let (y,delta)=bank.vertical_step(-18.75,100.0,false);
+        assert_eq!(delta,-13.0);
+        assert_eq!(y,87.0);
+    }
+
+    #[test]
+    fn original_camera_logic_grounded_threshold_is_literal_150_not_cam_height() {
+        // Original AVM1 Push(150) at absolute FWS offset 103368, followed
+        // by Math.abs > 1; Bank Street instead initializes camHeight=125.
+        let bank=StageId::Level1B.descriptor().camera;
+        assert_eq!(bank.height,125.0);
+        assert_eq!(bank.vertical_step(-18.75,168.75,false),(168.75,0.0));
+        assert_eq!(bank.vertical_step(-18.75,169.75,false),(169.75,0.0));
+        let (y,delta)=bank.vertical_step(-18.75,169.76,false);
+        assert!(delta<0.0);
+        assert!((y-(169.76+delta)).abs()<0.0001);
+        assert!((bank.jumping_y(-18.75)-47.9166667).abs()<0.0001);
     }
 
     #[test]
