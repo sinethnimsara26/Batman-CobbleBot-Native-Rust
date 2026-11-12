@@ -1198,3 +1198,27 @@ Tested original source fixed CODE SHA `26dad6e07ef3dc1ca860aa98b4a8ccfb12912f72`
     - `format_u32_digits_and_digit_count_match_standard_formatting`: exact character match and digit counts across boundary integers (`0`, `1`, `9`, `10`, `42`, `99`, `100`, `1234`, `999999`, `2147483647`).
   - Windows CI run `43311547391`: 51/51 Rust tests passed in 0.19s, render p95 `24.8706ms`, scenery scroll p95 `24.0489ms` (< 40ms gate), 15/15 historical 1× screenshots identical, 20/20 relocated standalone EXE HQ hashes identical, child exit 0.
 - **Confidence:** HIGH for bilinear mapping equivalence, zero-allocation invariants, and rendering performance.
+
+
+## RE-20261112-015 — CommonAssets & Lazy StageAssets Partitioning (R-04 / AUDIT-FIX-12)
+
+- **Batch/Context:** AUDIT-FIX-12 / R-04; branch `revive/level2-audit-fix-split-assets-2026-11-12`, draft PR #41 based on AUDIT-FIX-11 docs commit `0fc1ca2`.
+- **Target Subsystem:** `src/assets.rs`, `src/render.rs`.
+- **Original Architecture & Findings:**
+  1. `Assets::load()` eagerly loaded and decoded all embedded assets (persistent player/UI/HUD sprites, overlays, title screens, 180-frame intro, plus stage-specific tile packs and background) into memory at startup.
+  2. With additional stages planned across Level 1B (`#783`), 1C (`#1267`), 2A (`#1479`), and 2B (`#1569`), keeping all stage tile packs permanently decoded simultaneously in memory would balloon peak working set by hundreds of megabytes and create startup stalls.
+  3. Partitioned assets into:
+     - `CommonAssets`: persistent stage-invariant symbols: Batman (`#691` 1× & HQ), HUD (`#716`, numbers, fonts), Root backdrop (sky `#131`, moon `#134` 1× & HQ), Pickups (`#695` 1× & HQ), Batarangs (`#694` 1× & HQ), Overlays (tutorial `#737`, level title, fade in/out), and UI screens (title `#15`, instructions `#16`, story/intro `#18` 180-frame lazy set). Loaded once at startup in `CommonAssets::load()`.
+     - `StageAssets`: stage-specific assets: `background: Image`, `tiles: LevelTileSet`, `tiles_hq_base: LevelTileSet`, `detail_tiles_hq: LevelTileSet`, and `stage_id: StageId`. Loaded on demand via `StageAssets::load(stage_id)`.
+  4. Ergonomics and backward compatibility:
+     - `Assets` owns `common: CommonAssets` and `stage: StageAssets`.
+     - `Assets` implements `Deref<Target = CommonAssets>` and `DerefMut<Target = CommonAssets>` for frictionless access to all common symbols.
+     - Added `load_stage(&mut self, stage_id: StageId)` to swap active stage assets on stage transitions.
+     - Retained fields on `Assets` matching CI contracts while deriving safe zero-copy `Clone` on `LevelTileSet`.
+- **Verification Evidence:**
+  - Rust unit tests increased from 51 to 54:
+    - `common_and_stage_assets_split_invariants`: validates all invariant symbols, lazy frame counts, and stage scales.
+    - `stage_assets_load_and_swap_preserves_depth_and_scale`: verifies on-demand stage loading and swapping.
+    - `assets_deref_transparent_access`: verifies transparent `Deref` access to common symbols.
+  - Windows CI run `43317649029`: 54/54 Rust tests passed in 1.10s, render p95 `22.2483ms`, scenery scroll p95 `27.7404ms` (< 40ms gate), 15/15 historical 1× screenshots identical, 20/20 relocated standalone EXE HQ hashes identical, child exit 0.
+- **Confidence:** HIGH for memory partitioning, trait ergonomics, and stage transition readiness.

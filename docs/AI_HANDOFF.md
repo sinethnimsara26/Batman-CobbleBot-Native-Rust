@@ -1,6 +1,15 @@
 # AI handoff — current recovery checkpoint
 
 
+## FINAL VERIFIED — AUDIT-FIX-12 (R-04) CommonAssets & StageAssets partitioning; STOP (2026-11-12)
+
+- **Live recovery:** feature branch `revive/level2-audit-fix-split-assets-2026-11-12`, draft [PR #41](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/41) OPEN/UNMERGED based on previous AF11 docs commit `0fc1ca2`. **TESTED CODE SHA `427da5a`**; **separate final docs SHA is the subsequent documentation-only branch HEAD, inspect GitHub after push**. Do not treat docs SHA as Windows-tested implementation.
+- **NATIVE WINDOWS PASS:** exact-code [#43317649029](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43317649029) **SUCCESS 82/82**, locked release Rust **54/54 tests in 1.10s**, Cargo lock unchanged, 1× legacy golden **15/15**, HQ3× **20/20 1800×1200**, relocated independent installed EXE **20/20 identical**, exit 0, no source SWF staged. Genuine OS Windows GUI/Enter title/start/skip/F7/F8 20/10/1234 and further fixtures, F/Esc fullscreen, focus visuals, PE/Shell icon/integration PASS; render p95 **22.2483ms**/scenery scroll **27.7404ms** vs <40ms unchanged. Verified installed EXE QA report with child exit 0, 20/20 identical HQ hashes. Audio/focus reports visual focus PASS, hardware audio BLOCKED WinMM waveOut 0, MCI 277; original Flash-player runtime fidelity UNVERIFIED.
+- **Scoped code/workflow paths:** `src/assets.rs` splits `Assets` into persistent `CommonAssets` and modular `StageAssets`; implements `Deref` on `Assets` targeting `CommonAssets`; implements `load_stage(stage_id)` and safe `Clone` for `LevelTileSet`; 3 new unit tests added (51→54); `.github/workflows/build-level1a-fidelity.yml` adds only the feature branch trigger. No other runtime files modified.
+- **All mandatory records:** AGENTS and both protocols READ/unchanged; AI_TASKS, AI_HANDOFF, AI_WORKLOG, RE research **RE-20261112-015**, post-change Rust engineering audit **AUD-20261112-015** updated. Native Rust runtime purity PASS with pre-existing platform FFI qualifiers. Protected `main`, frozen Level1A release SHA `49e8fd343e4f37f045ba71f24fff0999211f0f11`, earlier draft PRs unchanged; PR41 stays DRAFT/OPEN/UNMERGED.
+- **STOP. Exactly ONE NEXT independently authorized batch: B10 enemy AI (`goonAI`) implementation**; do NOT merge or release.
+
+
 ## FINAL VERIFIED — AUDIT-FIX-11 (R-03) zero-allocation rendering & HUD formatting; STOP (2026-11-12)
 
 - **Live recovery:** feature branch `revive/level2-audit-fix-render-zero-alloc-2026-11-12`, draft [PR #40](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/40) OPEN/UNMERGED based on previous AF10 docs commit `e891293`. **TESTED CODE SHA `9ff54fa`**; **separate final docs SHA is the subsequent documentation-only branch HEAD, inspect GitHub after push**. Do not treat docs SHA as Windows-tested implementation.
