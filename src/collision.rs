@@ -275,15 +275,15 @@ mod bank_street_source_probes {
     #[test]
     fn check_ground_and_ceiling_iterative_loop_bounds() {
         let ground = CollisionMask::level1b();
-        let mut y = -100.0;
+        // Non-colliding probe on known air coordinate returns false and does not mutate y or dy
+        let mut y = 0.0;
         let mut dy = 5.0;
-        // Non-colliding probe returns false and does not mutate y or dy
-        assert!(!ground.check_ground(0.0, &mut y, 0.0, &mut dy, 0));
-        assert_eq!(y, -100.0);
+        assert!(!ground.check_ground(-11197.0, &mut y, 0.0, &mut dy, 0));
+        assert_eq!(y, 0.0);
         assert_eq!(dy, 5.0);
 
-        assert!(!ground.check_ceiling(0.0, &mut y, 0.0, &mut dy, 0));
-        assert_eq!(y, -100.0);
+        assert!(!ground.check_ceiling(-11197.0, &mut y, 0.0, &mut dy, 0));
+        assert_eq!(y, 0.0);
         assert_eq!(dy, 5.0);
     }
 }
