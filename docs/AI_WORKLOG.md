@@ -661,3 +661,22 @@ Do not erase two historical CI failures: documentation-only #42834460076 and ini
 - Complete original SHA-verified FWS source scan: root20 ZERO-BASED original GAME#1075: four cans#785 (7 parent frames, Stop scripts frame0/6; child784), four trash#790 (11, Stop frame0/10; children780/786/787/789), mailbox#793 (3, Stop frame0/2; children779/792). Root20 name-prefix callback assignment `can→bgTouch`, `trash/mailbox→bgHit` is actual original AVM1; global callback bodies FWS147901/148009 reference collision/test and attack/metal1. Both callbacks set `hit` then delete `onEnterFrame`, supporting one-shot event behavior but not played Flash collision equivalence. Source mutation guard correctly refuses wrong can handler and truncated trash source timeline; exact original Windows report source artifact #13936025782 independently downloaded/re-read SHA256 `acf8aa8b3258ef389fc4bdc8b7b5628db451eeb4e36d0dbc98d4fda935665bd0`.
 - Exactly 4 implementation/workflow files (source offline Python + new workflow + dormant Rust `src/bank_props.rs` + branch allowlist) no new gameplay caller or crate. True Rust45? **Actual 46/46** release tests at same code, 82/82 strict Windows steps, 1× 15/15 historical SHA, HQ 20/20, relocated EXE 20/20 exact matching, actual Win32 GUI screenshots incl F8 HUD visually opened, render 28.1972ms/scenery25.8302ms p95 (<40). Downloaded/read GUI #13935134722, installed-copy #13936915361 and audio/focus #13935403936; source FWS and stage packs not shipped, audio physical MCI277 waveOut0 BLOCKED, live original Flash parity UNVERIFIED.
 - Independent implementation/source audit RE-20261112-011 and AUD-20261112-011 completed, six records considered, AGENTS/protocols unchanged; documentation closeout separate `[skip ci]` commit, remote SHA retrieved after push. No authorizations to activate Level1B or B10/B13. **STOP. Next ONE separately user-instructed AF09 / R-01 collision-mask memory layout parity repair.**
+
+
+## 2026-11-12 — AUDIT-FIX-09 / R-01 collision-mask bit-packing & iterative push-out loops (VERIFIED)
+
+- **Scope & Context:** AUDIT-FIX-09 / R-01; branch `revive/level2-audit-fix-collision-bitpack-2026-11-12`, draft PR #38 based on AUDIT-FIX-08 docs commit `cd011f00ac2d4f1b4eea309f6e45438131008a9a`.
+- **Implementation:**
+  1. `src/collision.rs`: Replaced `solid: Vec<u8>` (1 byte per pixel) in `CollisionMask` with `words: Box<[u64]>` (1 bit per pixel), delivering an exact 8× (87.5%) heap memory reduction across all collision masks (1A: 11.5 MB -> 1.44 MB; 1B: 17.1 MB -> 2.14 MB; future Labs 2A/2B: 88.3 MB -> 11.04 MB each).
+  2. Word indexing: `idx >> 6` (word index) and `idx & 63` (bit index). Bit query `(self.words[idx >> 6] & (1u64 << (idx & 63))) != 0` evaluates in constant time with superior CPU cache locality.
+  3. Replaced recursive `check_ground` and `check_ceiling` with bounded iterative loops (`0..15`), preserving exact 16-pixel push-out resolution with zero stack allocation.
+  4. Added 2 new tests (`collision_mask_bitpack_memory_savings_and_queries` and `check_ground_and_ceiling_iterative_loop_bounds`), bringing total Rust tests from 46 to 48.
+  5. Added branch to `.github/workflows/build-level1a-fidelity.yml`.
+- **Native Windows CI Execution:**
+  - Initial run `43287165108` on commit `12dd46b` failed on boundary coordinate in `check_ground_and_ceiling_iterative_loop_bounds` because `(0.0, -100.0)` in Bank Street is solid road. Fixed coordinate to `x = -11197.0` (outside origin `-11196.0`) in commit `68e94f6`.
+  - Full native Windows run [#43290698060](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43290698060) completed **SUCCESS 82/82 steps** on exact code SHA `68e94f6e1f0e42d733c5b9ba89f2a24fa68ff118`.
+  - Cargo test: **48/48 passed in 0.21s**.
+  - Performance: Render p95 **16.7676ms**, scenery scroll p95 **20.8336ms** (well below 40.0ms gate).
+  - Fidelity: 15/15 historical 1× screenshots identical, 20/20 relocated standalone EXE HQ3× screenshot hashes identical, child exit 0.
+  - Hosted audio: BLOCKED (no hosted audio endpoint, WinMM MCI error 277).
+- **Records & Governance:** RE-20261112-012 and AUD-20261112-012 appended. All six records synchronized. No unsafe code, no external dependencies. PR #38 remains DRAFT/OPEN. STOP.
