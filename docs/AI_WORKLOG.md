@@ -680,3 +680,24 @@ Do not erase two historical CI failures: documentation-only #42834460076 and ini
   - Fidelity: 15/15 historical 1× screenshots identical, 20/20 relocated standalone EXE HQ3× screenshot hashes identical, child exit 0.
   - Hosted audio: BLOCKED (no hosted audio endpoint, WinMM MCI error 277).
 - **Records & Governance:** RE-20261112-012 and AUD-20261112-012 appended. All six records synchronized. No unsafe code, no external dependencies. PR #38 remains DRAFT/OPEN. STOP.
+
+
+## 2026-11-12 — AUDIT-FIX-10 / R-02 zero-cost coordinate & depth type safety (VERIFIED)
+
+- **Scope & Context:** AUDIT-FIX-10 / R-02; branch `revive/level2-audit-fix-coordinate-types-2026-11-12`, draft PR #39 based on AUDIT-FIX-09 docs commit `184ed92`.
+- **Implementation:**
+  1. `src/stage.rs`: Defined zero-cost newtypes `GamePos(pub f32, pub f32)`, `LevelPos(pub f32, pub f32)`, `GameDepth(pub u16)`, `LevelDepth(pub u16)`.
+  2. Added compile-time checked conversion methods `to_level_pos` and `to_game_pos` to `StageDescriptor`, eliminating the risk of passing GAME-local coordinates (relative to root GAME sprite `#1075` / `#696`) into LEVEL-local collision probes (`#783`).
+  3. Updated `BankStreetProp::origin_level_pos`, `BankStreetProp::game_depth`, `BankGoonSpawn::level_pos`, `BankGoonSpawn::game_depth`, and `CollisionMask::solid_level_pos`.
+  4. Implemented `From`, `Into`, `PartialEq`, and `PartialOrd` traits for full backwards compatibility with raw tuples and numeric assertions.
+  5. Added 1 new unit test (`coordinate_and_depth_newtypes_preserve_round_trip_and_ordering`), bringing total Rust tests from 48 to 49.
+  6. Added branch to `.github/workflows/build-level1a-fidelity.yml`.
+- **Native Windows CI Execution:**
+  - Initial run `43301994719` on commit `5d1549a` failed on missing test module imports in `src/stage.rs:522` (`GameDepth`, `LevelDepth`).
+  - Fixed imports in commit `1ed5c1a`.
+  - Full native Windows run [#43304552453](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43304552453) completed **SUCCESS 82/82 steps** on exact code SHA `1ed5c1a2dd6946002f23cf565ecbf2b8bf5fb2b3`.
+  - Cargo test: **49/49 passed in 0.20s**.
+  - Performance: Render p95 **19.9585ms**, scenery scroll p95 **21.4615ms** (well below 40.0ms gate).
+  - Fidelity: 15/15 historical 1× screenshots identical, 20/20 relocated standalone EXE HQ3× screenshot hashes identical, child exit 0.
+  - Hosted audio: BLOCKED (no hosted audio endpoint, WinMM MCI error 277).
+- **Records & Governance:** RE-20261112-013 and AUD-20261112-013 appended. All six records synchronized. No unsafe code, no external dependencies. PR #39 remains DRAFT/OPEN. STOP.

@@ -14,7 +14,7 @@
 //! (7/11/3), with frame scripts at first and terminal zero-based frames.
 //! Their live Flash hitTest outcomes and native playback remain UNVERIFIED.
 #![allow(dead_code)]
-use crate::stage::StageId;
+use crate::stage::{GameDepth, GamePos, LevelPos, StageId};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PropKind { Can, Trash, Mailbox }
@@ -31,7 +31,7 @@ pub struct BankStreetProp {
     pub name: &'static str,
     pub symbol_id: u16,
     /// Original GAME (#1075) display-list depth; not a level-local depth.
-    pub game_depth: u16,
+    pub game_depth: GameDepth,
     pub kind: PropKind,
     /// Original Flash GAME-local placement transform, not root pixels.
     pub source_game_matrix: SourceMatrix,
@@ -82,25 +82,33 @@ impl PropKind {
 }
 
 impl BankStreetProp {
+    pub fn origin_game_pos(self) -> GamePos {
+        GamePos::new(self.source_game_matrix.tx, self.source_game_matrix.ty)
+    }
+
+    pub fn origin_level_pos(self) -> LevelPos {
+        StageId::Level1B.descriptor().to_level_pos(self.origin_game_pos())
+    }
+
     /// Derived solely from the known original named level placement
     /// (1034.65,239.25) in GAME-local coordinates.
     pub fn origin_level_local(self) -> (f32,f32) {
-        let origin=StageId::Level1B.descriptor().level_origin_game_local;
-        (self.source_game_matrix.tx-origin.0,self.source_game_matrix.ty-origin.1)
+        let p = self.origin_level_pos();
+        (p.x, p.y)
     }
 }
 
 /// Original frame-0 game display-list order; root frame index zero-based.
 pub const BANK_STREET_PROPS: [BankStreetProp;9] = [
-    BankStreetProp { name: "can_03", symbol_id: 785, game_depth: 1077, kind: PropKind::Can, source_game_matrix: SourceMatrix { sx: 1_f32, sy: 1_f32, tx: -3391.85_f32, ty: 379.55_f32 } },
-    BankStreetProp { name: "can_02", symbol_id: 785, game_depth: 1079, kind: PropKind::Can, source_game_matrix: SourceMatrix { sx: 1_f32, sy: 1_f32, tx: -1600.8_f32, ty: 379.55_f32 } },
-    BankStreetProp { name: "can_01", symbol_id: 785, game_depth: 1081, kind: PropKind::Can, source_game_matrix: SourceMatrix { sx: 1_f32, sy: 1_f32, tx: -376.95_f32, ty: 379.55_f32 } },
-    BankStreetProp { name: "can_04", symbol_id: 785, game_depth: 1083, kind: PropKind::Can, source_game_matrix: SourceMatrix { sx: 1_f32, sy: 1_f32, tx: -5231.3_f32, ty: 379.55_f32 } },
-    BankStreetProp { name: "trash_01", symbol_id: 790, game_depth: 1085, kind: PropKind::Trash, source_game_matrix: SourceMatrix { sx: 1.1087646484375_f32, sy: 1.1087646484375_f32, tx: 243.95_f32, ty: 252.3_f32 } },
-    BankStreetProp { name: "trash_02", symbol_id: 790, game_depth: 1088, kind: PropKind::Trash, source_game_matrix: SourceMatrix { sx: 1.1087646484375_f32, sy: 1.1087646484375_f32, tx: -1184.6_f32, ty: 252.3_f32 } },
-    BankStreetProp { name: "trash_03", symbol_id: 790, game_depth: 1091, kind: PropKind::Trash, source_game_matrix: SourceMatrix { sx: 1.1087646484375_f32, sy: 1.1087646484375_f32, tx: -2726.1_f32, ty: 252.3_f32 } },
-    BankStreetProp { name: "trash_04", symbol_id: 790, game_depth: 1094, kind: PropKind::Trash, source_game_matrix: SourceMatrix { sx: 1.1087646484375_f32, sy: 1.1087646484375_f32, tx: -4677_f32, ty: 252.3_f32 } },
-    BankStreetProp { name: "mailbox_01", symbol_id: 793, game_depth: 1097, kind: PropKind::Mailbox, source_game_matrix: SourceMatrix { sx: 1.1978607177734375_f32, sy: 1.1978607177734375_f32, tx: -4155.8_f32, ty: 246.45_f32 } },
+    BankStreetProp { name: "can_03", symbol_id: 785, game_depth: GameDepth(1077), kind: PropKind::Can, source_game_matrix: SourceMatrix { sx: 1_f32, sy: 1_f32, tx: -3391.85_f32, ty: 379.55_f32 } },
+    BankStreetProp { name: "can_02", symbol_id: 785, game_depth: GameDepth(1079), kind: PropKind::Can, source_game_matrix: SourceMatrix { sx: 1_f32, sy: 1_f32, tx: -1600.8_f32, ty: 379.55_f32 } },
+    BankStreetProp { name: "can_01", symbol_id: 785, game_depth: GameDepth(1081), kind: PropKind::Can, source_game_matrix: SourceMatrix { sx: 1_f32, sy: 1_f32, tx: -376.95_f32, ty: 379.55_f32 } },
+    BankStreetProp { name: "can_04", symbol_id: 785, game_depth: GameDepth(1083), kind: PropKind::Can, source_game_matrix: SourceMatrix { sx: 1_f32, sy: 1_f32, tx: -5231.3_f32, ty: 379.55_f32 } },
+    BankStreetProp { name: "trash_01", symbol_id: 790, game_depth: GameDepth(1085), kind: PropKind::Trash, source_game_matrix: SourceMatrix { sx: 1.1087646484375_f32, sy: 1.1087646484375_f32, tx: 243.95_f32, ty: 252.3_f32 } },
+    BankStreetProp { name: "trash_02", symbol_id: 790, game_depth: GameDepth(1088), kind: PropKind::Trash, source_game_matrix: SourceMatrix { sx: 1.1087646484375_f32, sy: 1.1087646484375_f32, tx: -1184.6_f32, ty: 252.3_f32 } },
+    BankStreetProp { name: "trash_03", symbol_id: 790, game_depth: GameDepth(1091), kind: PropKind::Trash, source_game_matrix: SourceMatrix { sx: 1.1087646484375_f32, sy: 1.1087646484375_f32, tx: -2726.1_f32, ty: 252.3_f32 } },
+    BankStreetProp { name: "trash_04", symbol_id: 790, game_depth: GameDepth(1094), kind: PropKind::Trash, source_game_matrix: SourceMatrix { sx: 1.1087646484375_f32, sy: 1.1087646484375_f32, tx: -4677_f32, ty: 252.3_f32 } },
+    BankStreetProp { name: "mailbox_01", symbol_id: 793, game_depth: GameDepth(1097), kind: PropKind::Mailbox, source_game_matrix: SourceMatrix { sx: 1.1978607177734375_f32, sy: 1.1978607177734375_f32, tx: -4155.8_f32, ty: 246.45_f32 } },
 ];
 
 #[cfg(test)]
@@ -125,7 +133,7 @@ mod tests {
             }
         }
         assert_eq!(counts,[4,4,1]);
-        assert_eq!(depths.iter().copied().collect::<Vec<_>>(),
+        assert_eq!(depths.iter().copied().map(u16::from).collect::<Vec<_>>(),
                    [1077,1079,1081,1083,1085,1088,1091,1094,1097]);
     }
 
@@ -136,12 +144,16 @@ mod tests {
                    (20,1075,783,782));
         let can_01=BANK_STREET_PROPS.iter().find(|p|p.name=="can_01").unwrap();
         assert_eq!((can_01.source_game_matrix.tx,can_01.source_game_matrix.ty),(-376.95,379.55));
+        let pos_level = can_01.origin_level_pos();
+        assert_eq!(can_01.origin_level_local(), (pos_level.x, pos_level.y));
         let (x,y)=can_01.origin_level_local();
         assert!((x+1411.60).abs()<0.002 && (y-140.30).abs()<0.002);
         let mailbox=BANK_STREET_PROPS.iter().find(|p|p.name=="mailbox_01").unwrap();
         assert_eq!((mailbox.source_game_matrix.sx,mailbox.source_game_matrix.sy),
                    (1.1978607177734375,1.1978607177734375));
         assert_eq!(mailbox.game_depth,1097);
+        let mb_level = mailbox.origin_level_pos();
+        assert_eq!(mailbox.origin_level_local(), (mb_level.x, mb_level.y));
         let (mx,my)=mailbox.origin_level_local();
         assert!((mx+5190.45).abs()<0.002 && (my-7.20).abs()<0.002);
     }

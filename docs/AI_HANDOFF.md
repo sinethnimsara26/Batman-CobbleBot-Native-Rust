@@ -1,6 +1,15 @@
 # AI handoff — current recovery checkpoint
 
 
+## FINAL VERIFIED — AUDIT-FIX-10 (R-02) coordinate and depth type safety; STOP (2026-11-12)
+
+- **Live recovery:** feature branch `revive/level2-audit-fix-coordinate-types-2026-11-12`, draft [PR #39](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/39) OPEN/UNMERGED based on previous AF09 docs commit `184ed92`. **TESTED CODE SHA `1ed5c1a2dd6946002f23cf565ecbf2b8bf5fb2b3`**; **separate final docs SHA is the subsequent documentation-only branch HEAD, inspect GitHub after push**. Do not treat docs SHA as Windows-tested implementation.
+- **NATIVE WINDOWS PASS:** exact-code [#43304552453](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43304552453) **SUCCESS 82/82**, locked release Rust **49/49 tests in 0.20s**, Cargo lock unchanged, 1× legacy golden **15/15**, HQ3× **20/20 1800×1200**, relocated independent installed EXE **20/20 identical**, exit 0, no source SWF staged. Genuine OS Windows GUI/Enter title/start/skip/F7/F8 20/10/1234 and further fixtures, F/Esc fullscreen, focus visuals, PE/Shell icon/integration PASS; render p95 **19.9585ms**/scenery scroll **21.4615ms** vs <40ms unchanged. Verified installed EXE QA report with child exit 0, 20/20 identical HQ hashes. Audio/focus reports visual focus PASS, hardware audio BLOCKED WinMM waveOut 0, MCI 277; original Flash-player runtime fidelity UNVERIFIED.
+- **Scoped code/workflow paths:** `src/stage.rs` defines zero-cost newtypes `GamePos`, `LevelPos`, `GameDepth(pub u16)`, `LevelDepth(pub u16)` and conversion methods `to_level_pos`/`to_game_pos`; `src/bank_props.rs`, `src/bank_goons.rs`, and `src/collision.rs` adopt the typed coordinates; 1 new unit test added (48→49); `.github/workflows/build-level1a-fidelity.yml` adds only the feature branch trigger. No other runtime files modified.
+- **All mandatory records:** AGENTS and both protocols READ/unchanged; AI_TASKS, AI_HANDOFF, AI_WORKLOG, RE research **RE-20261112-013**, post-change Rust engineering audit **AUD-20261112-013** updated. Native Rust runtime purity PASS with pre-existing platform FFI qualifiers. Protected `main`, frozen Level1A release SHA `49e8fd343e4f37f045ba71f24fff0999211f0f11`, earlier draft PRs unchanged; PR39 stays DRAFT/OPEN/UNMERGED.
+- **STOP. Exactly ONE NEXT independently authorized batch: R-03 zero-allocation rendering in `src/render.rs`** (lookup tables and stack buffers); do NOT start B10/B13, merge, or release.
+
+
 ## FINAL VERIFIED — AUDIT-FIX-09 (R-01) collision-mask bit-packing & non-recursive probes; STOP (2026-11-12)
 
 - **Live recovery:** feature branch `revive/level2-audit-fix-collision-bitpack-2026-11-12`, draft [PR #38](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/38) OPEN/UNMERGED based on previous AF08 docs commit `cd011f00ac2d4f1b4eea309f6e45438131008a9a`. **TESTED CODE SHA `68e94f6e1f0e42d733c5b9ba89f2a24fa68ff118`**; **separate final docs SHA is the subsequent documentation-only branch HEAD, inspect GitHub after push**. Do not treat docs SHA as Windows-tested implementation.

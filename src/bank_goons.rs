@@ -8,7 +8,7 @@
 //! All metadata remains dormant. No source sprites, AI, audio, attacks,
 //! enemy hitboxes, 1B transition, or runtime Flash/Python are activated.
 #![allow(dead_code)]
-use crate::stage::StageId;
+use crate::stage::{GameDepth, GamePos, LevelPos, StageId};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct SourceGoonLabel {
@@ -111,31 +111,42 @@ pub struct BankGoonSpawn {
     pub name: &'static str,
     pub symbol_id: u16,
     /// Original GAME #1075 direct depth (not ground #782 nested depth).
-    pub game_depth: u16,
+    pub game_depth: GameDepth,
     /// Original game-local placement translation, NOT world camera pixels.
     pub x_game: f32,
     pub y_game: f32,
 }
 
 impl BankGoonSpawn {
+    #[inline]
+    pub fn game_pos(self) -> GamePos {
+        GamePos::new(self.x_game, self.y_game)
+    }
+
+    #[inline]
+    pub fn level_pos(self) -> LevelPos {
+        StageId::Level1B.descriptor().to_level_pos(self.game_pos())
+    }
+
+    #[inline]
     pub fn level_local(self) -> (f32, f32) {
-        let level = StageId::Level1B.descriptor().level_origin_game_local;
-        (self.x_game - level.0, self.y_game - level.1)
+        let p = self.level_pos();
+        (p.x, p.y)
     }
 }
 
 /// Ten ORIGINAL game #1075 frame-0 goon instances in authored depth order.
 pub const BANK_GOON_SPAWNS: [BankGoonSpawn; 10] = [
-    BankGoonSpawn { name: "goon1", symbol_id: 880, game_depth: 1105, x_game: -1086.15_f32, y_game: 398.1_f32 },
-    BankGoonSpawn { name: "goon2", symbol_id: 964, game_depth: 1107, x_game: -746.15_f32, y_game: 398.1_f32 },
-    BankGoonSpawn { name: "goon4", symbol_id: 880, game_depth: 1109, x_game: -2074.85_f32, y_game: 398.1_f32 },
-    BankGoonSpawn { name: "goon3", symbol_id: 964, game_depth: 1111, x_game: -1734.85_f32, y_game: 398.1_f32 },
-    BankGoonSpawn { name: "goon6", symbol_id: 964, game_depth: 1113, x_game: -3466.85_f32, y_game: 398.1_f32 },
-    BankGoonSpawn { name: "goon5", symbol_id: 964, game_depth: 1115, x_game: -3126.85_f32, y_game: 398.1_f32 },
-    BankGoonSpawn { name: "goon7", symbol_id: 964, game_depth: 1117, x_game: -5364.85_f32, y_game: 398.1_f32 },
-    BankGoonSpawn { name: "goon9", symbol_id: 880, game_depth: 1119, x_game: -5970.75_f32, y_game: 398.1_f32 },
-    BankGoonSpawn { name: "goon8", symbol_id: 880, game_depth: 1121, x_game: -4976.85_f32, y_game: 398.1_f32 },
-    BankGoonSpawn { name: "goon10", symbol_id: 964, game_depth: 1123, x_game: -6110.45_f32, y_game: 398.1_f32 },
+    BankGoonSpawn { name: "goon1", symbol_id: 880, game_depth: GameDepth(1105), x_game: -1086.15_f32, y_game: 398.1_f32 },
+    BankGoonSpawn { name: "goon2", symbol_id: 964, game_depth: GameDepth(1107), x_game: -746.15_f32, y_game: 398.1_f32 },
+    BankGoonSpawn { name: "goon4", symbol_id: 880, game_depth: GameDepth(1109), x_game: -2074.85_f32, y_game: 398.1_f32 },
+    BankGoonSpawn { name: "goon3", symbol_id: 964, game_depth: GameDepth(1111), x_game: -1734.85_f32, y_game: 398.1_f32 },
+    BankGoonSpawn { name: "goon6", symbol_id: 964, game_depth: GameDepth(1113), x_game: -3466.85_f32, y_game: 398.1_f32 },
+    BankGoonSpawn { name: "goon5", symbol_id: 964, game_depth: GameDepth(1115), x_game: -3126.85_f32, y_game: 398.1_f32 },
+    BankGoonSpawn { name: "goon7", symbol_id: 964, game_depth: GameDepth(1117), x_game: -5364.85_f32, y_game: 398.1_f32 },
+    BankGoonSpawn { name: "goon9", symbol_id: 880, game_depth: GameDepth(1119), x_game: -5970.75_f32, y_game: 398.1_f32 },
+    BankGoonSpawn { name: "goon8", symbol_id: 880, game_depth: GameDepth(1121), x_game: -4976.85_f32, y_game: 398.1_f32 },
+    BankGoonSpawn { name: "goon10", symbol_id: 964, game_depth: GameDepth(1123), x_game: -6110.45_f32, y_game: 398.1_f32 },
 ];
 
 #[cfg(test)]
@@ -169,7 +180,7 @@ mod tests {
         assert_eq!(BANK_GOON_SPAWNS.map(|g|g.name),
             ["goon1","goon2","goon4","goon3","goon6","goon5",
              "goon7","goon9","goon8","goon10"]);
-        assert_eq!(BANK_GOON_SPAWNS.map(|g|g.game_depth),
+        assert_eq!(BANK_GOON_SPAWNS.map(|g|u16::from(g.game_depth)),
             [1105,1107,1109,1111,1113,1115,1117,1119,1121,1123]);
         let mut seen=std::collections::BTreeSet::new();
         let mut families=[0,0];
@@ -223,6 +234,8 @@ mod tests {
         assert_eq!((d.root_frame_zero_based,d.game_symbol,d.level_symbol,d.ground_symbol),
                    (20,1075,783,782));
         let p=BANK_GOON_SPAWNS[0];
+        let p_level = p.level_pos();
+        assert_eq!(p.level_local(), (p_level.x, p_level.y));
         let (x,y)=p.level_local();
         assert!((x+2120.80).abs()<0.002);
         assert!((y-158.85).abs()<0.002);
