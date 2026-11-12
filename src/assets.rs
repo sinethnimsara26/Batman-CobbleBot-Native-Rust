@@ -64,13 +64,12 @@ impl std::ops::Deref for SpriteSet {
     fn deref(&self) -> &Self::Target { &self.frames }
 }
 
-pub struct Assets {
+pub struct CommonAssets {
     pub batman_frames: SpriteSet,
     pub batman_frames_hq: SpriteSet,
     pub root_sky: Image,
     pub root_moon: Image,
     pub root_moon_hq: SpriteSet,
-    pub city_background: Image,
     pub pickup_frames: SpriteSet,
     pub batarang_frames: SpriteSet,
     pub pickup_frames_hq: SpriteSet,
@@ -90,16 +89,13 @@ pub struct Assets {
     pub hud_digits_small_hq: Image,
     pub hud_digits_batarang_hq: Image,
     pub hud_digits_large_hq: Image,
-    pub level1a_tiles: LevelTileSet,
-    pub level1a_tiles_hq_base: LevelTileSet,
-    pub level1a_detail_tiles_hq: LevelTileSet,
     pub title_screen: Image,
     pub instructions_screen: Image,
     /// 180 original root-frame-18 story samples, loaded lazily.
     pub intro_frames: LazySpriteSet,
 }
 
-impl Assets {
+impl CommonAssets {
     pub fn load() -> Self {
         Self {
             batman_frames: decode_sprite_frames_expected(include_bytes!("../assets/batman_frames.bin"),1.0,"batman_frames"),
@@ -107,7 +103,6 @@ impl Assets {
             root_sky: decode_png(include_bytes!("../assets/root_bg_131.png")),
             root_moon: decode_png(include_bytes!("../assets/root_bg_134.png")),
             root_moon_hq: decode_sprite_frames_expected(include_bytes!("../assets/root_bg_134_hq.bin"),3.0,"root_moon_hq"),
-            city_background: decode_png(include_bytes!("../assets/level1a_bg.png")),
             pickup_frames: decode_sprite_frames_expected(include_bytes!("../assets/pickup_frames.bin"),1.0,"pickup_frames"),
             batarang_frames: decode_sprite_frames_expected(include_bytes!("../assets/batarang_frames.bin"),1.0,"batarang_frames"),
             pickup_frames_hq: decode_sprite_frames_expected(include_bytes!("../assets/pickup_frames_hq.bin"),3.0,"pickup_frames_hq"),
@@ -127,13 +122,91 @@ impl Assets {
             hud_digits_small_hq: decode_png(include_bytes!("../assets/hud_digits_small_hq.png")),
             hud_digits_batarang_hq: decode_png(include_bytes!("../assets/hud_digits_batarang_hq.png")),
             hud_digits_large_hq: decode_png(include_bytes!("../assets/hud_digits_large_hq.png")),
-            level1a_tiles: LevelTileSet::new_expected(include_bytes!("../assets/level1a_tiles.bin"),1.0,12,"level1a_tiles"),
-            level1a_tiles_hq_base: LevelTileSet::new_expected(include_bytes!("../assets/level1a_tiles_hq_base.bin"),1.0,4,"level1a_tiles_hq_base"),
-            level1a_detail_tiles_hq: LevelTileSet::new_expected(include_bytes!("../assets/level1a_detail_tiles_hq.bin"),3.0,4,"level1a_detail_tiles_hq"),
             title_screen: decode_png(include_bytes!("../assets/title_screen.png")),
             instructions_screen: decode_png(include_bytes!("../assets/instructions_screen.png")),
             intro_frames: decode_sprite_frames_lazy_expected(include_bytes!("../assets/intro_frames.bin"),1.0,"intro_frames"),
         }
+    }
+}
+
+pub struct StageAssets {
+    pub stage_id: crate::stage::StageId,
+    pub background: Image,
+    pub tiles: LevelTileSet,
+    pub tiles_hq_base: LevelTileSet,
+    pub detail_tiles_hq: LevelTileSet,
+}
+
+impl StageAssets {
+    pub fn load_level1a() -> Self {
+        Self {
+            stage_id: crate::stage::StageId::Level1A,
+            background: decode_png(include_bytes!("../assets/level1a_bg.png")),
+            tiles: LevelTileSet::new_expected(include_bytes!("../assets/level1a_tiles.bin"),1.0,12,"level1a_tiles"),
+            tiles_hq_base: LevelTileSet::new_expected(include_bytes!("../assets/level1a_tiles_hq_base.bin"),1.0,4,"level1a_tiles_hq_base"),
+            detail_tiles_hq: LevelTileSet::new_expected(include_bytes!("../assets/level1a_detail_tiles_hq.bin"),3.0,4,"level1a_detail_tiles_hq"),
+        }
+    }
+
+    pub fn load(stage_id: crate::stage::StageId) -> Self {
+        match stage_id {
+            crate::stage::StageId::Level1A => Self::load_level1a(),
+            _ => panic!("StageAssets::load: stage {:?} assets not yet embedded", stage_id),
+        }
+    }
+}
+
+pub struct Assets {
+    pub common: CommonAssets,
+    pub stage: StageAssets,
+    pub city_background: Image,
+    pub level1a_tiles: LevelTileSet,
+    pub level1a_tiles_hq_base: LevelTileSet,
+    pub level1a_detail_tiles_hq: LevelTileSet,
+}
+
+impl std::ops::Deref for Assets {
+    type Target = CommonAssets;
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        &self.common
+    }
+}
+
+impl std::ops::DerefMut for Assets {
+    #[inline]
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.common
+    }
+}
+
+impl Assets {
+    pub fn load() -> Self {
+        let common = CommonAssets::load();
+        let stage = StageAssets::load_level1a();
+        let city_background = stage.background.clone();
+        let level1a_tiles = stage.tiles.clone();
+        let level1a_tiles_hq_base = stage.tiles_hq_base.clone();
+        let level1a_detail_tiles_hq = stage.detail_tiles_hq.clone();
+        Self {
+            common,
+            stage,
+            city_background,
+            level1a_tiles,
+            level1a_tiles_hq_base,
+            level1a_detail_tiles_hq,
+        }
+    }
+
+    pub fn load_stage(&mut self, stage_id: crate::stage::StageId) {
+        let stage = StageAssets::load(stage_id);
+        if stage_id == crate::stage::StageId::Level1A {
+            self.city_background = stage.background.clone();
+            self.level1a_tiles = stage.tiles.clone();
+            self.level1a_tiles_hq_base = stage.tiles_hq_base.clone();
+            self.level1a_detail_tiles_hq = stage.detail_tiles_hq.clone();
+        }
+        self.stage = stage;
     }
 }
 
@@ -225,6 +298,18 @@ impl LevelTileSet {
             image
         };
         Some(LevelTileFrame{image,crop_x:meta.crop_x,crop_y:meta.crop_y})
+    }
+}
+
+impl Clone for LevelTileSet {
+    fn clone(&self) -> Self {
+        Self {
+            bytes: self.bytes,
+            index: self.index.clone(),
+            cache: RefCell::new(VecDeque::new()),
+            cache_limit: self.cache_limit,
+            logical_pixel_scale: self.logical_pixel_scale,
+        }
     }
 }
 
@@ -371,5 +456,38 @@ mod tests{
         let _=decode_sprite_frames_expected(
             include_bytes!("../assets/scale_probe.bin"),1.0,"scale_probe"
         );
+    }
+
+    #[test]
+    fn common_and_stage_assets_split_invariants(){
+        let assets=super::Assets::load();
+        assert_eq!(assets.stage.stage_id,crate::stage::StageId::Level1A);
+        assert!((assets.stage.tiles.logical_pixel_scale-1.0).abs()<0.0001);
+        assert!((assets.stage.tiles_hq_base.logical_pixel_scale-1.0).abs()<0.0001);
+        assert!((assets.stage.detail_tiles_hq.logical_pixel_scale-3.0).abs()<0.0001);
+        assert_eq!(assets.common.intro_frames.len(),180);
+        assert_eq!(assets.intro_frames.len(),180);
+        assert_eq!(assets.common.title_screen.w,600);
+        assert_eq!(assets.title_screen.w,600);
+    }
+
+    #[test]
+    fn stage_assets_load_and_swap_preserves_depth_and_scale(){
+        let stage_1a=super::StageAssets::load(crate::stage::StageId::Level1A);
+        assert_eq!(stage_1a.stage_id,crate::stage::StageId::Level1A);
+        assert!((stage_1a.tiles.logical_pixel_scale-1.0).abs()<0.0001);
+        assert!((stage_1a.detail_tiles_hq.logical_pixel_scale-3.0).abs()<0.0001);
+
+        let mut assets=super::Assets::load();
+        assets.load_stage(crate::stage::StageId::Level1A);
+        assert_eq!(assets.stage.stage_id,crate::stage::StageId::Level1A);
+    }
+
+    #[test]
+    fn assets_deref_transparent_access(){
+        let assets=super::Assets::load();
+        assert_eq!(assets.batman_frames.frames.len(),assets.common.batman_frames.frames.len());
+        assert_eq!(assets.hud_shell_hq.frames.len(),assets.common.hud_shell_hq.frames.len());
+        assert_eq!(assets.hud_shell_hq.frames.len(),1);
     }
 }
