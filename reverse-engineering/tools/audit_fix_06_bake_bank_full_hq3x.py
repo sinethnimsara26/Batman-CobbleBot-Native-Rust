@@ -114,7 +114,7 @@ def main():
     if source_definition_tags(args.swf, {758, 771, 774}) != {758:34, 771:34, 774:11}:
         raise AssertionError("original Button2/Text tags changed")
     split = source_depth_split(stage, symbols, set(excluded))
-    if split["original_direct_display_depth_cut"] != 626:
+    if split["original_direct_display_depth_cut"] != 385:
         raise AssertionError("original Bank authored-depth cut changed")
     args.out.mkdir(parents=True, exist_ok=True)
 
@@ -222,7 +222,7 @@ def main():
 
     reject({**manifests["flat"], "complete_bank_street_hq3x": False}, args.out, "missing_hq_certificate")
     reject({**manifests["flat"], "tiles": manifests["flat"]["tiles"][:9]}, args.out, "truncated_hq_flat")
-    reject({**manifests["upper"], "source_root_depth_range": [1, 626]}, args.out, "fake_depth_band")
+    reject({**manifests["upper"], "source_root_depth_range": [1, 385]}, args.out, "fake_depth_band")
     report = {
         "batch": "AUDIT-FIX-06", "canonical_fws_sha256": sha,
         "zero_based_source_frames": {"root": 20, "bank_street": 0},

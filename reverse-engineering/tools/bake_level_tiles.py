@@ -94,9 +94,9 @@ def main():
             raise ValueError("full Bank #783 HQ3x requires canonical source, true 6x vector filtering and an authenticated depth mode")
         if args.root_depth_range is not None:
             lo, hi = args.root_depth_range
-            if not ((expected_band == "lower" and lo < 626 and hi == 626)
-                    or (expected_band == "upper" and lo == 627 and hi >= 627)):
-                raise ValueError("Bank depth layer must use original depth cut 626 and an ordered complete band")
+            if not ((expected_band == "lower" and lo < 385 and hi == 385)
+                    or (expected_band == "upper" and lo == 386 and hi >= 386)):
+                raise ValueError("Bank depth layer must use original depth cut 385 and an ordered complete band")
     elif args.bank_depth_band != "flat":
         raise ValueError("--bank-depth-band is available only for complete Bank HQ3x")
     if args.output_scale < 1:

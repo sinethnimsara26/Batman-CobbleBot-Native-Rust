@@ -67,11 +67,11 @@ def main():
                 raise ValueError("Bank Street flat HQ3x must contain all 75 source tiles")
             if (band == "lower" and not (
                     isinstance(depths, list) and len(depths) == 2
-                    and isinstance(depths[0], int) and depths[0] < 626 and depths[1] == 626)):
+                    and isinstance(depths[0], int) and depths[0] < 385 and depths[1] == 385)):
                 raise ValueError("Bank Street lower HQ3x original depth certificate mismatch")
             if (band == "upper" and not (
                     isinstance(depths, list) and len(depths) == 2
-                    and depths[0] == 627 and isinstance(depths[1], int) and depths[1] >= 627)):
+                    and depths[0] == 386 and isinstance(depths[1], int) and depths[1] >= 386)):
                 raise ValueError("Bank Street upper HQ3x original depth certificate mismatch")
             if band not in ("flat", "lower", "upper") or not tiles or len(tiles) > 75:
                 raise ValueError("Bank Street HQ3x missing authored-band or tile data")
