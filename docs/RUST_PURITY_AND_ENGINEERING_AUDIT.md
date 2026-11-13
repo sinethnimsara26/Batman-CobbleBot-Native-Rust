@@ -1228,3 +1228,11 @@ Do not erase two historical CI failures: documentation-only #42834460076 and ini
 
 
 
+
+### AUD-20261113-025 — B19 Bank Chapter Integration & Shared Enemy Renderer Audit
+- **Batch / Branch:** `B19` on `revive/level2-b19-bank-milestone-qa-2026-11-13` (Draft PR #51, code SHA `5b0f42a13f34c57afd1e47977d7b0293fe9dfaa3`, CI [#43402438555](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43402438555))
+- **Audit Checks (PASS):**
+  - Zero `unsafe` code added; zero new external crates; `Cargo.lock` untouched.
+  - Zero upfront RGBA heap growth on Level 1A (`goon_a_frames`, `goon_b_frames`, `biker_frames`, `penguin_frames` stored as `LazySpriteSet`); all `20/20` HQ and `15/15` Legacy Level 1A baseline hashes preserved unchanged.
+  - Eliminated latent stage-transition freeze in `Game::start_stage()` by clearing all stage completion flags unconditionally before `match stage` so `1A -> 1B -> 1C` runs live without stale completion locks.
+  - Shared `draw_enemy_sprite` / `draw_stage_enemies_scaled` helper serves both Legacy (`1x`) and HQ (`3x`) paths with zero duplicated enemy-clip lookup logic and zero per-frame allocations.

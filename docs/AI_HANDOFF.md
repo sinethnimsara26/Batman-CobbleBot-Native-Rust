@@ -1,6 +1,13 @@
 # AI handoff — current recovery checkpoint
 
 
+## FINAL VERIFIED — B19 Integrated Bank Chapter Milestone (`1A -> 1B -> 1C -> card:escape -> Pending(Level2A)`); STOP (2026-11-13)
+
+- **Branch / Draft PR:** `revive/level2-b19-bank-milestone-qa-2026-11-13` -> Draft PR [#51](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/51) (targeting `revive/level2-b18-penguin-escape-card-2026-11-13`).
+- **Tested Code SHA:** [`5b0f42a13f34c57afd1e47977d7b0293fe9dfaa3`](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/commit/5b0f42a13f34c57afd1e47977d7b0293fe9dfaa3)
+- **Windows CI Status:** [Run #43402438555](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43402438555) — **SUCCESS** (`10m32s`), `104 passed; 0 failed` (`1.17s`), `20/20` HQ hashes identical (`9fd02f2506b34bfef5e1a6aa7d6519ed97caa5125c0b7052d7db4f95522530e7`), `child_exit: 0`, `render_p95_ms: 18.8548`, `scenery_p95_ms: 22.4629`, `--qa-bank-route` pass (`final_score: 505`, `final_lives: 5`, `final_batarangs: 5`, `level1b p95: 26.5505 ms`, `level1c p95: 25.1904 ms`). Audio: `BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT` (WinMM MCI 277 on headless CI).
+- **Next Authorized Batch:** **B20** (`revive/level2-b20-labs2a-scenery-mask-2026-11-13`) — `Labs 2A` (`#1317` excl. `#1316` 1× tiles `assets/level2a_tiles.bin`, `#1316` collision mask `level2a_ground.png`, and `Level2A` object inventory/separation).
+
 ## FINAL VERIFIED — B18 Penguin 1C Boss Defeat, card:escape #1267 Timeline & end-to-2A Handoff; STOP (2026-11-13)
 
 - **Live recovery:** feature branch `revive/level2-b18-penguin-escape-card-2026-11-13`, draft [PR #50](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/50) OPEN/UNMERGED based on previous B17 docs commit `0d66104`. **TESTED CODE SHA `5064a47`**; **separate final docs SHA is the subsequent documentation-only branch HEAD, inspect GitHub after push**. Do not treat docs SHA as Windows-tested implementation.
