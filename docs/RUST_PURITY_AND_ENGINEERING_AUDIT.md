@@ -1207,4 +1207,24 @@ Do not erase two historical CI failures: documentation-only #42834460076 and ini
   - **HARDWARE SPEAKER AUDIO:** BLOCKED (`BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT`, unchanged).
 
 
+## AUD-20261113-024 — Independent post-code Rust purity/engineering audit of Batch B18 (Level 1C Boss Defeat, card:escape & 2A Handoff)
+
+- **Audit Date:** 2026-11-13
+- **Scope:** `reverse-engineering/tools/b18_bake_escape_card.py`, `src/penguin.rs`, `src/stage.rs`, `src/assets.rs`, `src/game.rs`, `src/render.rs`, `src/win32.rs`, `.github/workflows/build-level1a-fidelity.yml`.
+- **Code SHA:** `5064a47` on branch `revive/level2-b18-penguin-escape-card-2026-11-13` (PR #50).
+- **Actual Changed Code and Engineering Review:**
+  1. Pure-Rust Level 1C / `card:escape` runtime & UI integration:
+     - `src/penguin.rs` & `src/stage.rs`: Exports `LEVEL1C_PICKUP_POINTS` without duplicating coordinate literals and adds `PendingStageEntry::after_story_card(StoryCard::Escape, StageId::Level1C, 130, progress)` cleanly recording both outgoing story card audio (`130`) and incoming Level 2A track (`1409`).
+     - `src/assets.rs` & `reverse-engineering/tools/b18_bake_escape_card.py`: Embeds baked `escape_card_frames.bin` (`BCBFRM02`, `225` frames) via `LazySpriteSet` matching existing `intro_frames` LRU decoding; baker remains offline build/CI-only with zero Python/Flash shipped at runtime.
+     - `src/game.rs`: Wires `StageId::Level1C` gameplay (`start_stage`, `tick_level1c_boss`, `LEVEL1C_PICKUP_POINTS` pickups, `apply_player_damage_with_state` routing `PlayerState::Electro` for `#1192` laser hits) and `AppScreen::EscapeCard` (225-frame non-looping `#1267` timeline, `#1268`/key SKIP gated strictly by 41-frame `#34` fadeout + `IntroStop` at frame 39, `PendingStageEntry` preserving `score`/`lives`/`batarangs`). Added 3 integration tests raising total Rust tests from 98 to 101.
+     - `src/render.rs` & `src/win32.rs`: Parameterized `render_story_timeline_legacy`, HQ `#34` fadeout, and `hit_skip_rect`/`active_card_skip_rect` cleanly across both `Intro` (`#129`) and `EscapeCard` (`#1268`) without code duplication or `unsafe` additions.
+  2. CI execution confirmed on GitHub Actions run [#43395035011](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43395035011) (`build-level1a-fidelity` SUCCESS in `10m55s`): `101/101` tests passed in `0.86s`, render p95 `18.6876ms`, scenery scroll p95 `22.2334ms` (< 40ms gate), 20/20 relocated standalone EXE HQ hashes identical, child exit 0.
+- **Verdicts:**
+  - **PURE-RUST RUNTIME COMPLIANCE:** PASS (with existing direct Win32/GDI/WinMM OS FFI qualifications). Zero new crates, zero unsafe blocks, zero per-tick allocations introduced in gameplay or story loops.
+  - **ENGINEERING QUALITY:** PASS (shared story-card & SKIP button handlers across `#129`/`#1268`, shared damage-state helper for `Hurt` vs `Electro`, strict 41-frame fadeout invariants).
+  - **ORIGINAL-GAME FIDELITY:** VERIFIED FOR TESTED SCOPE (Level 1A/1B regressions preserved; `penguinAI` defeat tail, root frame `22` `card:escape` `#1267`/`#1268`/`#34` timing, and `end-to-2A` progress handoff match `cobblebot.swf` verbatim).
+  - **HARDWARE SPEAKER AUDIO:** BLOCKED (`BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT`, unchanged).
+
+
+
 

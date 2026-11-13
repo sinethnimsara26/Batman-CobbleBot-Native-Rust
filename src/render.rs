@@ -115,14 +115,17 @@ pub fn render_with_config(
 
             if game.screen!=AppScreen::Playing{
                 // Title/instructions still use the exact Round-3 path.
-                if game.screen==AppScreen::Intro && game.intro_fadeout_tick.is_some(){
+                let active_fade=match game.screen{
+                    AppScreen::Intro=>game.intro_fadeout_tick,
+                    AppScreen::EscapeCard=>game.escape_card_fadeout_tick,
+                    _=>None,
+                };
+                if let Some(t)=active_fade{
                     // Do not double-composite a low-res fade. Rust draws the
                     // existing original sprite34 asset at genuine 3x.
                     render_legacy_intro_overlay(base,game,assets,false);
                     upscale_opaque_base(base,target);
-                    if let Some(t)=game.intro_fadeout_tick {
-                        draw_root_timeline_hq_lazy(target,&assets.fadeout_frames_hq,t as u64,301.0,205.0);
-                    }
+                    draw_root_timeline_hq_lazy(target,&assets.fadeout_frames_hq,t as u64,301.0,205.0);
                 }else{
                     render_legacy(base,game,assets);
                     upscale_opaque_base(base,target);
@@ -245,24 +248,43 @@ fn render_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     render_legacy_intro_overlay(fb,game,assets,true);
 }
 
+fn render_story_timeline_legacy(
+    fb:&mut RenderSurface,
+    assets:&Assets,
+    frames:&crate::assets::LazySpriteSet,
+    tick:u16,
+    fadeout_tick:Option<u16>,
+    show_fade:bool,
+){
+    let frame=(tick as usize).min(frames.len()-1);
+    let story=frames.frame(frame);
+    blit(
+        fb,&story.image,
+        -story.anchor_x.round() as i32,-story.anchor_y.round() as i32,
+        story.image.w as i32,story.image.h as i32,false
+    );
+    if show_fade {
+        if let Some(t)=fadeout_tick{
+            draw_root_timeline_lazy_legacy(fb,&assets.fadeout_frames,t as u64,301.0,205.0);
+        }
+    }
+}
+
 fn render_legacy_intro_overlay(fb:&mut RenderSurface,game:&Game,assets:&Assets,show_fade:bool){
     fb.fill(0xff000000);
     match game.screen{
         AppScreen::Title=>{blit(fb,&assets.title_screen,0,0,600,400,false);return},
         AppScreen::Instructions=>{blit(fb,&assets.instructions_screen,0,0,600,400,false);return},
         AppScreen::Intro=>{
-            let frame=(game.intro_tick as usize).min(assets.intro_frames.len()-1);
-            let story=assets.intro_frames.frame(frame);
-            blit(
-                fb,&story.image,
-                -story.anchor_x.round() as i32,-story.anchor_y.round() as i32,
-                story.image.w as i32,story.image.h as i32,false
+            render_story_timeline_legacy(
+                fb,assets,&assets.intro_frames,game.intro_tick,game.intro_fadeout_tick,show_fade,
             );
-            if show_fade {
-                if let Some(t)=game.intro_fadeout_tick{
-                    draw_root_timeline_lazy_legacy(fb,&assets.fadeout_frames,t as u64,301.0,205.0);
-                }
-            }
+            return
+        },
+        AppScreen::EscapeCard=>{
+            render_story_timeline_legacy(
+                fb,assets,&assets.escape_card_frames,game.escape_card_tick,game.escape_card_fadeout_tick,show_fade,
+            );
             return
         },
         AppScreen::Playing=>{}
@@ -353,6 +375,7 @@ fn draw_world_objects_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     let pickup_coords: &[(f32,f32)] = match game.active_stage() {
         crate::stage::StageId::Level1A => &crate::game::PICKUPS,
         crate::stage::StageId::Level1B => &crate::game::LEVEL1B_PICKUPS,
+        crate::stage::StageId::Level1C => &crate::penguin::LEVEL1C_PICKUP_POINTS,
         _ => &[],
     };
     if !assets.pickup_frames.is_empty() {
@@ -383,6 +406,7 @@ fn draw_world_objects_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     let pickup_coords: &[(f32,f32)] = match game.active_stage() {
         crate::stage::StageId::Level1A => &crate::game::PICKUPS,
         crate::stage::StageId::Level1B => &crate::game::LEVEL1B_PICKUPS,
+        crate::stage::StageId::Level1C => &crate::penguin::LEVEL1C_PICKUP_POINTS,
         _ => &[],
     };
 

@@ -1467,5 +1467,26 @@ Tested original source fixed CODE SHA `26dad6e07ef3dc1ca860aa98b4a8ccfb12912f72`
 - **Confidence:** HIGH for complete 3,920-byte `penguinAI` combat parity, `#1192` AABB mapping, and exact `+500`/`+100` scoring branches.
 
 
+## RE-20261113-024 — Level 1C Penguin Defeat Tail, card:escape (Root Frame 22, #1267/#1268) & 2A Transition (Batch B18)
+
+- **Batch/Context:** Batch B18; branch `revive/level2-b18-penguin-escape-card-2026-11-13`, draft PR #50 based on B17 docs commit `0d66104`.
+- **Target Subsystem:** `reverse-engineering/tools/b18_bake_escape_card.py`, `src/penguin.rs`, `src/stage.rs`, `src/assets.rs`, `src/game.rs`, `src/render.rs`, `src/win32.rs`, `.github/workflows/build-level1a-fidelity.yml`.
+- **Original Architecture & Findings:**
+  1. `penguinAI` Defeat Tail (`cobblebot.swf` bytecode offset `4387` / root frame `21` -> `22`):
+     - On `health <= 0`, sets `gotoLast = "start"`, `gotoNext = "card:escape"`, calls `fadeout.play()`, and plays `bam.start()` once (`bammed` latch). During the 41-frame `#34` fadeout, frame `39` triggers `StopSounds` (`AudioEvent::MusicStop`) and frame `40` dispatches into root frame `22` (`card:escape`).
+  2. Root Frame `22` (`card:escape`) Display List & Timeline Actions:
+     - Root frame `22` executes `DoAction: Stop()` and `StartSound id=130 flags=0x04` (same looping track as root frame `18` `intro`, modeled via `AudioEvent::IntroStart`/`IntroStop`).
+     - Places `#1254` (depth `1`, `162` frames with terminal `Stop()` at frame `161`, at `(505.5, 286.95)`), `#1255` (depth `20`), `#1267` (depth `21`, `225` frames `0..=224` with terminal frame `224` `DoAction`: `stop(); _root.gotoNext = "level2a"; _root.fadeout.play();`), `#1268` SKIP (`DefineButton2`, depth `245`, `cond=0x0008` release-inside setting `gotoNext = "level2a"` and playing `#34`, UP-state `#128`, exact pixel bounds `(528, 370, 573, 382)`), `#24` (depth `247`), and `#34` `fadeout` (depth `248`, `(301.0, 205.0)`).
+  3. Level 2A Stage Handoff (`PendingStageEntry::after_story_card`):
+     - `card:escape` preserves `RootProgress { score, lives, batarangs }`, closes `outgoing_root_sound_id = 130`, and targets `StageId::Level2A` (`incoming_root_sound_id = 1409`).
+     - `#1267` holds on frame `224` through both timeline completion and SKIP fadeouts (never wraps back to frame `0`), while SKIP triggers `#34` `0..=40` cleanly with `IntroStop` at frame `39`.
+  4. Offline Escape Card Baker (`reverse-engineering/tools/b18_bake_escape_card.py`):
+     - Bakes all `225` frames of `card:escape` (`600x400`) with zero `unsupported_fills` and zero `missing_bitmap_ids` into `assets/escape_card_frames.bin` (`BCBFRM02`, `2,222,400` bytes @ `1.0×`) and emits `escape_card_button_bounds.rs`.
+- **Verification Evidence:**
+  - Rust unit tests increased from 98 to 101 (+3 end-to-end Level 1C / EscapeCard integration tests in `src/game.rs` plus `#1268` Win32 hit-test coverage in `src/win32.rs`).
+  - Windows CI fidelity run `#43395035011` (`build-level1a-fidelity`): SUCCESS on code SHA `5064a47`; `101/101` tests passed in 0.86s, `escape-card/manifest.json` (`source_root_frame == 22`) + multi-frame diff checks passed, render p95 `18.6876ms`, scenery scroll p95 `22.2334ms` (< 40ms gate), 20/20 relocated standalone EXE HQ hashes identical, child exit 0.
+- **Confidence:** HIGH for root frame `22` display list / `DoAction` extraction, 225-frame lossless rasterization, `#1268` SKIP geometry, and end-to-2A transition state machine.
+
+
 
 

@@ -1,6 +1,15 @@
 # AI handoff — current recovery checkpoint
 
 
+## FINAL VERIFIED — B18 Penguin 1C Boss Defeat, card:escape #1267 Timeline & end-to-2A Handoff; STOP (2026-11-13)
+
+- **Live recovery:** feature branch `revive/level2-b18-penguin-escape-card-2026-11-13`, draft [PR #50](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/50) OPEN/UNMERGED based on previous B17 docs commit `0d66104`. **TESTED CODE SHA `5064a47`**; **separate final docs SHA is the subsequent documentation-only branch HEAD, inspect GitHub after push**. Do not treat docs SHA as Windows-tested implementation.
+- **NATIVE WINDOWS PASS:** exact-code [#43395035011](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43395035011) **SUCCESS** (`10m55s`), `cargo test --release --locked` **101/101 tests passed in 0.86s**, Cargo lock unchanged, relocated independent installed EXE **20/20 HQ hashes identical** (`sha256: 6b518504...`), exit 0, no source SWF staged. Render p95 **18.6876ms**/scenery scroll **22.2334ms** vs <40ms unchanged. Audio/focus reports `BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT`; original Flash-player runtime fidelity UNVERIFIED.
+- **Scoped code/workflow paths:** `reverse-engineering/tools/b18_bake_escape_card.py` (225-frame `card:escape` `#1267` baker + `#1268` SKIP bounds), `src/penguin.rs` (`LEVEL1C_PICKUP_POINTS`), `src/stage.rs` (`PendingStageEntry::after_story_card`), `src/assets.rs` (`CommonAssets::escape_card_frames`), `src/game.rs` (`AppScreen::EscapeCard`, `start_stage(Level1C)`, `tick_level1c_boss`, `begin_escape_card`, `finish_escape_card_to_level2a`, `skip_escape_card`, `apply_player_damage_with_state` + 3 tests 98→101), `src/render.rs` (story card + HQ fadeout + Level 1C pickups), `src/win32.rs` (`#1268` SKIP rect + test update), `.github/workflows/build-level1a-fidelity.yml` (branch trigger + `escape-card` bake/pack + multi-frame validation).
+- **All mandatory records:** AGENTS and both protocols READ/unchanged; AI_TASKS, AI_HANDOFF, AI_WORKLOG, RE research **RE-20261113-024**, post-change Rust engineering audit **AUD-20261113-024** updated. Native Rust runtime purity PASS with pre-existing platform FFI qualifiers. Protected `main`, frozen Level1A release SHA `49e8fd343e4f37f045ba71f24fff0999211f0f11`, earlier draft PRs unchanged; PR50 stays DRAFT/OPEN/UNMERGED.
+- **STOP. Exactly ONE NEXT independently authorized batch: B19 Bank milestone — integrated `1A -> 1B -> 1C -> escape-card` runtime/visual regression & Windows QA**; do NOT merge or release.
+
+
 ## FINAL VERIFIED — B17 Penguin Combat, Laser Hitbox #1192, Batman Electro & +500/+100 Scoring; STOP (2026-11-13)
 
 - **Live recovery:** feature branch `revive/level2-b17-penguin-combat-2026-11-13`, draft [PR #49](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/49) OPEN/UNMERGED based on previous B16 docs commit `5ac786d`. **TESTED CODE SHA `2204d88`**; **separate final docs SHA is the subsequent documentation-only branch HEAD, inspect GitHub after push**. Do not treat docs SHA as Windows-tested implementation.
