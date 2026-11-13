@@ -982,3 +982,13 @@ Do not erase two historical CI failures: documentation-only #42834460076 and ini
   - Added `LabsElevatorPlacement::{hitbox_bounds_at, hits_player_at, pack_frame}` (`src/stage.rs`) and `CommonAssets::elevator_frames` (`src/assets.rs`).
   - Implemented `LabsElevatorState` + exact AVM1 `_global.elevatorLogic` (`on_platform` mount, `-20`/`-40` lockstep carry with `else if !self.on_platform` double-integration guard, `-36 + dy/3` jump-off, `limit_y` stop) (`src/game.rs`), `draw_labs_elevators_scaled` (`src/render.rs`), and 3 tests (`113 -> 116`).
 - **CI Proof:** `116 passed; 0 failed` (`1.92s`), `hq_smoke_hashes_identical: 20`, relocated EXE SHA-256 `00c8b5947c6eb9d49c46e3166b0d2ad8cc854f6d91469bfea73d2c3848ec66e9`, `child_exit: 0`, `render_p95_ms: 19.2357`, `scenery_p95_ms: 22.5761`, `intro_audio_focus: BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT` (WinMM MCI 277).
+
+## B24 — `Labs 2A` 9 Goons (`#1365`) & Inert `eagle1` (`#1393` `birdAI`) (VERIFIED FINAL)
+- **Date:** 2026-11-13
+- **Branch / PR:** `revive/level2-b24-labs2a-enemies-2026-11-13` (Draft PR #56 -> `revive/level2-b23-labs2a-elevators-2026-11-13`)
+- **Code SHA / CI Run:** `b8726f2` -> [Run #43426236375](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43426236375) (`SUCCESS`, `11m50s`)
+- **Summary of Changes:**
+  - Added `reverse-engineering/tools/b24_bake_labs_enemies.py` + CI proof `Batman-CobbleBot-B24-Labs2A-Enemies-Proof` (`proof_sha256: e5f2bc05b3a2652597c64b456bee6c7059f5ea8aba9764fd9ff8d76bec7e0b4f`) packing `assets/labs_goon_frames.bin` (`187,599` bytes, `69` `BCBFRM02` frames at `1.0x`, `341×298`) and `assets/eagle_frames.bin` (`91,133` bytes, `41` `BCBFRM02` frames at `1.0x`, `134×217`).
+  - Added `src/labs_bird.rs` (`BirdState`, `BirdEvent`, `LabsEagle`, exact `_global.birdAI` with `ai_attached` gate for `eagle1` vs `eagle_BAK`).
+  - Extended `src/bank_goons.rs` (`GoonFamily::LabsC`, `BankGoon::{stage_id, scale, from_labs2a}`, `BankGoonSquad` `Vec<BankGoon>` + `enable_wave2_respawn` + `new_labs2a()`), `src/assets.rs` (`labs_goon_frames`, `eagle_frames`), `src/game.rs` (`tick_stage_enemies`), `src/render.rs` (`draw_stage_enemies_scaled`), and 3 tests (`116 -> 119`).
+- **CI Proof:** `119 passed; 0 failed` (`2.02s`), `hq_smoke_hashes_identical: 20`, relocated EXE SHA-256 `d6dc27140bab2d57510f37eba0fe784be9b2faa7445b87f33ae3e9c5219e79a8`, `child_exit: 0`, `render_p95_ms: 24.561`, `scenery_p95_ms: 23.3389`, `intro_audio_focus: BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT` (WinMM MCI 277).
