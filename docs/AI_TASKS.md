@@ -1,6 +1,15 @@
 # Persistent development tasks — Batman Rust port
 
 
+## B23 — COMPLETED / `Labs 2A` `elevatorLogic` & 3 Elevators (`#1328`/`#1330`) (2026-11-13)
+- **Branch / Draft PR:** `revive/level2-b23-labs2a-elevators-2026-11-13` -> Draft PR [#55](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/55) (base `revive/level2-b22-labs2a-doors-2026-11-13`)
+- **CI Run:** [Run #43421534386](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43421534386) (`SUCCESS`, `12m23s`) on code SHA `7c8d33b`.
+- **Verified Deliverables:**
+  - `116 passed; 0 failed` (`1.92s` CI / `2.10s` local), `hq_smoke_hashes_identical: 20`, `child_exit: 0`, `render_p95_ms: 19.2357`, `scenery_p95_ms: 22.5761`, `intro_audio_focus: BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT` (`audio_hardware_verified: false`), relocated EXE SHA-256 `00c8b5947c6eb9d49c46e3166b0d2ad8cc854f6d91469bfea73d2c3848ec66e9`.
+  - Labs 2A Elevators Proof (`Batman-CobbleBot-B23-Labs2A-Elevators-Proof`): `assets/elevator_frames.bin` (`13,365` bytes, `2` `BCBFRM02` frames at `1.0x`: `#1328` `465×239` & `#1330` `465×164`), `LabsElevatorPlacement::{hitbox_bounds_at, hits_player_at, pack_frame}` (`src/stage.rs`), `CommonAssets::elevator_frames` (`src/assets.rs`), `LabsElevatorState` + `_global.elevatorLogic` lockstep carrier/jump-off/limit stop (`src/game.rs`), `draw_labs_elevators_scaled` in Legacy `1x` & HQ `3x` (`src/render.rs`), and 3 tests (`113 -> 116`).
+### Next Authorized Batch: **B24 — `Labs 2A` 9 Goons (`#1365`) & `eagle1` (`#1393` `birdAI`)**
+- Branch `revive/level2-b24-labs2a-enemies-2026-11-13` off the B23 `[skip ci]` docs closeout commit.
+
 ## B22 — COMPLETED / `Labs 2A` `doorOpen`, 18 Doors (`#1325`/`#1324`), 18 Front Jambs (`#1394..1396`) & Sound `#1323` (2026-11-13)
 
 **VERIFIED NATIVE WINDOWS REGRESSION.** Code SHA [`32bed64`](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/commit/32bed64) on Draft PR [#54](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/54) passed [CI Run #43415499947](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43415499947) (`SUCCESS` in `14m22s`):
