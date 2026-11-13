@@ -17,6 +17,7 @@ mod bank_goons;
 mod bank_biker;
 // B14: original Level 1C Penguin (`#1250`) dormant metadata and pickup layout.
 mod penguin;
+mod labs_bird;
 mod win32;
 
 fn main() {

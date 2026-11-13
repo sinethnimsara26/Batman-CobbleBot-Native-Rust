@@ -73,6 +73,19 @@ pub const GOON_B_CLIPS: [SourceGoonChildClip; 9] = [
     SourceGoonChildClip { name: "intro", source_child_symbol_id: 939, first_frame_inclusive: 56, end_frame_exclusive: 66 },
 ];
 
+/// Original source child frames for Labs 2A/2B goons (`#1365`); total 69 frames.
+pub const GOON_LABS_C_CLIPS: [SourceGoonChildClip; 9] = [
+    SourceGoonChildClip { name: "stand", source_child_symbol_id: 1340, first_frame_inclusive: 0, end_frame_exclusive: 1 },
+    SourceGoonChildClip { name: "walk", source_child_symbol_id: 1348, first_frame_inclusive: 1, end_frame_exclusive: 18 },
+    SourceGoonChildClip { name: "retreat", source_child_symbol_id: 1349, first_frame_inclusive: 18, end_frame_exclusive: 35 },
+    SourceGoonChildClip { name: "attack", source_child_symbol_id: 1358, first_frame_inclusive: 35, end_frame_exclusive: 47 },
+    SourceGoonChildClip { name: "hurt", source_child_symbol_id: 1362, first_frame_inclusive: 47, end_frame_exclusive: 52 },
+    SourceGoonChildClip { name: "fall", source_child_symbol_id: 1363, first_frame_inclusive: 52, end_frame_exclusive: 60 },
+    SourceGoonChildClip { name: "die", source_child_symbol_id: 1364, first_frame_inclusive: 60, end_frame_exclusive: 67 },
+    SourceGoonChildClip { name: "idle", source_child_symbol_id: 1340, first_frame_inclusive: 67, end_frame_exclusive: 68 },
+    SourceGoonChildClip { name: "intro", source_child_symbol_id: 1340, first_frame_inclusive: 68, end_frame_exclusive: 69 },
+];
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct GoonSourceTimeline {
     pub source_symbol_id: u16,
@@ -181,8 +194,9 @@ impl GoonState {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum GoonFamily {
-    A, // DefineSprite #880
-    B, // DefineSprite #964
+    A,     // DefineSprite #880
+    B,     // DefineSprite #964
+    LabsC, // DefineSprite #1365
 }
 
 impl GoonFamily {
@@ -190,6 +204,7 @@ impl GoonFamily {
         match self {
             Self::A => 880,
             Self::B => 964,
+            Self::LabsC => 1365,
         }
     }
 
@@ -197,6 +212,7 @@ impl GoonFamily {
         match self {
             Self::A => &GOON_A_CLIPS,
             Self::B => &GOON_B_CLIPS,
+            Self::LabsC => &GOON_LABS_C_CLIPS,
         }
     }
 
@@ -275,6 +291,8 @@ pub enum GoonCombatEvent {
 pub struct BankGoon {
     pub name: &'static str,
     pub family: GoonFamily,
+    pub stage_id: StageId,
+    pub scale: f32,
     pub game_depth: GameDepth,
     pub x: f32,
     pub y: f32,
@@ -310,6 +328,8 @@ impl BankGoon {
         Self {
             name: spawn.name,
             family,
+            stage_id: StageId::Level1B,
+            scale: 1.0,
             game_depth: spawn.game_depth,
             x: spawn.x_game,
             y: spawn.y_game,
@@ -332,6 +352,35 @@ impl BankGoon {
         }
     }
 
+    /// Initializes a `Level 2A` Labs goon (`#1365`, `health=70`, `strength=10`, `speed=6`, `dir=1`).
+    pub fn from_labs2a(spawn: crate::stage::LabsEnemyPlacement, spawn_index: usize) -> Self {
+        Self {
+            name: spawn.name,
+            family: GoonFamily::LabsC,
+            stage_id: StageId::Level2A,
+            scale: spawn.sx,
+            game_depth: GameDepth(spawn.depth),
+            x: spawn.x,
+            y: spawn.y,
+            dir: 1,
+            state: GoonState::Idle,
+            frame: 0,
+            health: 70,
+            max_health: 70,
+            strength: 10,
+            speed: 6.0,
+            attack_count: 0.0,
+            fall_count: 0,
+            flash: 0,
+            invincible: false,
+            visible: true,
+            active: true,
+            hit_count: 0,
+            is_wave2: false,
+            spawn_index,
+        }
+    }
+
     #[inline]
     pub fn game_pos(&self) -> GamePos {
         GamePos::new(self.x, self.y)
@@ -339,7 +388,7 @@ impl BankGoon {
 
     #[inline]
     pub fn level_pos(&self) -> LevelPos {
-        StageId::Level1B.descriptor().to_level_pos(self.game_pos())
+        self.stage_id.descriptor().to_level_pos(self.game_pos())
     }
 
     pub fn set_state(&mut self, new_state: GoonState) {
@@ -488,7 +537,7 @@ impl BankGoon {
         // Hurt state: knockback slide (-6 * dir) and child animation
         if self.state == GoonState::Hurt {
             let kx = -6.0 * (self.dir as f32);
-            if !check_goon_wall(collision, self.x, self.y, kx) {
+            if !check_goon_wall_for_stage(self.stage_id, collision, self.x, self.y, kx) {
                 self.x += kx;
             }
             let clip = self.family.child_clip(GoonState::Hurt);
@@ -504,7 +553,7 @@ impl BankGoon {
         if self.state == GoonState::Fall {
             if self.fall_count < 6 {
                 let kx = -10.0 * (self.dir as f32);
-                if !check_goon_wall(collision, self.x, self.y, kx) {
+                if !check_goon_wall_for_stage(self.stage_id, collision, self.x, self.y, kx) {
                     self.x += kx;
                 }
                 self.fall_count += 1;
@@ -625,8 +674,8 @@ impl BankGoon {
             }
             GoonState::Walk => {
                 let dx = self.speed * (self.dir as f32);
-                let wall = check_goon_wall(collision, self.x, self.y, dx);
-                let edge = check_goon_edge(collision, self.x, self.y, 50.0 * (self.dir as f32));
+                let wall = check_goon_wall_for_stage(self.stage_id, collision, self.x, self.y, dx);
+                let edge = check_goon_edge_for_stage(self.stage_id, collision, self.x, self.y, 50.0 * (self.dir as f32));
 
                 if !wall && edge {
                     self.x += dx;
@@ -641,8 +690,8 @@ impl BankGoon {
             }
             GoonState::Retreat => {
                 let dx = self.speed * (self.dir as f32);
-                let wall = check_goon_wall(collision, self.x, self.y, -dx);
-                let edge = check_goon_edge(collision, self.x, self.y, -50.0 * (self.dir as f32));
+                let wall = check_goon_wall_for_stage(self.stage_id, collision, self.x, self.y, -dx);
+                let edge = check_goon_edge_for_stage(self.stage_id, collision, self.x, self.y, -50.0 * (self.dir as f32));
 
                 if !wall && edge {
                     self.x -= dx;
@@ -669,43 +718,72 @@ impl BankGoon {
     }
 }
 
-/// Checks wall ahead of goon using Level 1B ground mask.
+/// Checks wall ahead of goon using the given stage ground mask.
 /// Flash AVM1 checkWall: hitTest at (goon.x + dx, goon.y - 25.0).
-pub fn check_goon_wall(collision: &CollisionMask, x_game: f32, y_game: f32, dx: f32) -> bool {
-    let stage = StageId::Level1B.descriptor();
+pub fn check_goon_wall_for_stage(stage_id: StageId, collision: &CollisionMask, x_game: f32, y_game: f32, dx: f32) -> bool {
+    let stage = stage_id.descriptor();
     let test_pos = stage.to_level_pos(GamePos::new(x_game + dx, y_game - 25.0));
     collision.solid_level_pos(test_pos)
 }
 
-/// Checks ground ahead of goon using Level 1B ground mask.
+/// Checks ground ahead of goon using the given stage ground mask.
 /// Flash AVM1 checkEdge: hitTest at (goon.x + dx, goon.y + 4.0).
-pub fn check_goon_edge(collision: &CollisionMask, x_game: f32, y_game: f32, dx: f32) -> bool {
-    let stage = StageId::Level1B.descriptor();
+pub fn check_goon_edge_for_stage(stage_id: StageId, collision: &CollisionMask, x_game: f32, y_game: f32, dx: f32) -> bool {
+    let stage = stage_id.descriptor();
     let test_pos = stage.to_level_pos(GamePos::new(x_game + dx, y_game + 4.0));
     collision.solid_level_pos(test_pos)
 }
 
+/// Checks wall ahead of goon using Level 1B ground mask.
+pub fn check_goon_wall(collision: &CollisionMask, x_game: f32, y_game: f32, dx: f32) -> bool {
+    check_goon_wall_for_stage(StageId::Level1B, collision, x_game, y_game, dx)
+}
+
+/// Checks ground ahead of goon using Level 1B ground mask.
+pub fn check_goon_edge(collision: &CollisionMask, x_game: f32, y_game: f32, dx: f32) -> bool {
+    check_goon_edge_for_stage(StageId::Level1B, collision, x_game, y_game, dx)
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct BankGoonSquad {
-    pub goons: [BankGoon; 10],
+    pub goons: Vec<BankGoon>,
     pub rng: GoonRng,
     pub e_kills: usize,
     pub respawned: u32,
+    pub enable_wave2_respawn: bool,
 }
 
 impl BankGoonSquad {
     pub fn new() -> Self {
-        let mut idx = 0;
-        let goons = BANK_GOON_SPAWNS.map(|spawn| {
-            let g = BankGoon::from_spawn_with_index(spawn, idx);
-            idx += 1;
-            g
-        });
+        let goons = BANK_GOON_SPAWNS
+            .iter()
+            .copied()
+            .enumerate()
+            .map(|(idx, spawn)| BankGoon::from_spawn_with_index(spawn, idx))
+            .collect();
         Self {
             goons,
             rng: GoonRng::new(0x1337_BCB1_0000),
             e_kills: 0,
             respawned: 0,
+            enable_wave2_respawn: true,
+        }
+    }
+
+    /// Initializes the 9 `Level 2A` Labs goons (`#1365`, 70 HP, strength 10, speed 6, dir 1, no wave-2 respawn).
+    pub fn new_labs2a() -> Self {
+        let goons = crate::stage::labs2a::GOONS
+            .iter()
+            .copied()
+            .enumerate()
+            .map(|(idx, spawn)| BankGoon::from_labs2a(spawn, idx))
+            .collect();
+        Self {
+            goons,
+            rng: GoonRng::new(0x2A00_1365),
+            e_kills: 0,
+            respawned: 0,
+            enable_wave2_respawn: false,
         }
     }
 
@@ -776,9 +854,8 @@ impl BankGoonSquad {
             }
         }
 
-        // 4. Check wave 2 activation (Flash AVM1 respawn2)
-        // If initial wave (10 goons) is defeated:
-        if self.respawned == 0 && self.e_kills >= 10 {
+        // 4. Check wave 2 activation (Flash AVM1 respawn2 — Level 1B only)
+        if self.enable_wave2_respawn && self.respawned == 0 && self.e_kills >= 10 {
             self.e_kills = 0;
             self.respawned = 1;
 
@@ -812,8 +889,7 @@ impl BankGoonSquad {
         }
 
         // 5. Check stage exit trigger (Flash AVM1 respawn2 end)
-        // When wave 2 (8 enemies) is defeated:
-        if self.respawned > 0 && self.e_kills >= 8 {
+        if self.enable_wave2_respawn && self.respawned > 0 && self.e_kills >= 8 {
             events.push(GoonCombatEvent::StageComplete);
         }
     }
@@ -940,6 +1016,7 @@ mod tests {
             match goon.family {
                 GoonFamily::A => count_a += 1,
                 GoonFamily::B => count_b += 1,
+                GoonFamily::LabsC => panic!("unexpected LabsC goon in Level 1B spawns"),
             }
         }
         assert_eq!((count_a, count_b), (4, 6));
