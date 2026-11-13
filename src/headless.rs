@@ -420,3 +420,141 @@ fn write_png(path:&Path,fb:&RenderSurface){
     }
     writer.write_image_data(&bytes).expect("PNG pixels");
 }
+
+pub fn qa_bank_route(out_dir:&str){
+    let out=Path::new(out_dir);
+    fs::create_dir_all(out).expect("create B19 bank QA dir");
+    let mut assets=Assets::load();
+    let mut ground=CollisionMask::for_stage(crate::stage::StageId::Level1A);
+    let mut game=Game::new();
+    let mut input=InputState::default();
+
+    // Title -> Intro -> Level 1A
+    input.set(VK_ENTER,true);
+    game.tick(&mut input,&ground);
+    input.set(VK_ENTER,false);
+    assert!(game.skip_intro());
+    for _ in 0..41 { game.tick(&mut input,&ground); }
+    for _ in 0..105 { game.tick(&mut input,&ground); }
+    assert_eq!(game.active_stage(),crate::stage::StageId::Level1A);
+    snapshot(false,out,"bank_1a.png",&mut game,&assets);
+    snapshot(true,out,"bank_1a_hq.png",&mut game,&assets);
+    let (_,fp_1a)=intro_frame_metrics(true,&mut game,&assets);
+
+    // Progress through Level 1A exit -> Level 1B
+    game.player.x=PICKUPS[0].0-LEVEL_X;
+    game.player.y=PICKUPS[0].1-LEVEL_Y;
+    game.tick(&mut input,&ground);
+    game.level1a_exit_reached=true;
+    game.fadeout_tick=Some(0);
+    for _ in 0..41 { game.tick(&mut input,&ground); }
+    let next_1b=game.consume_pending_stage_entry().expect("Level1B handoff");
+    assert_eq!(next_1b,crate::stage::StageId::Level1B);
+    ground=CollisionMask::for_stage(next_1b);
+    assets.load_stage(next_1b);
+    // Position Batman in combat range of the first Bank goon & biker for visual QA
+    let d1b=crate::stage::StageId::Level1B.descriptor();
+    game.player.x=-1180.0-d1b.level_origin_game_local.x;
+    game.player.dir=1;
+    for _ in 0..45 { game.tick(&mut input,&ground); }
+    snapshot(false,out,"bank_1b.png",&mut game,&assets);
+    snapshot(true,out,"bank_1b_hq.png",&mut game,&assets);
+    let (dark_1b,fp_1b)=intro_frame_metrics(true,&mut game,&assets);
+    assert_ne!(fp_1b,fp_1a,"Level 1B HQ frame must differ from Level 1A");
+    assert!(dark_1b<0.95,"Level 1B frame unexpectedly blank");
+
+    // Measure HQ frame time on Level 1B
+    let mut base=RenderSurface::new(LOGICAL_W,LOGICAL_H);
+    let mut hq=RenderSurface::new(render::HQ_W,render::HQ_H);
+    render::render_high_quality(&mut base,&mut hq,&game,&assets);
+    let mut t1b=Vec::with_capacity(20);
+    for _ in 0..20 {
+        let start=Instant::now();
+        render::render_high_quality(&mut base,&mut hq,&game,&assets);
+        t1b.push(start.elapsed().as_secs_f64()*1000.0);
+    }
+    t1b.sort_by(|a,b|a.partial_cmp(b).unwrap());
+    let p95_1b=t1b[((t1b.len()-1) as f64*0.95).round() as usize];
+
+    // Clear Level 1B waves -> Level 1C
+    if let Some(squad)=&mut game.bank_goons {
+        squad.e_kills=10;
+    }
+    game.tick(&mut input,&ground);
+    if let Some(squad)=&mut game.bank_goons {
+        assert_eq!(squad.respawned,1);
+        squad.e_kills=8;
+    }
+    game.tick(&mut input,&ground);
+    assert!(game.level1b_exit_reached);
+    for _ in 0..41 { game.tick(&mut input,&ground); }
+    let next_1c=game.consume_pending_stage_entry().expect("Level1C handoff");
+    assert_eq!(next_1c,crate::stage::StageId::Level1C);
+    ground=CollisionMask::for_stage(next_1c);
+    assets.load_stage(next_1c);
+    let d1c=crate::stage::StageId::Level1C.descriptor();
+    if let Some(boss)=&game.penguin_boss {
+        game.player.x=boss.x-180.0-d1c.level_origin_game_local.x;
+        game.player.dir=1;
+    }
+    for _ in 0..45 { game.tick(&mut input,&ground); }
+    snapshot(false,out,"bank_1c.png",&mut game,&assets);
+    snapshot(true,out,"bank_1c_hq.png",&mut game,&assets);
+    let (dark_1c,fp_1c)=intro_frame_metrics(true,&mut game,&assets);
+    assert_ne!(fp_1c,fp_1a);
+    assert_ne!(fp_1c,fp_1b);
+    assert!(dark_1c<0.95,"Level 1C frame unexpectedly blank");
+
+    let mut t1c=Vec::with_capacity(20);
+    for _ in 0..20 {
+        let start=Instant::now();
+        render::render_high_quality(&mut base,&mut hq,&game,&assets);
+        t1c.push(start.elapsed().as_secs_f64()*1000.0);
+    }
+    t1c.sort_by(|a,b|a.partial_cmp(b).unwrap());
+    let p95_1c=t1c[((t1c.len()-1) as f64*0.95).round() as usize];
+
+    // Defeat Penguin -> EscapeCard -> Level2A pending handoff
+    game.player.jumping=false;
+    game.player.on_ground=true;
+    game.player.dy=0.0;
+    let (bx,by)= {
+        let boss=game.penguin_boss.as_mut().expect("1C boss");
+        boss.health=1;
+        boss.state=crate::penguin::PenguinState::Stand;
+        (boss.x,boss.y)
+    };
+    let d1c=crate::stage::StageId::Level1C.descriptor();
+    game.player.x=bx-d1c.level_origin_game_local.x-20.0;
+    game.player.y=by-d1c.level_origin_game_local.y;
+    game.player.dir=1;
+    game.player.state=crate::game::PlayerState::Punch;
+    game.player.state_tick=1;
+    game.player_attacking=true;
+    for _ in 0..45 {
+        game.tick(&mut input,&ground);
+        if game.fadeout_tick.is_some() { break; }
+    }
+    for _ in 0..42 {
+        game.tick(&mut input,&ground);
+        if game.screen==AppScreen::EscapeCard { break; }
+    }
+    assert_eq!(game.screen,AppScreen::EscapeCard);
+    snapshot(false,out,"escape_card_000.png",&mut game,&assets);
+    let (_,fp_esc0)=intro_frame_metrics(false,&mut game,&assets);
+    for _ in 0..112 { game.tick(&mut input,&ground); }
+    snapshot(false,out,"escape_card_112.png",&mut game,&assets);
+    snapshot(true,out,"escape_card_112_hq.png",&mut game,&assets);
+    let (_,fp_esc112)=intro_frame_metrics(false,&mut game,&assets);
+    assert_ne!(fp_esc0,fp_esc112,"EscapeCard must animate");
+    assert!(game.skip_escape_card());
+    for _ in 0..41 { game.tick(&mut input,&ground); }
+    let pending=game.pending_stage_entry().expect("Level2A handoff latched");
+    assert_eq!(pending.to,crate::stage::StageId::Level2A);
+
+    let report=format!(
+        "{{\n  \"milestone\": \"B19\",\n  \"route\": [\"Level1A\", \"Level1B\", \"Level1C\", \"EscapeCard\", \"Pending(Level2A)\"],\n  \"final_score\": {},\n  \"final_lives\": {},\n  \"final_batarangs\": {},\n  \"fingerprints\": {{\n    \"level1a_hq\": \"0x{fp_1a:016x}\",\n    \"level1b_hq\": \"0x{fp_1b:016x}\",\n    \"level1c_hq\": \"0x{fp_1c:016x}\",\n    \"escape_card_000\": \"0x{fp_esc0:016x}\",\n    \"escape_card_112\": \"0x{fp_esc112:016x}\"\n  }},\n  \"dark_fraction\": {{\n    \"level1b_hq\": {dark_1b:.4},\n    \"level1c_hq\": {dark_1c:.4}\n  }},\n  \"hq_frame_p95_ms\": {{\n    \"level1b\": {p95_1b:.4},\n    \"level1c\": {p95_1c:.4}\n  }},\n  \"keyframes\": [\n    \"bank_1a.png\", \"bank_1a_hq.png\", \"bank_1b.png\", \"bank_1b_hq.png\",\n    \"bank_1c.png\", \"bank_1c_hq.png\", \"escape_card_000.png\", \"escape_card_112.png\", \"escape_card_112_hq.png\"\n  ]\n}}\n",
+        pending.progress.score,pending.progress.lives,pending.progress.batarangs
+    );
+    fs::write(out.join("bank_route_qa_report.json"),report).expect("write B19 QA report");
+}

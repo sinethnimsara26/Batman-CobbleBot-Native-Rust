@@ -311,39 +311,31 @@ impl Game{
         self.pit_done=false;
         self.respawn_after_fade=false;
         self.gameover_after_fade=false;
+        self.level1a_exit_reached=false;
+        self.level1a_complete=false;
+        self.level1b_exit_reached=false;
+        self.level1b_complete=false;
+        self.level1c_exit_reached=false;
+        self.level1c_complete=false;
+        self.escape_card_complete=false;
+        self.pickups=[false;7];
 
         match stage{
             StageId::Level1A=>{
                 self.bank_goons=None;
                 self.bank_biker=None;
                 self.penguin_boss=None;
-                self.level1a_exit_reached=false;
-                self.level1a_complete=false;
-                self.level1c_exit_reached=false;
-                self.level1c_complete=false;
-                self.escape_card_complete=false;
-                self.pickups=[false;7];
             },
             StageId::Level1B=>{
                 self.bank_goons=Some(BankGoonSquad::new());
                 self.bank_biker=Some(BankBiker::new());
                 self.penguin_boss=None;
-                self.level1b_exit_reached=false;
-                self.level1b_complete=false;
-                self.level1c_exit_reached=false;
-                self.level1c_complete=false;
-                self.escape_card_complete=false;
-                self.pickups=[false;7];
             },
             StageId::Level1C=>{
                 self.bank_goons=None;
                 self.bank_biker=None;
                 self.penguin_boss=Some(PenguinBoss::new());
                 self.penguin_rng=PenguinRng::new(0x1C00_1250);
-                self.level1c_exit_reached=false;
-                self.level1c_complete=false;
-                self.escape_card_complete=false;
-                self.pickups=[false;7];
             },
             _=>{}
         }
@@ -355,6 +347,24 @@ impl Game{
 
     /// B04 readonly handoff; does not make Stage1B playable or start its audio.
     pub fn pending_stage_entry(&self)->Option<PendingStageEntry>{self.pending_stage_entry}
+
+    /// Consumes an implemented playable stage handoff (`Level1B` or `Level1C`),
+    /// resetting stage actors while preserving carried `RootProgress` and restarting music.
+    pub fn consume_pending_stage_entry(&mut self)->Option<StageId>{
+        let entry=self.pending_stage_entry?;
+        if !matches!(entry.to,StageId::Level1B|StageId::Level1C) {
+            return None;
+        }
+        self.start_stage(entry.to);
+        self.score=entry.progress.score;
+        self.lives=entry.progress.lives;
+        self.batarangs=entry.progress.batarangs;
+        self.shots.clear();
+        self.ticks=0;
+        self.screen=AppScreen::Playing;
+        self.audio_events.push(AudioEvent::MusicStart);
+        Some(entry.to)
+    }
 
     pub fn animation_frame(&self)->usize{
         self.player.state.display_tick(self.player.state_tick)
@@ -1837,5 +1847,184 @@ mod b18_penguin_escape_card_tests {
             game.pending_stage_entry().map(|p| (p.to, p.progress.score)),
             Some((StageId::Level2A, 777))
         );
+    }
+}
+
+#[cfg(test)]
+mod b19_bank_milestone_tests {
+    use super::{AppScreen, AudioEvent, Game, InputState, LOGICAL_H, LOGICAL_W, PICKUPS, VK_A, VK_ENTER, LEVEL_X, LEVEL_Y};
+    use crate::assets::Assets;
+    use crate::collision::CollisionMask;
+    use crate::render::{self, HQ_H, HQ_W};
+    use crate::stage::StageId;
+    use crate::surface::RenderSurface;
+
+    #[test]
+    fn integrated_bank_chapter_1a_to_1b_to_1c_to_escape_card_and_level2a_handoff() {
+        let mut ground = CollisionMask::for_stage(StageId::Level1A);
+        let mut game = Game::new();
+        let mut input = InputState::default();
+
+        // Title -> Intro -> SKIP fadeout -> Level 1A
+        input.set(VK_ENTER, true);
+        game.tick(&mut input, &ground);
+        input.set(VK_ENTER, false);
+        assert_eq!(game.screen, AppScreen::Intro);
+        assert!(game.skip_intro());
+        for _ in 0..41 {
+            game.tick(&mut input, &ground);
+        }
+        assert_eq!(game.screen, AppScreen::Playing);
+        assert_eq!(game.active_stage(), StageId::Level1A);
+        let _ = game.take_audio_events();
+
+        // Collect one batarang pickup and trigger Level 1A exit
+        game.player.x = PICKUPS[0].0 - LEVEL_X;
+        game.player.y = PICKUPS[0].1 - LEVEL_Y;
+        game.tick(&mut input, &ground);
+        assert!(game.score >= 5);
+        assert!(game.batarangs >= 5);
+        game.lives = 4;
+
+        game.level1a_exit_reached = true;
+        game.fadeout_tick = Some(0);
+        for _ in 0..41 {
+            game.tick(&mut input, &ground);
+        }
+        let next = game.consume_pending_stage_entry();
+        assert_eq!(next, Some(StageId::Level1B));
+        ground = CollisionMask::for_stage(StageId::Level1B);
+        assert_eq!(game.active_stage(), StageId::Level1B);
+        assert!(game.bank_goons.is_some());
+        assert!(game.bank_biker.is_some());
+        assert_eq!((game.lives, game.batarangs), (4, 5));
+        assert!(game.score >= 5);
+        assert!(game.take_audio_events().contains(&AudioEvent::MusicStart));
+
+        // Defeat Wave 1 + Wave 2 goons in Level 1B to trigger Level 1C handoff
+        if let Some(squad) = &mut game.bank_goons {
+            squad.e_kills = 10;
+        }
+        game.tick(&mut input, &ground);
+        {
+            let squad = game.bank_goons.as_ref().expect("1B squad active");
+            assert_eq!(squad.respawned, 1);
+            assert!(squad.active_count() >= 8);
+        }
+        if let Some(squad) = &mut game.bank_goons {
+            squad.e_kills = 8;
+        }
+        game.tick(&mut input, &ground);
+        assert!(game.level1b_exit_reached);
+        for _ in 0..41 {
+            game.tick(&mut input, &ground);
+        }
+        let next_1c = game.consume_pending_stage_entry();
+        assert_eq!(next_1c, Some(StageId::Level1C));
+        ground = CollisionMask::for_stage(StageId::Level1C);
+        assert_eq!(game.active_stage(), StageId::Level1C);
+        assert!(game.penguin_boss.is_some());
+        assert!(game.bank_goons.is_none());
+        assert!(game.bank_biker.is_none());
+        assert_eq!((game.lives, game.batarangs), (4, 5));
+        assert!(game.take_audio_events().contains(&AudioEvent::MusicStart));
+
+        // Defeat Penguin boss -> EscapeCard -> Level2A pending handoff
+        game.player.jumping = false;
+        game.player.on_ground = true;
+        game.player.dy = 0.0;
+        let (bx, by) = {
+            let boss = game.penguin_boss.as_mut().expect("1C boss");
+            boss.health = 1;
+            boss.state = crate::penguin::PenguinState::Stand;
+            (boss.x, boss.y)
+        };
+        let d1c = StageId::Level1C.descriptor();
+        game.player.x = bx - d1c.level_origin_game_local.x - 20.0;
+        game.player.y = by - d1c.level_origin_game_local.y;
+        game.player.dir = 1;
+        game.player.state = crate::game::PlayerState::Punch;
+        game.player.state_tick = 1;
+        game.player_attacking = true;
+        let _ = VK_A;
+        for _ in 0..45 {
+            game.tick(&mut input, &ground);
+            if game.fadeout_tick.is_some() {
+                break;
+            }
+        }
+        assert!(game.level1c_exit_reached, "Penguin defeat should trigger exit fade");
+        for _ in 0..42 {
+            game.tick(&mut input, &ground);
+            if game.screen == AppScreen::EscapeCard {
+                break;
+            }
+        }
+        assert_eq!(game.screen, AppScreen::EscapeCard);
+        let score_at_escape = game.score;
+        assert!(score_at_escape >= 505);
+
+        assert!(game.skip_escape_card());
+        for _ in 0..41 {
+            game.tick(&mut input, &ground);
+        }
+        assert!(game.escape_card_complete);
+        let handoff = game.pending_stage_entry().expect("Level2A handoff latched");
+        assert_eq!(handoff.from, StageId::Level1C);
+        assert_eq!(handoff.to, StageId::Level2A);
+        assert_eq!(handoff.progress.score, score_at_escape);
+        assert_eq!(handoff.progress.lives, 4);
+        // Level 2A stays latched until B20+ stage assets/masks are enabled
+        assert_eq!(game.consume_pending_stage_entry(), None);
+    }
+
+    #[test]
+    fn integrated_bank_chapter_renders_legacy_and_hq_across_1b_1c_and_escape_card() {
+        let mut assets = Assets::load();
+        let mut legacy = RenderSurface::new(LOGICAL_W, LOGICAL_H);
+        let mut base = RenderSurface::new(LOGICAL_W, LOGICAL_H);
+        let mut hq = RenderSurface::new(HQ_W, HQ_H);
+
+        let mut game_1a = Game::new();
+        game_1a.screen = AppScreen::Playing;
+        game_1a.ticks = 10;
+        render::render(&mut legacy, &game_1a, &assets);
+        let pixels_1a = legacy.pixels.clone();
+
+        // Stage 1B render check (Legacy + HQ)
+        let mut game_1b = Game::new();
+        game_1b.start_stage(StageId::Level1B);
+        game_1b.screen = AppScreen::Playing;
+        game_1b.ticks = 10;
+        assets.load_stage(StageId::Level1B);
+        render::render(&mut legacy, &game_1b, &assets);
+        assert_ne!(legacy.pixels, pixels_1a, "Level 1B must differ visually from Level 1A");
+        assert!(legacy.pixels.iter().any(|&p| (p & 0x00ff_ffff) != 0));
+        render::render_high_quality(&mut base, &mut hq, &game_1b, &assets);
+        assert!(hq.pixels.iter().any(|&p| (p & 0x00ff_ffff) != 0));
+
+        // Stage 1C render check (Legacy + HQ)
+        let mut game_1c = Game::new();
+        game_1c.start_stage(StageId::Level1C);
+        game_1c.screen = AppScreen::Playing;
+        game_1c.ticks = 10;
+        assets.load_stage(StageId::Level1C);
+        render::render(&mut legacy, &game_1c, &assets);
+        assert_ne!(legacy.pixels, pixels_1a);
+        assert!(legacy.pixels.iter().any(|&p| (p & 0x00ff_ffff) != 0));
+        render::render_high_quality(&mut base, &mut hq, &game_1c, &assets);
+        assert!(hq.pixels.iter().any(|&p| (p & 0x00ff_ffff) != 0));
+
+        // Escape card render check across frames 0 and 112 (HQ + Legacy)
+        let mut game_esc = Game::new();
+        game_esc.screen = AppScreen::EscapeCard;
+        game_esc.escape_card_tick = 0;
+        render::render(&mut legacy, &game_esc, &assets);
+        let esc0 = legacy.pixels.clone();
+        game_esc.escape_card_tick = 112;
+        render::render(&mut legacy, &game_esc, &assets);
+        assert_ne!(legacy.pixels, esc0, "Escape card must animate between frame 0 and 112");
+        render::render_high_quality(&mut base, &mut hq, &game_esc, &assets);
+        assert!(hq.pixels.iter().any(|&p| (p & 0x00ff_ffff) != 0));
     }
 }

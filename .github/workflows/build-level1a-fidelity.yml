@@ -2,7 +2,7 @@ name: build-level1a-fidelity
 
 on:
   push:
-    branches: [main, level1a-cxform-fidelity, hq-rendering-phase1-halftone, hq-rendering-phase2-surfaces, hq-rendering-phase3-3x-surface, hq-rendering-phase4-pack-v2, hq-rendering-phase5-batman-3x, hq-rendering-phase6-hud-3x, hq-rendering-phase7-overlays-3x, hq-rendering-phase8-world-objects-3x, hq-rendering-phase9-dpi-awareness, hq-rendering-phase10-scenery-eval, hq-rendering-phase11-backdrop-3x, revive/round11-ci-baseline-2026-11-09, revive/level1a-intro-hud-fidelity-2026-11-09, revive/level2-b02-stage-descriptors-2026-11-11, revive/level2-b03-source-asset-proofs-2026-11-11, revive/level2-b04-pending-transition-2026-11-11, revive/level2-b05-bank-street-source-1x-2026-11-11, revive/level2-b06-bank-street-hq3x-2026-11-11, revive/level2-b07-bank-ground-probes-2026-11-11, revive/level2-b08-bank-props-source-2026-11-12, revive/level2-b09-bank-goon-sprites-2026-11-12, revive/level2-audit-fix-goon-true-clips-2026-11-12, revive/level2-audit-fix-win32-reentry-2026-11-12, revive/level2-audit-fix-music-focus-2026-11-12, revive/level2-audit-fix-stroke-alpha-2026-11-12, revive/level2-audit-fix-bank-full-1x-2026-11-12, revive/level2-audit-fix-bank-full-hq3x-2026-11-12, revive/level2-audit-fix-camera-source-2026-11-12, revive/level2-audit-fix-bank-prop-logic-2026-11-12, revive/level2-audit-fix-collision-bitpack-2026-11-12, revive/level2-audit-fix-coordinate-types-2026-11-12, revive/level2-audit-fix-render-zero-alloc-2026-11-12, revive/level2-audit-fix-split-assets-2026-11-12, revive/level2-b10-goon-ai-2026-11-12, revive/level2-b11-goon-combat-2026-11-12, revive/level2-b12-biker-ai-2026-11-12, revive/level2-b13-stage-activation-2026-11-12, revive/level2-b14-penguin-arena-2026-11-12, revive/level2-b15-penguin-sprites-2026-11-12, revive/level2-b16-penguin-ai-2026-11-12, revive/level2-b17-penguin-combat-2026-11-13, revive/level2-b18-penguin-escape-card-2026-11-13]
+    branches: [main, level1a-cxform-fidelity, hq-rendering-phase1-halftone, hq-rendering-phase2-surfaces, hq-rendering-phase3-3x-surface, hq-rendering-phase4-pack-v2, hq-rendering-phase5-batman-3x, hq-rendering-phase6-hud-3x, hq-rendering-phase7-overlays-3x, hq-rendering-phase8-world-objects-3x, hq-rendering-phase9-dpi-awareness, hq-rendering-phase10-scenery-eval, hq-rendering-phase11-backdrop-3x, revive/round11-ci-baseline-2026-11-09, revive/level1a-intro-hud-fidelity-2026-11-09, revive/level2-b02-stage-descriptors-2026-11-11, revive/level2-b03-source-asset-proofs-2026-11-11, revive/level2-b04-pending-transition-2026-11-11, revive/level2-b05-bank-street-source-1x-2026-11-11, revive/level2-b06-bank-street-hq3x-2026-11-11, revive/level2-b07-bank-ground-probes-2026-11-11, revive/level2-b08-bank-props-source-2026-11-12, revive/level2-b09-bank-goon-sprites-2026-11-12, revive/level2-audit-fix-goon-true-clips-2026-11-12, revive/level2-audit-fix-win32-reentry-2026-11-12, revive/level2-audit-fix-music-focus-2026-11-12, revive/level2-audit-fix-stroke-alpha-2026-11-12, revive/level2-audit-fix-bank-full-1x-2026-11-12, revive/level2-audit-fix-bank-full-hq3x-2026-11-12, revive/level2-audit-fix-camera-source-2026-11-12, revive/level2-audit-fix-bank-prop-logic-2026-11-12, revive/level2-audit-fix-collision-bitpack-2026-11-12, revive/level2-audit-fix-coordinate-types-2026-11-12, revive/level2-audit-fix-render-zero-alloc-2026-11-12, revive/level2-audit-fix-split-assets-2026-11-12, revive/level2-b10-goon-ai-2026-11-12, revive/level2-b11-goon-combat-2026-11-12, revive/level2-b12-biker-ai-2026-11-12, revive/level2-b13-stage-activation-2026-11-12, revive/level2-b14-penguin-arena-2026-11-12, revive/level2-b15-penguin-sprites-2026-11-12, revive/level2-b16-penguin-ai-2026-11-12, revive/level2-b17-penguin-combat-2026-11-13, revive/level2-b18-penguin-escape-card-2026-11-13, revive/level2-b19-bank-milestone-qa-2026-11-13]
   workflow_dispatch:
 
 concurrency:
@@ -264,6 +264,18 @@ jobs:
           # Level 1B Bank Street 75-tile complete 1x pack.
           python "$tools/bake_level_tiles.py" "$swf" "$work/reports/symbols.json" "$work/level1b-tiles" --bitmaps "$work/bitmaps" --symbol 783 --place-x 1034.65 --place-y 239.25 --include-source-static-text --complete-bank-street-1x --exclude-symbol 153 --exclude-symbol 782 --exclude-symbol 758 --exclude-symbol 771
           python "$tools/pack_level_tiles.py" "$work/level1b-tiles" "assets/level1b_tiles.bin"
+
+          # Level 1C Inside Bank (60 tiles) + Bank Street enemies + Penguin boss 1x sprite packs (B19).
+          python "$tools/bake_level_tiles.py" "$swf" "$work/reports/symbols.json" "$work/level1c-tiles" --bitmaps "$work/bitmaps" --symbol 1095 --place-x 1485.65 --place-y 239.25 --exclude-symbol 1094 --include-source-static-text
+          python "$tools/pack_level_tiles.py" "$work/level1c-tiles" "assets/level1c_tiles.bin"
+          python "$tools/bake_player_states.py" "$swf" "$work/reports/symbols.json" "$work/penguin-frames" --bitmaps "$work/bitmaps" --symbol 1250 --scale 0.752182
+          python "$tools/pack_sprite_frames.py" "$work/penguin-frames" "assets/penguin_frames.bin" --format-version 2 --logical-pixel-scale 1.0
+          python "$tools/bake_player_states.py" "$swf" "$work/reports/symbols.json" "$work/goon-a-frames" --bitmaps "$work/bitmaps" --symbol 880 --scale 1.0
+          python "$tools/pack_sprite_frames.py" "$work/goon-a-frames" "assets/goon_a_frames.bin" --format-version 2 --logical-pixel-scale 1.0
+          python "$tools/bake_player_states.py" "$swf" "$work/reports/symbols.json" "$work/goon-b-frames" --bitmaps "$work/bitmaps" --symbol 964 --scale 1.0
+          python "$tools/pack_sprite_frames.py" "$work/goon-b-frames" "assets/goon_b_frames.bin" --format-version 2 --logical-pixel-scale 1.0
+          python "$tools/bake_player_states.py" "$swf" "$work/reports/symbols.json" "$work/biker-frames" --bitmaps "$work/bitmaps" --symbol 1005 --scale 1.1585846
+          python "$tools/pack_sprite_frames.py" "$work/biker-frames" "assets/biker_frames.bin" --format-version 2 --logical-pixel-scale 1.0
 
           # Round 10 selective scenery split.
           #
@@ -1813,6 +1825,10 @@ jobs:
           $scroll = Start-Process -FilePath $exe -ArgumentList @("--benchmark-scenery-scroll", ".generated/scenery-scroll-benchmark.json") -Wait -PassThru
           if ($scroll.ExitCode -ne 0) { throw "Scenery-scroll benchmark failed with exit code $($scroll.ExitCode)" }
 
+          $bankQa = Start-Process -FilePath $exe -ArgumentList @("--qa-bank-route", ".generated/b19-bank-qa") -Wait -PassThru
+          if ($bankQa.ExitCode -ne 0) { throw "B19 Bank Chapter route QA failed with exit code $($bankQa.ExitCode)" }
+          Get-Content ".generated/b19-bank-qa/bank_route_qa_report.json"
+
           $legacyShots = Get-ChildItem ".generated/visual-smoke/*.png"
           $hqShots = Get-ChildItem ".generated/visual-smoke-hq/*.png"
           if ($legacyShots.Count -ne 20) { throw "Expected 20 legacy smoke screenshots, got $($legacyShots.Count)" }
@@ -2374,6 +2390,13 @@ jobs:
         run: |
           python reverse-engineering/tools/windows_final_integration_probe.py --exe target/x86_64-pc-windows-msvc/release/batman_cobblebot_native.exe --generated .generated --out .generated/windows-integration-qa
           if ($LASTEXITCODE -ne 0) { throw "Batch08 installed-copy integration failed" }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Batman-CobbleBot-B19-Bank-Milestone-QA
+          path: .generated/b19-bank-qa/
+          if-no-files-found: error
 
       - uses: actions/upload-artifact@v4
         if: always()

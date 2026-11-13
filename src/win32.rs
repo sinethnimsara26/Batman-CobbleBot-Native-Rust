@@ -308,6 +308,10 @@ impl App{
    let mut stepped=false;
    while self.acc>=FIXED_STEP{
      self.game.tick(&mut self.input,&self.ground);
+     if let Some(next_stage)=self.game.consume_pending_stage_entry(){
+       self.ground=CollisionMask::for_stage(next_stage);
+       self.assets.load_stage(next_stage);
+     }
      for event in self.game.take_audio_events(){self.audio.handle(event);}
      self.acc-=FIXED_STEP;
      stepped=true;

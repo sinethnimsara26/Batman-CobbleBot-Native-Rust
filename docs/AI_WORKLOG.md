@@ -929,3 +929,15 @@ Do not erase two historical CI failures: documentation-only #42834460076 and ini
 
 
 
+
+## B19 — Bank Chapter Milestone Integration, Enemy/Boss Rendering & Windows QA (VERIFIED FINAL)
+- **Date:** 2026-11-13
+- **Branch / PR:** `revive/level2-b19-bank-milestone-qa-2026-11-13` (Draft PR #51 -> `revive/level2-b18-penguin-escape-card-2026-11-13`)
+- **Verified Code SHA:** `5b0f42a13f34c57afd1e47977d7b0293fe9dfaa3`
+- **Windows CI Run:** [`#43402438555`](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43402438555) (`10m32s`, SUCCESS)
+- **Summary:**
+  - Baked & packed 5 zero-error runtime packs in CI & runtime (`assets/level1c_tiles.bin` 60 tiles `#1095` excl. `#1094`, `assets/penguin_frames.bin` 162 frames `#1250`, `assets/goon_a_frames.bin` 55 frames `#880`, `assets/goon_b_frames.bin` 66 frames `#964`, `assets/biker_frames.bin` 9 frames `#1005`) loaded lazily in `CommonAssets` and `StageAssets::load_level1c()`.
+  - Added `CollisionMask::for_stage(StageId)`, `Game::consume_pending_stage_entry()` for `1A -> 1B -> 1C` while preserving `RootProgress` and keeping `Level2A` latched after `EscapeCard`, and fixed `Game::start_stage()` so all prior stage completion flags reset cleanly across stage handoffs.
+  - Added shared `draw_enemy_sprite` / `draw_stage_enemies_scaled` for Legacy & HQ rendering of `BankGoonSquad`, `BankBiker`, and `PenguinBoss` (source facing flips, zero per-frame allocations), enabled HQ non-1A backdrop + tiles rendering, gated `#154` `level_title` to `StageId::Level1A`, and wired Win32 `App::timer` stage swaps.
+  - Added `--qa-bank-route`, `b19_bank_milestone_tests`, and CI artifact upload `Batman-CobbleBot-B19-Bank-Milestone-QA`.
+- **CI Proof:** `104 passed; 0 failed` (`1.17s`), `hq_smoke_hashes_identical: 20`, `child_exit: 0`, `render_p95_ms: 18.8548`, `scenery_p95_ms: 22.4629`, `bank_route_qa_report.json` (`final_score: 505`, `final_lives: 5`, `final_batarangs: 5`, `level1b p95: 26.5505 ms`, `level1c p95: 25.1904 ms`), `intro_audio_focus: BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT` (WinMM MCI 277).

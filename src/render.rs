@@ -151,10 +151,12 @@ pub fn render_with_config(
                     upscale_alpha_layer(base,target);
                     draw_tiles_hq(target,game,&assets.level1a_detail_tiles_hq);
                 } else {
+                    draw_city_background_alpha(base,game,assets);
                     draw_tiles_alpha(base,game,&assets.stage.tiles);
                     upscale_alpha_layer(base,target);
                 }
                 draw_world_objects_hq(target,game,assets);
+                draw_stage_enemies_hq(target,game,assets);
                 draw_batman_hq(target,game,assets);
                 draw_foreground_hq(target,game,assets);
             }
@@ -297,6 +299,7 @@ fn render_legacy_intro_overlay(fb:&mut RenderSurface,game:&Game,assets:&Assets,s
 fn render_world_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     render_world_base_legacy(fb,game,assets);
     draw_world_objects_legacy(fb,game,assets);
+    draw_stage_enemies_legacy(fb,game,assets);
 }
 
 fn render_world_base_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
@@ -466,6 +469,84 @@ fn draw_batman_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     );
 }
 
+#[inline]
+fn draw_enemy_sprite(
+    fb:&mut RenderSurface,
+    frame:&crate::assets::LazySpriteFrame,
+    world_x:f32,world_y:f32,
+    camera_x:f32,camera_y:f32,
+    flip:bool,
+    pixel_scale:i32,
+){
+    let sx=(world_x+camera_x).round() as i32*pixel_scale;
+    let sy=(world_y+camera_y).round() as i32*pixel_scale;
+    let ax=if flip{frame.image.w as f32-frame.anchor_x}else{frame.anchor_x};
+    let dw=frame.image.w as i32*pixel_scale;
+    let dh=frame.image.h as i32*pixel_scale;
+    let px=sx-(ax*pixel_scale as f32).round() as i32;
+    let py=sy-(frame.anchor_y*pixel_scale as f32).round() as i32;
+    blit(fb,&frame.image,px,py,dw,dh,flip);
+}
+
+fn draw_stage_enemies_scaled(fb:&mut RenderSurface,game:&Game,assets:&Assets,pixel_scale:i32){
+    match game.active_stage() {
+        crate::stage::StageId::Level1B => {
+            if let Some(squad) = &game.bank_goons {
+                for goon in &squad.goons {
+                    if !goon.active || !goon.visible { continue; }
+                    let frames = match goon.family {
+                        crate::bank_goons::GoonFamily::A => &assets.goon_a_frames,
+                        crate::bank_goons::GoonFamily::B => &assets.goon_b_frames,
+                    };
+                    if frames.is_empty() { continue; }
+                    let clip = goon.family.child_clip(goon.state);
+                    let rel = (goon.frame as usize).min(clip.frame_count().saturating_sub(1) as usize);
+                    let idx = (clip.first_frame_inclusive as usize + rel).min(frames.len().saturating_sub(1));
+                    draw_enemy_sprite(
+                        fb,&frames.frame(idx),goon.x,goon.y,game.camera_x,game.camera_y,
+                        goon.dir < 0,pixel_scale
+                    );
+                }
+            }
+            if let Some(biker) = &game.bank_biker {
+                if biker.active && biker.visible && !assets.biker_frames.is_empty() {
+                    let idx = match biker.state {
+                        crate::bank_biker::BikerState::Drive => (biker.frame as usize) % 2,
+                        crate::bank_biker::BikerState::Fall => (2 + biker.frame as usize).min(assets.biker_frames.len().saturating_sub(1)),
+                    };
+                    draw_enemy_sprite(
+                        fb,&assets.biker_frames.frame(idx),biker.x,biker.y,game.camera_x,game.camera_y,
+                        biker.dir < 0.0,pixel_scale
+                    );
+                }
+            }
+        }
+        crate::stage::StageId::Level1C => {
+            if let Some(boss) = &game.penguin_boss {
+                if boss.active && !assets.penguin_frames.is_empty() {
+                    let clip = crate::penguin::penguin_clip_for_state(boss.state);
+                    let rel = (boss.child_frame as usize).min(clip.child_frames.saturating_sub(1) as usize);
+                    let idx = (clip.baked_start_frame as usize + rel).min(assets.penguin_frames.len().saturating_sub(1));
+                    // Unflipped #1250 artwork faces left (-x), so flip horizontally when dir >= 0.
+                    draw_enemy_sprite(
+                        fb,&assets.penguin_frames.frame(idx),boss.x,boss.y,game.camera_x,game.camera_y,
+                        boss.dir >= 0,pixel_scale
+                    );
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+fn draw_stage_enemies_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
+    draw_stage_enemies_scaled(fb,game,assets,1);
+}
+
+fn draw_stage_enemies_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
+    draw_stage_enemies_scaled(fb,game,assets,HQ_SCALE as i32);
+}
+
 fn draw_foreground_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     draw_hud(fb,game,assets);
 
@@ -480,7 +561,9 @@ fn draw_foreground_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
         );
     }
 
-    draw_root_timeline_lazy_legacy(fb,&assets.level_title_frames,game.ticks,318.7,76.75);
+    if assets.stage.stage_id == crate::stage::StageId::Level1A {
+        draw_root_timeline_lazy_legacy(fb,&assets.level_title_frames,game.ticks,318.7,76.75);
+    }
     draw_root_timeline_lazy_legacy(fb,&assets.fadein_frames,game.ticks,301.0,205.0);
     if let Some(t)=game.fadeout_tick{
         draw_root_timeline_lazy_legacy(fb,&assets.fadeout_frames,t as u64,301.0,205.0);
@@ -506,7 +589,9 @@ fn draw_foreground_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
         );
     }
 
-    draw_root_timeline_hq_lazy(fb,&assets.level_title_frames_hq,game.ticks,318.7,76.75);
+    if assets.stage.stage_id == crate::stage::StageId::Level1A {
+        draw_root_timeline_hq_lazy(fb,&assets.level_title_frames_hq,game.ticks,318.7,76.75);
+    }
     draw_root_timeline_hq_lazy(fb,&assets.fadein_frames_hq,game.ticks,301.0,205.0);
     if let Some(t)=game.fadeout_tick{
         draw_root_timeline_hq_lazy(fb,&assets.fadeout_frames_hq,t as u64,301.0,205.0);

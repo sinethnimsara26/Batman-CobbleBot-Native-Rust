@@ -1,6 +1,18 @@
 # Persistent development tasks — Batman Rust port
 
 
+## B19 — COMPLETED / Integrated Bank Chapter Milestone (`1A -> 1B -> 1C -> card:escape -> Pending(Level2A)`) (2026-11-13)
+
+**VERIFIED NATIVE WINDOWS REGRESSION.** Code SHA [`5b0f42a13f34c57afd1e47977d7b0293fe9dfaa3`](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/commit/5b0f42a13f34c57afd1e47977d7b0293fe9dfaa3) on Draft PR [#51](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/51) passed [CI Run #43402438555](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43402438555) (`SUCCESS` in `10m32s`):
+- `cargo test --release --locked`: `104 passed; 0 failed` in `1.17s` (CI) / `1.41s` (local).
+- Relocated installation & HQ smoke: `20/20` HQ hashes identical (`sha256: 9fd02f2506b34bfef5e1a6aa7d6519ed97caa5125c0b7052d7db4f95522530e7`), `child_exit: 0`, `render_p95_ms: 18.8548`, `scenery_p95_ms: 22.4629`.
+- `--qa-bank-route` Windows visual & performance QA: `1A -> 1B -> 1C -> EscapeCard -> Pending(Level2A)` verified (`final_score: 505`, `final_lives: 5`, `final_batarangs: 5`, `level1b hq_frame_p95_ms: 26.5505`, `level1c hq_frame_p95_ms: 25.1904`, hashes `level1a_hq: 0x34bafc13942fbddf`, `level1b_hq: 0x0a3c06a1050d1bff`, `level1c_hq: 0xd1b834cc1f4165eb`, `escape_card_000: 0x12e4d52da3756225`, `escape_card_112: 0x663a1308fcc2cc6f`). Visually inspected `bank_1b_hq.png`, `bank_1c_hq.png`, and `escape_card_112_hq.png` from CI artifact `Batman-CobbleBot-B19-Bank-Milestone-QA`.
+- Audio note: `intro_audio_focus: BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT` (WinMM MCI 277 on hosted runner without audio hardware).
+
+### Next Authorized Batch: **B20 — `Labs 2A` (`#1317`) 1× Tile Pack, `#1316` Collision Mask & `Level2A` Object Separation**
+- Branch `revive/level2-b20-labs2a-scenery-mask-2026-11-13` off the B19 `[skip ci]` docs closeout commit.
+- Bake `#1317` excl. `#1316` into `assets/level2a_tiles.bin`, export/embed `#1316` `level2a_ground.png` + `CollisionMask::level2a()`, separate `Level2A` dynamic objects (`door_01..18`, `elevator_01..03`, `checkpoint_2a_*`, `camera_01..10`, `eagle1`, `goon*`, `health01`, `item_br*`, `halo`), and verify on Windows CI.
+
 ## B18 — COMPLETED / Penguin 1C Boss Defeat, card:escape #1267 Timeline & end-to-2A Handoff (2026-11-13)
 
 **VERIFIED NATIVE WINDOWS REGRESSION.** [Draft, OPEN, UNMERGED PR #50](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/50) on `revive/level2-b18-penguin-escape-card-2026-11-13`, based on B17 docs commit `0d66104`. **Exact Windows-tested code SHA `5064a47`**. Final documentation SHA is the separate later `[skip ci]` commit; this file cannot prestate its own commit ID. Full native Windows [#43395035011](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43395035011) **SUCCESS** (`10m55s`) on exact code SHA.

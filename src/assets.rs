@@ -95,6 +95,14 @@ pub struct CommonAssets {
     pub intro_frames: LazySpriteSet,
     /// 225 original root-frame-22 (`card:escape`, #1267) story samples, loaded lazily.
     pub escape_card_frames: LazySpriteSet,
+    /// 55 Level 1B Family A (`#880`) goon child frames, loaded lazily.
+    pub goon_a_frames: LazySpriteSet,
+    /// 66 Level 1B Family B (`#964`) goon child frames, loaded lazily.
+    pub goon_b_frames: LazySpriteSet,
+    /// 9 Level 1B biker (`#1005`) child frames (`drive: 0..2`, `fall: 2..9`), loaded lazily.
+    pub biker_frames: LazySpriteSet,
+    /// 162 Level 1C Penguin (`#1250`) child frames across all 10 source labels, loaded lazily.
+    pub penguin_frames: LazySpriteSet,
 }
 
 impl CommonAssets {
@@ -128,6 +136,10 @@ impl CommonAssets {
             instructions_screen: decode_png(include_bytes!("../assets/instructions_screen.png")),
             intro_frames: decode_sprite_frames_lazy_expected(include_bytes!("../assets/intro_frames.bin"),1.0,"intro_frames"),
             escape_card_frames: decode_sprite_frames_lazy_expected(include_bytes!("../assets/escape_card_frames.bin"),1.0,"escape_card_frames"),
+            goon_a_frames: decode_sprite_frames_lazy_expected(include_bytes!("../assets/goon_a_frames.bin"),1.0,"goon_a_frames"),
+            goon_b_frames: decode_sprite_frames_lazy_expected(include_bytes!("../assets/goon_b_frames.bin"),1.0,"goon_b_frames"),
+            biker_frames: decode_sprite_frames_lazy_expected(include_bytes!("../assets/biker_frames.bin"),1.0,"biker_frames"),
+            penguin_frames: decode_sprite_frames_lazy_expected(include_bytes!("../assets/penguin_frames.bin"),1.0,"penguin_frames"),
         }
     }
 }
@@ -161,10 +173,21 @@ impl StageAssets {
         }
     }
 
+    pub fn load_level1c() -> Self {
+        Self {
+            stage_id: crate::stage::StageId::Level1C,
+            background: decode_png(include_bytes!("../assets/root_bg_131.png")),
+            tiles: LevelTileSet::new_expected(include_bytes!("../assets/level1c_tiles.bin"),1.0,12,"level1c_tiles"),
+            tiles_hq_base: LevelTileSet::empty(1.0),
+            detail_tiles_hq: LevelTileSet::empty(3.0),
+        }
+    }
+
     pub fn load(stage_id: crate::stage::StageId) -> Self {
         match stage_id {
             crate::stage::StageId::Level1A => Self::load_level1a(),
             crate::stage::StageId::Level1B => Self::load_level1b(),
+            crate::stage::StageId::Level1C => Self::load_level1c(),
             _ => panic!("StageAssets::load: stage {:?} assets not yet embedded", stage_id),
         }
     }
@@ -527,5 +550,25 @@ mod tests{
         assert_eq!(stage_1b.tiles_hq_base.index.len(),0);
         assert!((stage_1b.detail_tiles_hq.logical_pixel_scale-3.0).abs()<0.0001);
         assert_eq!(stage_1b.detail_tiles_hq.index.len(),0);
+    }
+
+    #[test]
+    fn b19_stage_1c_and_enemy_sprite_packs_invariants(){
+        let stage_1c=super::StageAssets::load(crate::stage::StageId::Level1C);
+        assert_eq!(stage_1c.stage_id,crate::stage::StageId::Level1C);
+        assert!((stage_1c.tiles.logical_pixel_scale-1.0).abs()<0.0001);
+        assert_eq!(stage_1c.tiles.index.len(),60);
+        assert_eq!(stage_1c.tiles_hq_base.index.len(),0);
+        assert_eq!(stage_1c.detail_tiles_hq.index.len(),0);
+
+        let mut assets=super::Assets::load();
+        assert_eq!(assets.goon_a_frames.len(),55);
+        assert_eq!(assets.goon_b_frames.len(),66);
+        assert_eq!(assets.biker_frames.len(),9);
+        assert_eq!(assets.penguin_frames.len(),162);
+        assets.load_stage(crate::stage::StageId::Level1B);
+        assert_eq!(assets.stage.stage_id,crate::stage::StageId::Level1B);
+        assets.load_stage(crate::stage::StageId::Level1C);
+        assert_eq!(assets.stage.stage_id,crate::stage::StageId::Level1C);
     }
 }

@@ -1490,3 +1490,12 @@ Tested original source fixed CODE SHA `26dad6e07ef3dc1ca860aa98b4a8ccfb12912f72`
 
 
 
+
+### RE-20261113-025 — B19 Bank Chapter Runtime Packs & Integrated Route Verification
+- **Batch / Branch:** `B19` on `revive/level2-b19-bank-milestone-qa-2026-11-13` (Draft PR #51, code SHA `5b0f42a13f34c57afd1e47977d7b0293fe9dfaa3`)
+- **Source Facts Verified:**
+  - Level 1C (`#1095` excl. `#1094` at `(1485.65, 239.25)`) packs to `60` tiles (`BCLVT001`, zero unsupported fills / missing bitmaps).
+  - Penguin `#1250` (`scale 0.752182`) packs to `162` frames aligned 1:1 with `PENGUIN_LABEL_SPANS` (`0..21..29..38..48..62..72..95..101..122..162`); unflipped artwork faces left (`-x`), mirrored horizontally when `dir >= 0`.
+  - Goons `#880` (`55` frames) and `#964` (`66` frames) at `scale 1.0`, plus Biker `#1005` (`9` frames: `drive 0..2`, `fall 2..9`) at `scale 1.1585846`, face right (`+x`) unflipped and mirror when `dir < 0`.
+  - Root `#154` (`level_title`) is scoped exclusively to `StageId::Level1A`, while root backdrop `#131` + city `#148` render behind `1A`, `1B`, and `1C`.
+  - Integrated Bank route verified end-to-end on Windows CI [#43402438555](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43402438555): `Level1A -> Level1B -> Level1C -> EscapeCard -> Pending(Level2A)` with distinct keyframes and `hq_frame_p95_ms` `26.5505` (`1B`) / `25.1904` (`1C`).

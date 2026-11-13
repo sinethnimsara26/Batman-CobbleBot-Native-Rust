@@ -41,6 +41,16 @@ impl CollisionMask {
         )
     }
 
+    /// Returns the runtime collision mask for the given gameplay stage.
+    pub fn for_stage(stage_id: crate::stage::StageId) -> Self {
+        match stage_id {
+            crate::stage::StageId::Level1A => Self::level1a(),
+            crate::stage::StageId::Level1B => Self::level1b(),
+            crate::stage::StageId::Level1C => Self::level1c(),
+            _ => panic!("CollisionMask::for_stage: stage {:?} collision mask not yet embedded", stage_id),
+        }
+    }
+
     #[inline]
     pub fn solid(&self, x: f32, y: f32) -> bool {
         let px = x.floor() as i32 - self.origin_x;
