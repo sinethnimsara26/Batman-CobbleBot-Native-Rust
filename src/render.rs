@@ -565,13 +565,14 @@ fn draw_world_foreground_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
 
 fn draw_stage_enemies_scaled(fb:&mut RenderSurface,game:&Game,assets:&Assets,pixel_scale:i32){
     match game.active_stage() {
-        crate::stage::StageId::Level1B => {
+        crate::stage::StageId::Level1B | crate::stage::StageId::Level2A => {
             if let Some(squad) = &game.bank_goons {
                 for goon in &squad.goons {
                     if !goon.active || !goon.visible { continue; }
                     let frames = match goon.family {
                         crate::bank_goons::GoonFamily::A => &assets.goon_a_frames,
                         crate::bank_goons::GoonFamily::B => &assets.goon_b_frames,
+                        crate::bank_goons::GoonFamily::LabsC => &assets.labs_goon_frames,
                     };
                     if frames.is_empty() { continue; }
                     let clip = goon.family.child_clip(goon.state);
@@ -592,6 +593,15 @@ fn draw_stage_enemies_scaled(fb:&mut RenderSurface,game:&Game,assets:&Assets,pix
                     draw_lazy_world_sprite(
                         fb,&assets.biker_frames.frame(idx),biker.x,biker.y,game.camera_x,game.camera_y,
                         biker.dir < 0.0,pixel_scale
+                    );
+                }
+            }
+            if !assets.eagle_frames.is_empty() {
+                for eagle in &game.labs_eagles {
+                    let idx = eagle.pack_frame_index().min(assets.eagle_frames.len().saturating_sub(1));
+                    draw_lazy_world_sprite(
+                        fb,&assets.eagle_frames.frame(idx),eagle.x,eagle.y,game.camera_x,game.camera_y,
+                        eagle.dir < 0,pixel_scale
                     );
                 }
             }
@@ -1373,5 +1383,36 @@ mod tests{
         assert!(at_top.pixels != moved.pixels, "moving elevator state.y must shift rendered platform in viewport");
         let hq_non_black = hq_out.pixels.iter().filter(|&&p| (p & 0x00ff_ffff) != 0).count();
         assert!(hq_non_black > 30_000, "HQ Labs 2A elevator view must render cleanly");
+    }
+
+    #[test]
+    fn b24_labs2a_enemies_render_and_flip_in_1x_and_hq3x() {
+        use super::{render, render_high_quality, HQ_H, LOGICAL_H};
+        use crate::assets::Assets;
+        use crate::game::{AppScreen, Game};
+
+        let mut assets = Assets::load();
+        assets.load_stage(crate::stage::StageId::Level2A);
+        let mut game = Game::new();
+        game.start_stage(crate::stage::StageId::Level2A);
+        game.screen = AppScreen::Playing;
+        game.ticks = 45;
+        // Frame goon2 at (1574.85, 2656.35) near viewport center (Flash camera_x = -world_x + screen_x)
+        game.camera_x = 300.0 - 1574.85;
+        game.camera_y = 260.0 - 2656.35;
+
+        let mut right_1x = RenderSurface::new(LOGICAL_W, LOGICAL_H);
+        let mut left_1x = RenderSurface::new(LOGICAL_W, LOGICAL_H);
+        let mut hq_out = RenderSurface::new(HQ_W, HQ_H);
+        let mut hq_scratch = RenderSurface::new(LOGICAL_W, LOGICAL_H);
+
+        render(&mut right_1x, &game, &assets);
+        render_high_quality(&mut hq_scratch, &mut hq_out, &game, &assets);
+        game.bank_goons.as_mut().unwrap().goons[0].dir = -1;
+        render(&mut left_1x, &game, &assets);
+
+        assert!(right_1x.pixels != left_1x.pixels, "flipping Labs goon facing dir must alter rendered silhouette");
+        let hq_non_black = hq_out.pixels.iter().filter(|&&p| (p & 0x00ff_ffff) != 0).count();
+        assert!(hq_non_black > 25_000, "HQ Labs 2A goon scene must render cleanly");
     }
 }

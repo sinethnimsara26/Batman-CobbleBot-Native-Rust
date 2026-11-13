@@ -1,6 +1,7 @@
 use crate::bank_biker::{BankBiker, BikerEvent};
-use crate::bank_goons::{BankGoonSquad, GoonCombatEvent, PlayerCombatContext};
+use crate::bank_goons::{BankGoonSquad, GoonCombatEvent, GoonRng, PlayerCombatContext};
 use crate::collision::CollisionMask;
+use crate::labs_bird::{BirdEvent, LabsEagle};
 use crate::penguin::{
     PenguinBoss, PenguinCombatEvent, PenguinPlayerContext, PenguinPlayerHurtKind, PenguinRng,
     PenguinState, LEVEL1C_PICKUP_POINTS,
@@ -249,6 +250,8 @@ pub struct Game{
     escape_card_sound_stopped:bool,
     pub escape_card_complete:bool,
     pub bank_goons:Option<BankGoonSquad>,
+    pub labs_eagles:Vec<LabsEagle>,
+    pub labs_bird_rng:GoonRng,
     pub bank_biker:Option<BankBiker>,
     pub penguin_boss:Option<PenguinBoss>,
     penguin_rng:PenguinRng,
@@ -295,7 +298,7 @@ impl Game{
             level1b_exit_reached:false,level1b_complete:false,
             level1c_exit_reached:false,level1c_complete:false,
             escape_card_tick:0,escape_card_fadeout_tick:None,escape_card_sound_stopped:false,escape_card_complete:false,
-            bank_goons:None,bank_biker:None,penguin_boss:None,penguin_rng:PenguinRng::new(0x1C00_1250),
+            bank_goons:None,labs_eagles:Vec::new(),labs_bird_rng:GoonRng::new(0x2A00_1393),bank_biker:None,penguin_boss:None,penguin_rng:PenguinRng::new(0x1C00_1250),
             pickups:[false;7],shots:Vec::new(),labs_doors:Vec::new(),labs_elevators:Vec::new(),ticks:0,audio_events:Vec::new(),pit_done:false,respawn_after_fade:false,gameover_after_fade:false,
         }
     }
@@ -370,12 +373,23 @@ impl Game{
                 self.penguin_boss=Some(PenguinBoss::new());
                 self.penguin_rng=PenguinRng::new(0x1C00_1250);
             },
+            StageId::Level2A=>{
+                self.bank_goons=Some(BankGoonSquad::new_labs2a());
+                self.bank_biker=None;
+                self.penguin_boss=None;
+            },
             _=>{
                 self.bank_goons=None;
                 self.bank_biker=None;
                 self.penguin_boss=None;
             }
         }
+        self.labs_eagles=if stage==StageId::Level2A{
+            vec![LabsEagle::from_labs2a(labs2a::EAGLES[0],false)]
+        }else{
+            Vec::new()
+        };
+        self.labs_bird_rng=GoonRng::new(0x2A00_1393);
         self.labs_doors=if stage==StageId::Level2A{
             vec![LabsDoorState::default();crate::stage::labs2a::DOORS.len()]
         }else{
@@ -663,7 +677,7 @@ impl Game{
         self.process_jump_and_glide(input);
 
         match self.stage {
-            StageId::Level1B => self.tick_level1b_enemies(ground),
+            StageId::Level1B | StageId::Level2A => self.tick_stage_enemies(ground),
             StageId::Level1C => self.tick_level1c_boss(ground),
             _ => {}
         }
@@ -1087,7 +1101,7 @@ impl Game{
         }
     }
 
-    fn tick_level1b_enemies(&mut self, ground: &CollisionMask) {
+    fn tick_stage_enemies(&mut self, ground: &CollisionMask) {
         let player_x_game = self.player.x + self.level_origin_x();
         let player_y_game = self.player.y + self.level_origin_y();
         let is_hurt = matches!(self.player.state, PlayerState::Hurt | PlayerState::Hurt2) || self.fadeout_tick.is_some();
@@ -1101,16 +1115,21 @@ impl Game{
             state_name,
         };
 
+        let batarangs: Vec<(f32, f32)> = self.shots.iter().map(|s| (s.x, s.y)).collect();
         let mut goon_events = Vec::new();
         if let Some(squad) = &mut self.bank_goons {
-            let batarangs: Vec<(f32, f32)> = self.shots.iter().map(|s| (s.x, s.y)).collect();
             squad.tick_combat(&player_ctx, &batarangs, ground, &mut goon_events);
         }
 
         let mut biker_events = Vec::new();
         if let Some(biker) = &mut self.bank_biker {
-            let batarangs: Vec<(f32, f32, bool)> = self.shots.iter().map(|s| (s.x, s.y, true)).collect();
-            biker.tick(player_x_game, player_y_game, self.player_attacking, is_hurt, &batarangs, &mut biker_events);
+            let biker_bats: Vec<(f32, f32, bool)> = batarangs.iter().map(|&(x, y)| (x, y, true)).collect();
+            biker.tick(player_x_game, player_y_game, self.player_attacking, is_hurt, &biker_bats, &mut biker_events);
+        }
+
+        let mut bird_events = Vec::new();
+        for eagle in &mut self.labs_eagles {
+            eagle.tick(&player_ctx, &batarangs, &mut self.labs_bird_rng, &mut bird_events);
         }
 
         for ev in goon_events {
@@ -1142,6 +1161,18 @@ impl Game{
                     self.score += pts as i32;
                 }
                 _ => {}
+            }
+        }
+
+        for ev in bird_events {
+            match ev {
+                BirdEvent::PlayerHurt { damage } => {
+                    self.apply_player_damage(damage);
+                }
+                BirdEvent::Score(pts) => {
+                    self.score += pts as i32;
+                }
+                BirdEvent::EagleSfx | BirdEvent::KickSfx => {}
             }
         }
     }
@@ -2569,5 +2600,64 @@ mod b23_labs2a_elevator_tests {
         up_game.tick(&mut jump, &open_air);
         assert!(!up_game.on_platform);
         assert!((up_game.player.dy - (-36.0 + (-12.0) / 3.0)).abs() < 0.01);
+    }
+}
+
+#[cfg(test)]
+mod b24_labs2a_enemies_tests {
+    use super::*;
+    use crate::bank_goons::{GoonFamily, GoonState};
+    use crate::collision::CollisionMask;
+    use crate::labs_bird::BirdState;
+    use crate::stage::{labs2a, StageId};
+
+    #[test]
+    fn labs2a_initializes_9_goons_1365_and_inert_eagle1_with_stage_collision() {
+        let ground = CollisionMask::for_stage(StageId::Level2A);
+        let mut game = Game::new();
+        game.start_stage(StageId::Level2A);
+        game.screen = AppScreen::Playing;
+
+        let squad = game.bank_goons.as_ref().expect("Labs 2A must spawn 9 goons");
+        assert_eq!(squad.goons.len(), 9);
+        assert!(!squad.enable_wave2_respawn);
+        for (idx, goon) in squad.goons.iter().enumerate() {
+            assert_eq!(goon.family, GoonFamily::LabsC);
+            assert_eq!(goon.stage_id, StageId::Level2A);
+            assert_eq!((goon.health, goon.strength, goon.dir), (70, 10, 1));
+            assert!((goon.speed - 6.0).abs() < 0.01);
+            assert!((goon.scale - labs2a::GOONS[idx].sx).abs() < 1e-4);
+        }
+
+        assert_eq!(game.labs_eagles.len(), 1);
+        let eagle = &game.labs_eagles[0];
+        assert!(!eagle.ai_attached);
+        assert_eq!(eagle.state, BirdState::Fly);
+        assert_eq!((eagle.x, eagle.y), (1388.0, -163.8));
+
+        // Position Batman next to goon2 (1574.85, 2656.35) at range=74.85 (>=50) and verify combat + zero wave2 respawn
+        game.player.x = 1500.0 - game.level_origin_x();
+        game.player.y = (2656.35 - 75.0) - game.level_origin_y();
+        game.player.jumping = false;
+        game.player.on_ground = true;
+
+        let mut neutral = InputState::default();
+        game.tick(&mut neutral, &ground);
+        assert_eq!(game.bank_goons.as_ref().unwrap().goons[0].state, GoonState::Stand);
+
+        // Defeat goon2 with batarang shots (`5` dmg x 14 = 70 HP; tick_stage_enemies runs before update_shots)
+        for _ in 0..14 {
+            let g0 = game.bank_goons.as_ref().unwrap().goons[0].clone();
+            game.bank_goons.as_mut().unwrap().goons[0].set_state(GoonState::Stand);
+            game.shots.clear();
+            game.shots.push(Shot { x: g0.x, y: g0.y - 30.0, dir: 1 });
+            game.tick(&mut neutral, &ground);
+        }
+        let g0_after = &game.bank_goons.as_ref().unwrap().goons[0];
+        assert_eq!(g0_after.state, GoonState::Die);
+        assert_eq!(g0_after.health, 0);
+        assert!(game.score >= 100);
+        assert!(!game.bank_goons.as_ref().unwrap().is_wave2_active());
+        assert!(game.fadeout_tick.is_none());
     }
 }

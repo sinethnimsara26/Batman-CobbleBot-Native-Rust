@@ -107,6 +107,10 @@ pub struct CommonAssets {
     pub door_frames: LazySpriteSet,
     /// 2 Labs 2A/2B elevator platform sprites (`#1328` -> `0`, `#1330` -> `1`).
     pub elevator_frames: LazySpriteSet,
+    /// 69 Labs 2A/2B goon (`#1365`) child frames across all 9 source labels, loaded lazily.
+    pub labs_goon_frames: LazySpriteSet,
+    /// 41 Labs eagle (`#1393`) child frames across all 5 source labels, loaded lazily.
+    pub eagle_frames: LazySpriteSet,
 }
 
 impl CommonAssets {
@@ -146,6 +150,8 @@ impl CommonAssets {
             penguin_frames: decode_sprite_frames_lazy_expected(include_bytes!("../assets/penguin_frames.bin"),1.0,"penguin_frames"),
             door_frames: decode_sprite_frames_lazy_expected(include_bytes!("../assets/door_frames.bin"),1.0,"door_frames"),
             elevator_frames: decode_sprite_frames_lazy_expected(include_bytes!("../assets/elevator_frames.bin"),1.0,"elevator_frames"),
+            labs_goon_frames: decode_sprite_frames_lazy_expected(include_bytes!("../assets/labs_goon_frames.bin"),1.0,"labs_goon_frames"),
+            eagle_frames: decode_sprite_frames_lazy_expected(include_bytes!("../assets/eagle_frames.bin"),1.0,"eagle_frames"),
         }
     }
 }
@@ -585,6 +591,8 @@ mod tests{
         assert_eq!(assets.penguin_frames.len(),162);
         assert_eq!(assets.door_frames.len(),23);
         assert_eq!(assets.elevator_frames.len(),2);
+        assert_eq!(assets.labs_goon_frames.len(),69);
+        assert_eq!(assets.eagle_frames.len(),41);
         assets.load_stage(crate::stage::StageId::Level1B);
         assert_eq!(assets.stage.stage_id,crate::stage::StageId::Level1B);
         assets.load_stage(crate::stage::StageId::Level1C);
