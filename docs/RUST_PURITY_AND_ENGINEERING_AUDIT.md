@@ -1169,3 +1169,23 @@ Do not erase two historical CI failures: documentation-only #42834460076 and ini
   - **ORIGINAL-GAME FIDELITY:** VERIFIED FOR TESTED SCOPE (Level 1A/1B regressions completely preserved; `#1250` outer frames, HQ3× label starts, 162 true child frames, child `DoAction` hooks, and grandchild FX/#1192 `hitBox` verified verbatim against canonical SWF).
   - **HARDWARE SPEAKER AUDIO:** BLOCKED (`BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT`, unchanged).
 
+
+## AUD-20261113-022 — Independent post-code Rust purity/engineering audit of Batch B16 (penguinAI Movement, Dodge, Block, Facing & Approach)
+
+- **Audit Date:** 2026-11-13
+- **Scope:** `src/penguin.rs`, `.github/workflows/build-level1a-fidelity.yml`.
+- **Code SHA:** `8ce03ca` on branch `revive/level2-b16-penguin-ai-2026-11-12` (PR #48).
+- **Actual Changed Code and Engineering Review:**
+  1. Pure-Rust dormant Level 1C Penguin AI state machine (`src/penguin.rs`):
+     - Adds Level 1C camera/dodge/gravity constants (`PENGUIN_CAM_*`, `PENGUIN_DODGE_*`, `PENGUIN_GLOBAL_GRAVITY`) directly from Level 1C root DoAction and `penguinAI`.
+     - Adds `PenguinRng` (zero-allocation XorShift64*), `PenguinBatarangOutcome`, `check_penguin_wall` (wrapping `CollisionMask::level1c()` + `level1c_game_to_level`), and `PenguinBoss` (`new()`, `stength` typo field + `strength()` accessor, `facing_scale_x()`, `set_state()`, `face_x()`, `step_child_frame()`, `evaluate_batarang()`, `tick_noncombat()`).
+     - Adds 5 source-step behavioral unit tests verifying root22 stats, `range` facing/`attack2` quota/flee flip, arena `0..2300` boundary bounce and parabolic `dodge` arc, inner `2100`/`100` wall guards and 30% Y-settle, deterministic `PenguinRng` block threshold (`rand * 5.0 > 2.0`), and `CollisionMask::level1c()` wall checks. Total Rust tests increased from 88 to 93 with zero compiler warnings in `src/penguin.rs`.
+     - Leaves Level 1A/1B execution paths (`src/game.rs`, `src/render.rs`, `src/assets.rs`) completely untouched.
+  2. CI execution confirmed on GitHub Actions run [#43387097167](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43387097167) (`build-level1a-fidelity` SUCCESS): `93/93` tests passed in `0.80s`, render p95 `28.4254ms`, scenery scroll p95 `26.5765ms` (< 40ms gate), 20/20 relocated standalone EXE HQ hashes identical, child exit 0.
+- **Verdicts:**
+  - **PURE-RUST RUNTIME COMPLIANCE:** PASS (with existing direct Win32/GDI/WinMM OS FFI qualifications). Zero new crates, zero unsafe blocks, zero heap allocations per tick.
+  - **ENGINEERING QUALITY:** PASS (shallow-nested `match` on `PenguinState` & `PenguinChildAction`, exact AVM1 branch ordering, deterministic seeded RNG, clean separation from B17 combat/scoring).
+  - **ORIGINAL-GAME FIDELITY:** VERIFIED FOR TESTED SCOPE (Level 1A/1B regressions completely preserved; `penguinAI` movement, boundary dodge bounce, inner guards, batarang block probability, range rules, child terminal hooks, and Level 1C camera config verified verbatim against `cobblebot.swf` bytecode).
+  - **HARDWARE SPEAKER AUDIO:** BLOCKED (`BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT`, unchanged).
+
+

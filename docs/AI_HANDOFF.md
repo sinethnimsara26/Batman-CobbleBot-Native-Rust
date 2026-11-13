@@ -1,6 +1,15 @@
 # AI handoff — current recovery checkpoint
 
 
+## FINAL VERIFIED — B16 penguinAI Movement, Dodge, Block, Facing & Approach; STOP (2026-11-13)
+
+- **Live recovery:** feature branch `revive/level2-b16-penguin-ai-2026-11-12`, draft [PR #48](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/48) OPEN/UNMERGED based on previous B15 docs commit `07fd792`. **TESTED CODE SHA `8ce03ca`**; **separate final docs SHA is the subsequent documentation-only branch HEAD, inspect GitHub after push**. Do not treat docs SHA as Windows-tested implementation.
+- **NATIVE WINDOWS PASS:** exact-code [#43387097167](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43387097167) **SUCCESS** (`11m28s`), `cargo test --release --locked` **93/93 tests passed in 0.80s**, Cargo lock unchanged, relocated independent installed EXE **20/20 HQ hashes identical**, exit 0, no source SWF staged. Render p95 **28.4254ms**/scenery scroll **26.5765ms** vs <40ms unchanged. Audio/focus reports `BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT`; original Flash-player runtime fidelity UNVERIFIED.
+- **Scoped code/workflow paths:** `src/penguin.rs` adds Level 1C `cameraLogic`/dodge constants, `PenguinRng`, `PenguinBatarangOutcome`, `check_penguin_wall`, and `PenguinBoss` (`new()`, `strength()`, `step_child_frame()`, `evaluate_batarang()`, `tick_noncombat()`) + 5 unit tests (88→93); `.github/workflows/build-level1a-fidelity.yml` (branch trigger).
+- **All mandatory records:** AGENTS and both protocols READ/unchanged; AI_TASKS, AI_HANDOFF, AI_WORKLOG, RE research **RE-20261113-022**, post-change Rust engineering audit **AUD-20261113-022** updated. Native Rust runtime purity PASS with pre-existing platform FFI qualifiers. Protected `main`, frozen Level1A release SHA `49e8fd343e4f37f045ba71f24fff0999211f0f11`, earlier draft PRs unchanged; PR48 stays DRAFT/OPEN/UNMERGED.
+- **STOP. Exactly ONE NEXT independently authorized batch: B17 Penguin `attack`/`attack2`/`laser`, Batman hit response, boss HP/knockdowns and `+500` scoring (`src/penguin.rs`)**; do NOT merge or release.
+
+
 ## FINAL VERIFIED — B15 Level 1C Penguin #1250 99-Frame Outer Timeline, 162 True Child Frames & Attack FX; STOP (2026-11-13)
 
 - **Live recovery:** feature branch `revive/level2-b15-penguin-sprites-2026-11-12`, draft [PR #47](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/47) OPEN/UNMERGED based on previous B14 docs commit `c50de8c`. **TESTED CODE SHA `0f12090`**; **separate final docs SHA is the subsequent documentation-only branch HEAD, inspect GitHub after push**. Do not treat docs SHA as Windows-tested implementation.

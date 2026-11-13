@@ -1,10 +1,14 @@
-//! Batches B14-B15: Level 1C Penguin (`boss` / `#1250`) source-backed metadata, pickup layout,
-//! 99-frame outer timeline, 162-frame true nested child timelines, and attack FX geometry.
+//! Batches B14-B16: Level 1C Penguin (`boss` / `#1250`) source-backed metadata, pickup layout,
+//! 99-frame outer timeline, 162-frame true nested child timelines, attack FX geometry,
+//! and source-faithful `penguinAI` movement, dodge, block, facing, and approach AI.
 //!
-//! Dormant metadata extracted verbatim from canonical `cobblebot.swf` (`root` frame 21,
+//! Dormant runtime extracted verbatim from canonical `cobblebot.swf` (`root` frame 21/22,
 //! `#1251` `game`, `#1250` `boss`, `#1103..#1249` child clips, and `penguinAI`). Live gameplay
-//! and Level 1C switching remain gated for later batches (B16-B18).
+//! combat/laser scoring (B17) and Level 1C switching/escape card (B18) remain gated for next batches.
 
+#![allow(dead_code)]
+
+use crate::collision::CollisionMask;
 use crate::stage::{GamePos, StageId};
 
 pub const PENGUIN_GAME_SYMBOL: u16 = 1251;
@@ -31,13 +35,29 @@ pub const PENGUIN_INITIAL_SCALE_Y: f32 = 0.7521820068359375;
 
 pub const PENGUIN_HEALTH: i32 = 200;
 pub const PENGUIN_SPEED: f32 = 6.0;
-/// Source `root` frame 21 ActionScript assigns `_root.stength = 5` (original spelling).
+/// Source `root` Level 1C ActionScript assigns `boss.stength = 5` (original spelling typo).
 pub const PENGUIN_STRENGTH: i32 = 5;
 pub const PENGUIN_ENEMY_WIDTH: f32 = 50.0;
 pub const PENGUIN_ENEMY_HEIGHT: f32 = 50.0;
 pub const PENGUIN_KILL_SCORE: i32 = 500;
 pub const PENGUIN_ARENA_MIN_X: f32 = 0.0;
 pub const PENGUIN_ARENA_MAX_X: f32 = 2300.0;
+pub const PENGUIN_DODGE_WALL_RIGHT_X: f32 = 2100.0;
+pub const PENGUIN_DODGE_WALL_LEFT_X: f32 = 100.0;
+pub const PENGUIN_DODGE_INITIAL_DY: f32 = -12.0;
+pub const PENGUIN_DODGE_VX: f32 = 15.0;
+pub const PENGUIN_DODGE_MAX_TICKS: u16 = 20;
+pub const PENGUIN_GLOBAL_GRAVITY: f32 = 5.0;
+
+/// Level 1C root camera & scroll setup (`_root.game.onEnterFrame = _global.cameraLogic`).
+pub const PENGUIN_CAM_DELAY: f32 = 0.0;
+pub const PENGUIN_CAM_HEIGHT: f32 = 270.0;
+pub const PENGUIN_CAM_JUMP: f32 = 4.0;
+pub const PENGUIN_CAM_MIN_X: f32 = 250.0;
+pub const PENGUIN_CAM_MAX_X: f32 = 2150.0;
+pub const PENGUIN_CAM_OFFSET: f32 = 0.0;
+pub const PENGUIN_CAM_ZOOM: f32 = 100.0;
+pub const PENGUIN_BG_SCROLL: f32 = 6.0;
 
 pub const PENGUIN_PICKUP_SYMBOL: u16 = 695;
 pub const PENGUIN_PICKUP_SCALE: f32 = 1.1306915283203125;
@@ -524,6 +544,385 @@ pub fn level1c_game_to_level(pos: GamePos) -> crate::stage::LevelPos {
     StageId::Level1C.descriptor().to_level_pos(pos)
 }
 
+/// Checks Level 1C ground/wall mask using original Flash AVM1 `checkWall(character, height, dx)`:
+/// `level.ground.hitTest(char._x + game._x + dx, char._y + height / 2 + game._y, true)`.
+pub fn check_penguin_wall(
+    collision: &CollisionMask,
+    x_game: f32,
+    y_game: f32,
+    height: f32,
+    dx: f32,
+) -> bool {
+    let test_pos = level1c_game_to_level(GamePos::new(x_game + dx, y_game + height * 0.5));
+    collision.solid_level_pos(test_pos)
+}
+
+/// Deterministic XorShift64* PRNG mirroring `GoonRng` for source `Math.random()` / `random(n)` parity.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PenguinRng {
+    pub state: u64,
+}
+
+impl PenguinRng {
+    pub const fn new(seed: u64) -> Self {
+        Self {
+            state: if seed == 0 { 0x853c49e6748fea9b } else { seed },
+        }
+    }
+
+    #[inline]
+    pub fn next_f32(&mut self) -> f32 {
+        self.state ^= self.state >> 12;
+        self.state ^= self.state << 25;
+        self.state ^= self.state >> 27;
+        let x = self.state.wrapping_mul(0x2545F4914F6CDD1D);
+        let v = (x >> 40) as u32;
+        (v as f32) / 16777216.0_f32
+    }
+}
+
+impl Default for PenguinRng {
+    fn default() -> Self {
+        Self::new(0x1337_BCB1_C0BB)
+    }
+}
+
+/// Outcome returned when evaluating incoming batarang collision against Penguin (`penguinAI`).
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PenguinBatarangOutcome {
+    None,
+    Blocked,
+    Hurt,
+}
+
+/// Source-faithful Level 1C Penguin boss state (`_root.game.boss`, `#1250`, `_global.penguinAI`).
+#[derive(Clone, Debug, PartialEq)]
+pub struct PenguinBoss {
+    pub x: f32,
+    pub y: f32,
+    pub enemy_y: f32,
+    pub dy: f32,
+    pub dir: i8,
+    pub speed: f32,
+    pub health: i32,
+    pub max_health: i32,
+    /// Original root ActionScript initializes `boss.stength = 5` (missing `r`).
+    pub stength: i32,
+    pub enemy_width: f32,
+    pub enemy_height: f32,
+    pub jumping: bool,
+    pub range: f32,
+    pub attack_count: u8,
+    pub fall_count: u16,
+    pub state: PenguinState,
+    pub child_frame: u16,
+    pub done: bool,
+    pub bammed: bool,
+    pub active: bool,
+}
+
+impl Default for PenguinBoss {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl PenguinBoss {
+    /// Initializes Penguin from exact Level 1C root timeline setup (`health = 200`,
+    /// `speed = 6`, `stength = 5`, `dir = 1`, `state = Stand`, `enemy_y = 316.2`).
+    pub fn new() -> Self {
+        Self {
+            x: PENGUIN_INITIAL_POS.x,
+            y: PENGUIN_INITIAL_POS.y,
+            enemy_y: PENGUIN_INITIAL_POS.y,
+            dy: 0.0,
+            dir: 1,
+            speed: PENGUIN_SPEED,
+            health: PENGUIN_HEALTH,
+            max_health: PENGUIN_HEALTH,
+            stength: PENGUIN_STRENGTH,
+            enemy_width: PENGUIN_ENEMY_WIDTH,
+            enemy_height: PENGUIN_ENEMY_HEIGHT,
+            jumping: false,
+            range: 0.0,
+            attack_count: 0,
+            fall_count: 0,
+            state: PenguinState::Stand,
+            child_frame: 0,
+            done: false,
+            bammed: false,
+            active: true,
+        }
+    }
+
+    /// Canonical melee/laser strength alias reading the source `stength` field.
+    #[inline]
+    pub const fn strength(&self) -> i32 {
+        self.stength
+    }
+
+    #[inline]
+    pub fn game_pos(&self) -> GamePos {
+        GamePos::new(self.x, self.y)
+    }
+
+    #[inline]
+    pub fn level_pos(&self) -> crate::stage::LevelPos {
+        level1c_game_to_level(self.game_pos())
+    }
+
+    /// Current `_xscale = dir * Math.abs(_xscale)` applied every alive `penguinAI` frame.
+    #[inline]
+    pub fn facing_scale_x(&self) -> f32 {
+        (self.dir as f32) * PENGUIN_INITIAL_SCALE_X.abs()
+    }
+
+    /// Sets boss state and rewinds `child_frame` to 0 when transitioning states.
+    #[inline]
+    pub fn set_state(&mut self, new_state: PenguinState) {
+        if self.state != new_state {
+            self.state = new_state;
+            self.child_frame = 0;
+        }
+    }
+
+    #[inline]
+    pub fn face_x(&mut self, target_x: f32) {
+        if self.x > target_x {
+            self.dir = -1;
+        } else if self.x < target_x {
+            self.dir = 1;
+        }
+    }
+
+    /// Advances nested child sprite frame according to `#1250` (`#1115..#1249`) child DoActions.
+    pub fn step_child_frame(&mut self, player_state: &str, rng: &mut PenguinRng) {
+        let clip = penguin_clip_for_state(self.state);
+        if self.state == PenguinState::Attack2
+            && self.child_frame == PENGUIN_LASER_ELECTRO_HOLD_LOCAL_FRAME
+            && player_state == "electro"
+        {
+            self.child_frame = PENGUIN_LASER_ELECTRO_HOLD_LOCAL_FRAME.saturating_sub(1);
+            return;
+        }
+
+        if self.child_frame + 1 < clip.child_frames {
+            self.child_frame += 1;
+            return;
+        }
+
+        match clip.terminal_action {
+            PenguinChildAction::Loop => {
+                self.child_frame = 0;
+            }
+            PenguinChildAction::Stop => {
+                self.child_frame = clip.child_frames.saturating_sub(1);
+            }
+            PenguinChildAction::SetParentStand => {
+                self.set_state(PenguinState::Stand);
+            }
+            PenguinChildAction::TransitionToDodge { dy }
+            | PenguinChildAction::RecoverToDodge { dy } => {
+                self.set_state(PenguinState::Dodge);
+                self.dy = dy;
+                self.fall_count = 0;
+            }
+            PenguinChildAction::RandomStandOrAttack {
+                rand_modulus,
+                stand_if_greater_than,
+            } => {
+                let roll = (rng.next_f32() * (rand_modulus as f32)) as u8;
+                if roll > stand_if_greater_than {
+                    self.set_state(PenguinState::Stand);
+                } else {
+                    self.set_state(PenguinState::Attack);
+                    self.fall_count = 0;
+                }
+            }
+        }
+    }
+
+    /// Evaluates batarang overlap during `penguinAI`: blocks if `rng * 5.0 > 2.0` (`60%`),
+    /// otherwise flags `Hurt` (`false` combat branch wired in B17).
+    pub fn evaluate_batarang(
+        &mut self,
+        player_x: f32,
+        batarangs: &[(f32, f32)],
+        rng: &mut PenguinRng,
+    ) -> PenguinBatarangOutcome {
+        if self.health <= 0 {
+            return PenguinBatarangOutcome::None;
+        }
+        let hit = batarangs.iter().any(|&(bx, by)| {
+            (bx - self.x).abs() <= 25.0 && by >= self.y - 75.0 && by <= self.y + 10.0
+        });
+        if !hit
+            || matches!(
+                self.state,
+                PenguinState::Hurt
+                    | PenguinState::Fall
+                    | PenguinState::Block
+                    | PenguinState::Dodge
+            )
+        {
+            return PenguinBatarangOutcome::None;
+        }
+
+        self.face_x(player_x);
+        if rng.next_f32() * 5.0 > 2.0 {
+            self.set_state(PenguinState::Block);
+            PenguinBatarangOutcome::Blocked
+        } else {
+            PenguinBatarangOutcome::Hurt
+        }
+    }
+
+    /// Executes `penguinAI` boundary clamp, Y settle, range/facing logic, state physics
+    /// (`Walk`, `Dodge`, `Hurt`, `Fall`), optional batarang block, and approach `Walk` transition.
+    pub fn tick_noncombat(
+        &mut self,
+        player_x: f32,
+        player_dir: i8,
+        player_state: &str,
+        batarangs: &[(f32, f32)],
+        collision: &CollisionMask,
+        rng: &mut PenguinRng,
+    ) -> PenguinBatarangOutcome {
+        if !self.active || self.health <= 0 {
+            return PenguinBatarangOutcome::None;
+        }
+
+        // 1. Arena X-clamp boundary bounce (`0..2300` -> dodge back inside with dy = -12)
+        if self.x > PENGUIN_ARENA_MAX_X {
+            self.dir = 1;
+            self.set_state(PenguinState::Dodge);
+            self.dy = PENGUIN_DODGE_INITIAL_DY;
+        } else if self.x < PENGUIN_ARENA_MIN_X {
+            self.dir = -1;
+            self.set_state(PenguinState::Dodge);
+            self.dy = PENGUIN_DODGE_INITIAL_DY;
+        }
+
+        // 2. Smooth vertical settle toward `enemy_y` whenever not dodging
+        if self.state != PenguinState::Dodge {
+            let diff = self.y - self.enemy_y;
+            if diff.abs() > 5.0 {
+                self.y -= diff * 0.3;
+            } else {
+                self.y = self.enemy_y;
+            }
+        }
+
+        // 3. Distance range calculation, facing, mid-range laser trigger, and close flee flip
+        self.range = (self.x - player_x).abs();
+        if self.range > 180.0 && self.range < 320.0 {
+            if self.state != PenguinState::Dodge {
+                self.face_x(player_x);
+                if self.attack_count < 3
+                    && !matches!(
+                        self.state,
+                        PenguinState::Attack2
+                            | PenguinState::Hurt
+                            | PenguinState::Fall
+                            | PenguinState::Dodge
+                            | PenguinState::Block
+                    )
+                {
+                    self.set_state(PenguinState::Attack2);
+                    self.attack_count += 1;
+                }
+            }
+        } else if self.range < 180.0
+            && ((self.dir == 1 && player_dir == 1 && self.x > player_x)
+                || (self.dir == -1 && player_dir == -1 && self.x < player_x))
+        {
+            self.dir = -self.dir;
+        }
+
+        if self.range > 360.0 {
+            self.face_x(player_x);
+            self.attack_count = 0;
+        }
+
+        // 4. Per-state physics
+        let dir_f = self.dir as f32;
+        match self.state {
+            PenguinState::Walk => {
+                let dx = self.speed * dir_f;
+                if !check_penguin_wall(collision, self.x, self.y, -50.0, dx) {
+                    self.x += dx;
+                }
+            }
+            PenguinState::Dodge => {
+                if self.y <= self.enemy_y {
+                    self.y += self.dy;
+                    self.dy += PENGUIN_GLOBAL_GRAVITY;
+                    if self.x > PENGUIN_DODGE_WALL_RIGHT_X {
+                        self.dir = 1;
+                        self.x -= PENGUIN_DODGE_VX * (self.dir as f32);
+                    } else if self.x < PENGUIN_DODGE_WALL_LEFT_X {
+                        self.dir = -1;
+                        self.x -= PENGUIN_DODGE_VX * (self.dir as f32);
+                    } else if !check_penguin_wall(
+                        collision,
+                        self.x,
+                        self.y,
+                        -50.0,
+                        -self.speed * dir_f,
+                    ) {
+                        self.x -= PENGUIN_DODGE_VX * dir_f;
+                    }
+                } else {
+                    self.dy = 0.0;
+                    self.y = self.enemy_y;
+                    self.set_state(PenguinState::Stand);
+                }
+                self.fall_count += 1;
+                if self.fall_count >= PENGUIN_DODGE_MAX_TICKS {
+                    self.dy = 0.0;
+                    self.y = self.enemy_y;
+                    self.set_state(PenguinState::Stand);
+                }
+            }
+            PenguinState::Hurt => {
+                if !check_penguin_wall(collision, self.x, self.y, -50.0, self.speed * dir_f) {
+                    self.x -= 6.0 * dir_f;
+                }
+            }
+            PenguinState::Fall => {
+                if self.fall_count < 6 {
+                    if !check_penguin_wall(collision, self.x, self.y, -50.0, self.speed * dir_f) {
+                        self.x -= 6.0 * dir_f;
+                    }
+                    self.fall_count += 1;
+                }
+            }
+            _ => {}
+        }
+
+        // 5. Batarang block check
+        let bat_outcome = self.evaluate_batarang(player_x, batarangs, rng);
+
+        // 6. Approach walk fallback when not busy (`!checkWall(this, enemyHeight)`)
+        if !check_penguin_wall(collision, self.x, self.y, self.enemy_height, 0.0)
+            && !matches!(
+                self.state,
+                PenguinState::Dodge
+                    | PenguinState::Block
+                    | PenguinState::Attack
+                    | PenguinState::Attack2
+                    | PenguinState::Hurt
+                    | PenguinState::Fall
+            )
+        {
+            self.set_state(PenguinState::Walk);
+        }
+
+        self.step_child_frame(player_state, rng);
+        bat_outcome
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -667,5 +1066,202 @@ mod tests {
         assert!((boss_lvl.y - (316.2 - 239.25)).abs() < 0.05);
         assert!((player_lvl.x - (122.05 - 1485.65)).abs() < 0.05);
         assert!((player_lvl.y - (281.25 - 239.25)).abs() < 0.05);
+    }
+
+    #[test]
+    fn penguin_boss_init_defaults_preserve_200hp_speed6_camera_and_stength_typo() {
+        let boss = PenguinBoss::new();
+        assert_eq!(boss.health, 200);
+        assert_eq!(boss.max_health, 200);
+        assert_eq!(boss.speed, 6.0);
+        assert_eq!(boss.stength, 5);
+        assert_eq!(boss.strength(), 5);
+        assert_eq!(boss.dir, 1);
+        assert_eq!(boss.state, PenguinState::Stand);
+        assert!((boss.enemy_y - 316.2).abs() < 1e-4);
+        assert_eq!(boss.enemy_width, 50.0);
+        assert_eq!(boss.enemy_height, 50.0);
+        assert_eq!(boss.attack_count, 0);
+        assert_eq!(boss.fall_count, 0);
+        assert_eq!(PENGUIN_CAM_MIN_X, 250.0);
+        assert_eq!(PENGUIN_CAM_MAX_X, 2150.0);
+        assert_eq!(PENGUIN_CAM_HEIGHT, 270.0);
+        assert_eq!(PENGUIN_CAM_JUMP, 4.0);
+        assert_eq!(PENGUIN_GLOBAL_GRAVITY, 5.0);
+        assert!(boss.facing_scale_x() > 0.0);
+    }
+
+    #[test]
+    fn penguin_range_facing_attack2_quota_and_close_flee_flip() {
+        let mask = CollisionMask::level1c();
+        let mut rng = PenguinRng::new(0xBEEF_1C01);
+        let mut boss = PenguinBoss::new();
+        boss.attack_count = 3;
+
+        // Far range (> 360) faces player and resets attack_count to 0, then approaches in Walk.
+        boss.tick_noncombat(200.0, 1, "stand", &[], &mask, &mut rng);
+        assert_eq!(boss.dir, -1);
+        assert_eq!(boss.attack_count, 0);
+        assert_eq!(boss.state, PenguinState::Walk);
+        assert!((boss.facing_scale_x() - (-PENGUIN_INITIAL_SCALE_X.abs())).abs() < 1e-5);
+
+        // Mid-range (180 < range < 320) enters Attack2 up to attack_count < 3.
+        for expected_count in 1..=3u8 {
+            boss.set_state(PenguinState::Stand);
+            boss.x = 1000.0;
+            boss.tick_noncombat(750.0, 1, "stand", &[], &mask, &mut rng);
+            assert_eq!(boss.state, PenguinState::Attack2);
+            assert_eq!(boss.attack_count, expected_count);
+            assert_eq!(boss.dir, -1);
+        }
+
+        // 4th entry in mid-range does NOT trigger Attack2 while attack_count == 3.
+        boss.set_state(PenguinState::Stand);
+        boss.x = 1000.0;
+        boss.tick_noncombat(750.0, 1, "stand", &[], &mask, &mut rng);
+        assert_eq!(boss.state, PenguinState::Walk);
+        assert_eq!(boss.attack_count, 3);
+
+        // Close range (< 180) with boss facing away in player's direction flips dir to face player.
+        boss.set_state(PenguinState::Stand);
+        boss.dir = 1;
+        boss.x = 900.0;
+        boss.tick_noncombat(800.0, 1, "stand", &[], &mask, &mut rng);
+        assert_eq!(boss.dir, -1);
+
+        // Symmetric check for dir == -1, player_dir == -1, boss.x < player.x.
+        boss.set_state(PenguinState::Stand);
+        boss.dir = -1;
+        boss.x = 700.0;
+        boss.tick_noncombat(800.0, -1, "stand", &[], &mask, &mut rng);
+        assert_eq!(boss.dir, 1);
+    }
+
+    #[test]
+    fn penguin_arena_boundary_bounce_and_dodge_parabolic_arc() {
+        let mask = CollisionMask::level1c();
+        let mut rng = PenguinRng::new(0xD0D6_E001);
+        let mut boss = PenguinBoss::new();
+
+        // Exceeding right arena bound (2300) triggers Dodge left (-15 * dir with dir = 1, dy = -12).
+        boss.x = 2310.0;
+        boss.tick_noncombat(200.0, 1, "stand", &[], &mask, &mut rng);
+        assert_eq!(boss.dir, 1);
+        assert_eq!(boss.state, PenguinState::Dodge);
+        assert!((boss.x - 2295.0).abs() < 1e-4);
+        assert!((boss.y - (boss.enemy_y - 12.0)).abs() < 1e-4);
+        assert!((boss.dy - (-7.0)).abs() < 1e-4);
+
+        // Step parabolic arc to landing back past enemy_y -> returns to Stand (then approaches).
+        for _ in 0..8 {
+            if boss.state != PenguinState::Dodge {
+                break;
+            }
+            boss.tick_noncombat(200.0, 1, "stand", &[], &mask, &mut rng);
+        }
+        assert!(boss.x < 2280.0);
+        assert!((boss.y - boss.enemy_y).abs() < 1e-4);
+
+        // Crossing below left arena bound (0.0) triggers Dodge right (-15 * dir with dir = -1).
+        boss.set_state(PenguinState::Stand);
+        boss.fall_count = 0;
+        boss.x = -5.0;
+        boss.tick_noncombat(1500.0, -1, "stand", &[], &mask, &mut rng);
+        assert_eq!(boss.dir, -1);
+        assert_eq!(boss.state, PenguinState::Dodge);
+        assert!((boss.x - 10.0).abs() < 1e-4);
+
+        // Safety timer fall_count >= 20 terminates Dodge cleanly even if still airborne.
+        boss.fall_count = 19;
+        boss.y = boss.enemy_y - 40.0;
+        boss.dy = -5.0;
+        boss.tick_noncombat(1500.0, -1, "stand", &[], &mask, &mut rng);
+        assert_eq!(boss.dy, 0.0);
+        assert!((boss.y - boss.enemy_y).abs() < 1e-4);
+        assert_ne!(boss.state, PenguinState::Dodge);
+    }
+
+    #[test]
+    fn penguin_dodge_inner_wall_guards_and_smooth_y_settle() {
+        let mask = CollisionMask::level1c();
+        let mut rng = PenguinRng::new(0x1111_2222);
+        let mut boss = PenguinBoss::new();
+
+        // Inner right wall clamp (> 2100) forces dir = 1 in Dodge.
+        boss.set_state(PenguinState::Dodge);
+        boss.dir = -1;
+        boss.x = 2150.0;
+        boss.dy = -10.0;
+        boss.tick_noncombat(500.0, 1, "stand", &[], &mask, &mut rng);
+        assert_eq!(boss.dir, 1);
+        assert!((boss.x - 2135.0).abs() < 1e-4);
+
+        // Inner left wall clamp (< 100) forces dir = -1 in Dodge.
+        boss.set_state(PenguinState::Dodge);
+        boss.dir = 1;
+        boss.fall_count = 0;
+        boss.x = 80.0;
+        boss.y = boss.enemy_y;
+        boss.dy = -10.0;
+        boss.tick_noncombat(500.0, 1, "stand", &[], &mask, &mut rng);
+        assert_eq!(boss.dir, -1);
+        assert!((boss.x - 95.0).abs() < 1e-4);
+
+        // Outside Dodge, large vertical delta settles by 30% toward enemy_y per tick.
+        boss.set_state(PenguinState::Stand);
+        boss.x = 1000.0;
+        boss.y = boss.enemy_y - 20.0;
+        boss.tick_noncombat(200.0, 1, "stand", &[], &mask, &mut rng);
+        assert!((boss.y - (boss.enemy_y - 14.0)).abs() < 1e-4);
+    }
+
+    #[test]
+    fn penguin_batarang_rng_block_and_level1c_collision_wall_stop() {
+        let mask = CollisionMask::level1c();
+        let mut boss = PenguinBoss::new();
+
+        // Search deterministic seeds exercising both sides of `rand * 5.0 > 2.0`.
+        let mut saw_block = false;
+        let mut saw_hurt = false;
+        for seed in 1u64..64 {
+            let mut trial = boss.clone();
+            let mut rng = PenguinRng::new(seed);
+            let outcome = trial.tick_noncombat(
+                200.0,
+                1,
+                "stand",
+                &[(trial.x + 10.0, trial.y - 40.0)],
+                &mask,
+                &mut rng,
+            );
+            match outcome {
+                PenguinBatarangOutcome::Blocked => {
+                    assert_eq!(trial.state, PenguinState::Block);
+                    saw_block = true;
+                }
+                PenguinBatarangOutcome::Hurt => {
+                    saw_hurt = true;
+                }
+                PenguinBatarangOutcome::None => {}
+            }
+            if saw_block && saw_hurt {
+                break;
+            }
+        }
+        assert!(saw_block && saw_hurt);
+
+        // Open arena Walk moves at `speed = 6.0` px/tick toward player.
+        let mut rng = PenguinRng::new(0xABCD_1234);
+        boss.x = 1200.0;
+        boss.dir = -1;
+        boss.set_state(PenguinState::Walk);
+        boss.tick_noncombat(400.0, 1, "stand", &[], &mask, &mut rng);
+        assert_eq!(boss.state, PenguinState::Walk);
+        assert!((boss.x - 1194.0).abs() < 1e-4);
+
+        // Solid Level 1C perimeter wall checks (`checkWall`) hold outside 0..2300 while interior is open.
+        assert!(!check_penguin_wall(&mask, 1200.0, boss.enemy_y, -50.0, -6.0));
+        assert!(check_penguin_wall(&mask, 2557.0, boss.enemy_y, -50.0, 6.0));
+        assert!(check_penguin_wall(&mask, -236.0, boss.enemy_y, -50.0, -6.0));
     }
 }

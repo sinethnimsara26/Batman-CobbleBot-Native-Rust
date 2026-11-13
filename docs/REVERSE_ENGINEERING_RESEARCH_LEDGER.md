@@ -1418,3 +1418,28 @@ Tested original source fixed CODE SHA `26dad6e07ef3dc1ca860aa98b4a8ccfb12912f72`
 - **Confidence:** HIGH for `#1250` child clip extraction, AVM1 child scripts, `#1192` hitbox transform math, and lossless raster parity.
 
 
+## RE-20261113-022 — Flash AVM1 penguinAI Movement, Dodge, Block, Facing, Approach & Level 1C Camera Setup (Batch B16)
+
+- **Batch/Context:** Batch B16; branch `revive/level2-b16-penguin-ai-2026-11-12`, draft PR #48 based on B15 docs commit `07fd792`.
+- **Target Subsystem:** `src/penguin.rs`, `.github/workflows/build-level1a-fidelity.yml`.
+- **Original Architecture & Findings:**
+  1. Complete AVM1 Disassembly of `penguinAI` (offset `124287..128207`, `3,920` bytes) and Level 1C Root DoAction (`frame 21`/`22`, `cobblebot.swf`):
+     - **Root Initialization:** `boss.onEnterFrame = _global.penguinAI`, `speed = 6`, `dir = 1`, `state = "stand"`, `jumping = false`, `health = 200`, `range = 0.0`, `stength = 5` (original Flash spelling without `r`), `enemyHeight = 50`, `enemyWidth = 50`, `attackCount = 0.0`, `fallCount = 0.0`, `dy = 0.0`, `enemy_y = _y` (`316.2`); globals `gravity = 5`, `globalGravity = 5`.
+     - **Level 1C Camera Setup:** `_root.game.onEnterFrame = _global.cameraLogic`, `camDelay = 0.0`, `camHeight = 270`, `camJump = 4`, `camMin = 250`, `camMax = 2150`, `camOffset = 0.0`, `camZoom = 100`, `bgScroll = 6`, `gotoLast = "level1c"`.
+  2. Exact `penguinAI` Noncombat & Motion State Transitions (when `health > 0`):
+     - **Arena Boundary Bounce (`0..2300`):** `x > 2300 => { dir = 1; state = "dodge"; dy = -12 }` and `x < 0 => { dir = -1; state = "dodge"; dy = -12 }`. Setting `dir = 1` at `x > 2300` works because `dodge` retreats horizontally via `_x -= 15 * dir` (`-15` push back left into arena; `+15` push back right when `dir = -1`).
+     - **Vertical Y Settle (when `state != "dodge"`):** if `|y - enemy_y| > 5`, `y -= (y - enemy_y) * 0.3`; otherwise `y = enemy_y`.
+     - **Range, Facing & Quota Logic (`range = |x - player._x|`):**
+       - `180 < range < 320` (and `state != "dodge"`): faces player, and if `attackCount < 3` and not in `attack2/hurt/fall/dodge/block`, transitions to `attack2` and increments `attackCount`.
+       - `else if range < 180`: flips `dir *= -1` if `(dir == 1 && playerDir == 1 && x > player.x) || (dir == -1 && playerDir == -1 && x < player.x)`.
+       - Always checked `if range > 360`: faces player and resets `attackCount = 0`.
+       - `_xscale = dir * Math.abs(_xscale)`.
+     - **State Physics:** `walk` moves `+speed * dir` when `!checkWall(this, -50, speed * dir)`; `dodge` integrates `y += dy; dy += globalGravity` (`5.0`) and retreats `-15 * dir` (with inner clamp overrides `x > 2100 => dir = 1` and `x < 100 => dir = -1`, or wall check `!checkWall(this, -50, -speed * dir)`), resetting to `stand` (`dy = 0, y = enemy_y`) if `y > enemy_y` or `fallCount >= 20`; `hurt` slides `-6 * dir`; `fall` slides `-6 * dir` for `fallCount < 6`.
+     - **Batarang Block & Approach Walk:** when hit by batarang and not in `hurt/fall/block/dodge`, faces player and rolls `Math.random() * 5.0 > 2.0` (`60%` block -> `state = "block"`). Fallback transitions to `walk` when `!checkWall(this, enemyHeight)` and not in `dodge/block/attack/attack2/hurt/fall`. Verified `level1c_penguin_ground.png` floor at `enemy_y + 50`, air at `enemy_y +- 25`, and perimeter walls at `level_x = -1728..-1724` and `1075..1079`.
+- **Verification Evidence:**
+  - Rust unit tests increased from 88 to 93 (+5 source-step behavioral tests in `src/penguin.rs`).
+  - Windows CI fidelity run `#43387097167` (`build-level1a-fidelity`): SUCCESS on code SHA `8ce03ca`; `93/93` tests passed in 0.80s, render p95 `28.4254ms`, scenery scroll p95 `26.5765ms` (< 40ms gate), 20/20 relocated standalone EXE HQ hashes identical, child exit 0.
+- **Confidence:** HIGH for AVM1 `penguinAI` bytecode semantics, Level 1C root22 camera/init parameters, and deterministic Rust behavioral coverage.
+
+
+

@@ -883,3 +883,18 @@ Do not erase two historical CI failures: documentation-only #42834460076 and ini
 - **Records & Governance:** RE-20261113-021 and AUD-20261113-021 appended. All six records synchronized. No unsafe code, no external dependencies. PR #47 remains DRAFT/OPEN. STOP.
 
 
+## 2026-11-13 — B16 penguinAI Movement, Dodge, Block, Facing & Approach (VERIFIED)
+
+- **Scope & Context:** B16 dormant Level 1C `penguinAI` movement, boundary dodge bounce, parabolic dodge arc, RNG batarang block, range facing/attack2 quota, approach `Walk`, and Level 1C `cameraLogic` constants; branch `revive/level2-b16-penguin-ai-2026-11-12`, draft PR #48 based on B15 docs commit `07fd792`.
+- **Implementation:**
+  1. `src/penguin.rs`: Decompiled full 3,920-byte `penguinAI`, `checkWall`, `checkPlayer`, `checkBatarang`, and Level 1C root DoAction (`camMin=250`, `camMax=2150`, `camHeight=270`, `camJump=4`, `bgScroll=6`, `globalGravity=5`, `boss` `health=200`, `speed=6`, `stength=5`). Implemented dormant `PenguinRng`, `PenguinBatarangOutcome`, `check_penguin_wall`, and `PenguinBoss` (`tick_noncombat`, `step_child_frame`, `evaluate_batarang`, `stength` typo + `strength()`) + 5 source-step behavioral tests (88→93).
+  2. `.github/workflows/build-level1a-fidelity.yml`: Added branch `revive/level2-b16-penguin-ai-2026-11-12` to workflow push triggers.
+- **Native Windows CI Execution:**
+  - Full native Windows run [#43387097167](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43387097167) (`build-level1a-fidelity`) completed **SUCCESS** on exact code SHA `8ce03ca`.
+  - Cargo test: **93/93 passed in 0.80s** (`20/20` relocated standalone EXE HQ3× screenshot hashes identical, `child_exit: 0`).
+  - Performance: Render p95 **28.4254ms**, scenery scroll p95 **26.5765ms** (below 40.0ms gate).
+  - Hosted audio: `BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT`.
+- **Records & Governance:** RE-20261113-022 and AUD-20261113-022 appended. All six records synchronized. No unsafe code, no external dependencies. PR #48 remains DRAFT/OPEN. STOP.
+
+
+
