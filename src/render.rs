@@ -118,6 +118,7 @@ pub fn render_with_config(
                 let active_fade=match game.screen{
                     AppScreen::Intro=>game.intro_fadeout_tick,
                     AppScreen::EscapeCard=>game.escape_card_fadeout_tick,
+                    AppScreen::TvCard=>game.tv_card_fadeout_tick,
                     _=>None,
                 };
                 if let Some(t)=active_fade{
@@ -287,6 +288,12 @@ fn render_legacy_intro_overlay(fb:&mut RenderSurface,game:&Game,assets:&Assets,s
         AppScreen::EscapeCard=>{
             render_story_timeline_legacy(
                 fb,assets,&assets.escape_card_frames,game.escape_card_tick,game.escape_card_fadeout_tick,show_fade,
+            );
+            return
+        },
+        AppScreen::TvCard=>{
+            render_story_timeline_legacy(
+                fb,assets,&assets.tv_card_frames,game.tv_card_tick,game.tv_card_fadeout_tick,show_fade,
             );
             return
         },

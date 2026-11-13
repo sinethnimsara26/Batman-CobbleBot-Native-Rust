@@ -94,10 +94,12 @@ const OVERLAY_WALK:usize=58;
 const OVERLAY_FIND_LAB:usize=66;
 const OVERLAY_TO_STREET:usize=140;
 const ESCAPE_CARD_TERMINAL_FRAME:u16=224;
+const TV_CARD_AUTO_FADE_FRAME:u16=151;
+const TV_CARD_TERMINAL_FRAME:u16=184;
 const ESCAPE_CARD_SOUND_ID:u16=130;
 
 #[derive(Copy,Clone,Debug,PartialEq,Eq)]
-pub enum AppScreen{Title,Instructions,Intro,Playing,EscapeCard}
+pub enum AppScreen{Title,Instructions,Intro,Playing,EscapeCard,TvCard}
 
 #[derive(Copy,Clone,Debug,PartialEq,Eq)]
 pub enum AudioEvent{
@@ -266,6 +268,13 @@ pub struct Game{
     pub escape_card_fadeout_tick:Option<u16>,
     escape_card_sound_stopped:bool,
     pub escape_card_complete:bool,
+    pub level2a_exit_reached:bool,
+    /// Original root frame 24 (`card:tv`, `#1479`) story sequence (`0..=184` at 25 fps).
+    pub tv_card_tick:u16,
+    /// Original 41-frame fadeout sprite `#34` started at `#1479` frame `151` or SKIP `#1480`.
+    pub tv_card_fadeout_tick:Option<u16>,
+    tv_card_sound_stopped:bool,
+    pub tv_card_complete:bool,
     pub bank_goons:Option<BankGoonSquad>,
     pub labs_eagles:Vec<LabsEagle>,
     pub labs_bird_rng:GoonRng,
@@ -316,6 +325,8 @@ impl Game{
             level1b_exit_reached:false,level1b_complete:false,
             level1c_exit_reached:false,level1c_complete:false,
             escape_card_tick:0,escape_card_fadeout_tick:None,escape_card_sound_stopped:false,escape_card_complete:false,
+            level2a_exit_reached:false,
+            tv_card_tick:0,tv_card_fadeout_tick:None,tv_card_sound_stopped:false,tv_card_complete:false,
             bank_goons:None,labs_eagles:Vec::new(),labs_bird_rng:GoonRng::new(0x2A00_1393),bank_biker:None,penguin_boss:None,penguin_rng:PenguinRng::new(0x1C00_1250),
             pickups:vec![false;PICKUPS.len()],labs_health_collected:false,shots:Vec::new(),labs_doors:Vec::new(),labs_elevators:Vec::new(),ticks:0,audio_events:Vec::new(),pit_done:false,respawn_after_fade:false,gameover_after_fade:false,
         }
@@ -372,6 +383,8 @@ impl Game{
         self.level1c_exit_reached=false;
         self.level1c_complete=false;
         self.escape_card_complete=false;
+        self.level2a_exit_reached=false;
+        self.tv_card_complete=false;
         let pickup_count = match stage {
             StageId::Level1A => PICKUPS.len(),
             StageId::Level1B => LEVEL1B_PICKUPS.len(),
@@ -455,11 +468,11 @@ impl Game{
     /// B04 readonly handoff; does not make Stage1B playable or start its audio.
     pub fn pending_stage_entry(&self)->Option<PendingStageEntry>{self.pending_stage_entry}
 
-    /// Consumes an implemented playable stage handoff (`Level1B` or `Level1C`),
+    /// Consumes an implemented playable stage handoff (`Level1B`, `Level1C`, or `Level2A`),
     /// resetting stage actors while preserving carried `RootProgress` and restarting music.
     pub fn consume_pending_stage_entry(&mut self)->Option<StageId>{
         let entry=self.pending_stage_entry?;
-        if !matches!(entry.to,StageId::Level1B|StageId::Level1C) {
+        if !matches!(entry.to,StageId::Level1B|StageId::Level1C|StageId::Level2A) {
             return None;
         }
         self.start_stage(entry.to);
@@ -539,53 +552,131 @@ impl Game{
         true
     }
 
-    fn stop_escape_card_sound_once(&mut self){
-        if !self.escape_card_sound_stopped {
-            self.escape_card_sound_stopped=true;
-            self.audio_events.push(AudioEvent::IntroStop);
+    fn story_card_spec(card:StoryCard)->(AppScreen,u16,u16){
+        match card {
+            StoryCard::Escape=>(AppScreen::EscapeCard,ESCAPE_CARD_TERMINAL_FRAME,ESCAPE_CARD_TERMINAL_FRAME),
+            StoryCard::Tv=>(AppScreen::TvCard,TV_CARD_AUTO_FADE_FRAME,TV_CARD_TERMINAL_FRAME),
+            StoryCard::Kabuki=>unreachable!("StoryCard::Kabuki is deferred to B32"),
         }
     }
 
-    fn advance_escape_card_story(&mut self){
-        if self.escape_card_tick<ESCAPE_CARD_TERMINAL_FRAME {
-            self.escape_card_tick+=1;
+    fn story_card_slots_mut(&mut self,card:StoryCard)->(&mut u16,&mut Option<u16>,&mut bool,&mut bool){
+        match card {
+            StoryCard::Escape=>(
+                &mut self.escape_card_tick,
+                &mut self.escape_card_fadeout_tick,
+                &mut self.escape_card_sound_stopped,
+                &mut self.escape_card_complete,
+            ),
+            StoryCard::Tv=>(
+                &mut self.tv_card_tick,
+                &mut self.tv_card_fadeout_tick,
+                &mut self.tv_card_sound_stopped,
+                &mut self.tv_card_complete,
+            ),
+            StoryCard::Kabuki=>unreachable!("StoryCard::Kabuki is deferred to B32"),
         }
+    }
+
+    fn begin_story_card(&mut self,card:StoryCard){
+        let (screen,_,_)=Self::story_card_spec(card);
+        self.screen=screen;
+        self.fadeout_tick=None;
+        match card {
+            StoryCard::Escape=>self.level1c_complete=true,
+            StoryCard::Tv=>self.level2a_complete_mark(),
+            StoryCard::Kabuki=>{}
+        }
+        let (tick,fadeout_tick,sound_stopped,complete)=self.story_card_slots_mut(card);
+        *tick=0;
+        *fadeout_tick=None;
+        *sound_stopped=false;
+        *complete=false;
+        // Root frames 22/24 both execute `StartSound 130` (same looping track as frame 18).
+        self.audio_events.push(AudioEvent::IntroStart);
+    }
+
+    #[inline]
+    fn level2a_complete_mark(&mut self){
+        self.level2a_exit_reached=true;
+    }
+
+    fn skip_story_card(&mut self,card:StoryCard)->bool{
+        let (expected_screen,_,_)=Self::story_card_spec(card);
+        if self.screen!=expected_screen {
+            return false;
+        }
+        let (_,fadeout_tick,_,complete)=self.story_card_slots_mut(card);
+        if fadeout_tick.is_some() || *complete {
+            return false;
+        }
+        *fadeout_tick=Some(0);
+        true
+    }
+
+    fn tick_story_card(&mut self,card:StoryCard,from_stage:StageId,input:&mut InputState){
+        let (_,auto_fade_frame,terminal_frame)=Self::story_card_spec(card);
+        let skip_pressed=input.pressed(VK_ENTER)||input.pressed(VK_SPACE)||input.pressed(VK_ESCAPE);
+        let mut finished=false;
+        let mut stop_sound=false;
+        {
+            let (tick,fadeout_tick,sound_stopped,complete)=self.story_card_slots_mut(card);
+            if !*complete {
+                if let Some(frame)=*fadeout_tick {
+                    if *tick<terminal_frame { *tick+=1; }
+                    if frame>=40 {
+                        *fadeout_tick=Some(40);
+                        *complete=true;
+                        finished=true;
+                        if !*sound_stopped { *sound_stopped=true; stop_sound=true; }
+                    }else{
+                        let next=frame+1;
+                        *fadeout_tick=Some(next);
+                        if next==39 && !*sound_stopped {
+                            *sound_stopped=true;
+                            stop_sound=true;
+                        }
+                    }
+                }else if skip_pressed {
+                    *fadeout_tick=Some(0);
+                }else{
+                    if *tick<terminal_frame { *tick+=1; }
+                    if *tick>=auto_fade_frame {
+                        *fadeout_tick=Some(0);
+                    }
+                }
+            }
+        }
+        if stop_sound {
+            self.audio_events.push(AudioEvent::IntroStop);
+        }
+        if finished {
+            self.pending_stage_entry=PendingStageEntry::after_story_card(
+                card,
+                from_stage,
+                ESCAPE_CARD_SOUND_ID,
+                RootProgress{score:self.score,lives:self.lives,batarangs:self.batarangs},
+            );
+        }
+        input.clear_pressed();
     }
 
     /// Source button #1268's release-inside event sets `gotoNext="level2a"` and plays fadeout `#34`.
     pub fn skip_escape_card(&mut self)->bool{
-        if self.screen!=AppScreen::EscapeCard
-            || self.escape_card_fadeout_tick.is_some()
-            || self.escape_card_complete
-        {
-            return false;
-        }
-        self.escape_card_fadeout_tick=Some(0);
-        true
+        self.skip_story_card(StoryCard::Escape)
+    }
+
+    /// Source button #1480's release-inside event sets `gotoNext="level2b"` and plays fadeout `#34`.
+    pub fn skip_tv_card(&mut self)->bool{
+        self.skip_story_card(StoryCard::Tv)
     }
 
     fn begin_escape_card(&mut self){
-        self.screen=AppScreen::EscapeCard;
-        self.escape_card_tick=0;
-        self.escape_card_fadeout_tick=None;
-        self.escape_card_sound_stopped=false;
-        self.escape_card_complete=false;
-        self.fadeout_tick=None;
-        self.level1c_complete=true;
-        // Root frame 22 executes `StartSound 130` (same looping track as frame 18).
-        self.audio_events.push(AudioEvent::IntroStart);
+        self.begin_story_card(StoryCard::Escape);
     }
 
-    fn finish_escape_card_to_level2a(&mut self){
-        self.stop_escape_card_sound_once();
-        self.escape_card_fadeout_tick=Some(40);
-        self.escape_card_complete=true;
-        self.pending_stage_entry=PendingStageEntry::after_story_card(
-            StoryCard::Escape,
-            StageId::Level1C,
-            ESCAPE_CARD_SOUND_ID,
-            RootProgress{score:self.score,lives:self.lives,batarangs:self.batarangs},
-        );
+    fn begin_tv_card(&mut self){
+        self.begin_story_card(StoryCard::Tv);
     }
 
     pub fn tick(&mut self,input:&mut InputState,ground:&CollisionMask){
@@ -647,29 +738,14 @@ impl Game{
                 return
             },
             AppScreen::EscapeCard=>{
-                // Root frame 22 plays #1267 (`225` frames, `0..=224`), holding
-                // `#1254` at stopped frame `161`. Frame `224` executes
-                // `stop(); _root.gotoNext = "level2a"; _root.fadeout.play();`.
-                if !self.escape_card_complete {
-                    if let Some(frame)=self.escape_card_fadeout_tick{
-                        self.advance_escape_card_story();
-                        if frame>=40 {
-                            self.finish_escape_card_to_level2a();
-                        }else{
-                            let next=frame+1;
-                            self.escape_card_fadeout_tick=Some(next);
-                            if next==39 { self.stop_escape_card_sound_once(); }
-                        }
-                    }else if input.pressed(VK_ENTER)||input.pressed(VK_SPACE)||input.pressed(VK_ESCAPE){
-                        let _=self.skip_escape_card();
-                    }else{
-                        self.advance_escape_card_story();
-                        if self.escape_card_tick>=ESCAPE_CARD_TERMINAL_FRAME {
-                            self.escape_card_fadeout_tick=Some(0);
-                        }
-                    }
-                }
-                input.clear_pressed();
+                // Root frame 22 plays #1267 (`225` frames, `0..=224`); frame 224 starts `#34`.
+                self.tick_story_card(StoryCard::Escape,StageId::Level1C,input);
+                return
+            },
+            AppScreen::TvCard=>{
+                // Root frame 24 plays #1479 (`185` frames, `0..=184`); frame 151 starts `#34`
+                // while `#1479` continues animating through terminal `Stop()` at frame 184.
+                self.tick_story_card(StoryCard::Tv,StageId::Level2A,input);
                 return
             },
             AppScreen::Playing=>{}
@@ -1032,7 +1108,7 @@ impl Game{
             // StopSounds before root's destination-frame jump at frame 40.
             // Change only the completed exits: pit/continue paths retain
             // their established native behavior and regression contract.
-            if next==39 && (self.level1a_exit_reached || self.level1b_exit_reached || self.level1c_exit_reached) {
+            if next==39 && (self.level1a_exit_reached || self.level1b_exit_reached || self.level1c_exit_reached || self.level2a_exit_reached) {
                 self.audio_events.push(AudioEvent::MusicStop);
             }
             return false;
@@ -1086,6 +1162,9 @@ impl Game{
         }else if self.level1c_exit_reached {
             // Original penguinAI sets gotoNext="card:escape", then plays #34.
             self.begin_escape_card();
+        }else if self.level2a_exit_reached {
+            // Original checkpoint_2a_tv sets gotoNext="card:tv", then plays #34.
+            self.begin_tv_card();
         }else{
             // Other non-pit terminal fades preserve the old sound behavior.
             self.audio_events.push(AudioEvent::MusicStop);
@@ -1409,6 +1488,13 @@ impl Game{
                         }
                         "checkpoint_2a_02" => {
                             self.overlay_goto_and_play(OVERLAY_GLIDE_DOWN);
+                        }
+                        "checkpoint_2a_tv" if !self.level2a_exit_reached && self.fadeout_tick.is_none() => {
+                            // SWF checkpoint_2a_tv sets `_root.gotoNext = "card:tv"; _root.fadeout.play();`.
+                            self.level2a_exit_reached = true;
+                            self.fadeout_tick = Some(0);
+                            self.player.dx = 0.0;
+                            self.player.dy = 0.0;
                         }
                         _ => {}
                     }
@@ -2339,8 +2425,18 @@ mod b19_bank_milestone_tests {
         assert_eq!(handoff.to, StageId::Level2A);
         assert_eq!(handoff.progress.score, score_at_escape);
         assert_eq!(handoff.progress.lives, 4);
-        // Level 2A stays latched until B20+ stage assets/masks are enabled
-        assert_eq!(game.consume_pending_stage_entry(), None);
+        // B26+: Level 2A is live: consuming EscapeCard handoff enters StageId::Level2A
+        // cleanly while carrying RootProgress and queueing Level2A music.
+        let _ = game.take_audio_events();
+        assert_eq!(game.consume_pending_stage_entry(), Some(StageId::Level2A));
+        assert_eq!(game.stage, StageId::Level2A);
+        assert_eq!(game.screen, AppScreen::Playing);
+        assert_eq!(game.score, score_at_escape);
+        assert_eq!(game.lives, 4);
+        assert_eq!(
+            game.take_audio_events(),
+            vec![AudioEvent::StageTrack(StageId::Level2A), AudioEvent::MusicStart]
+        );
     }
 
     #[test]
@@ -2822,5 +2918,167 @@ mod b24_labs2a_enemies_tests {
         throw.set(super::VK_A, true);
         game.tick(&mut throw, &ground);
         assert!(game.take_audio_events().contains(&AudioEvent::Swish));
+    }
+}
+
+#[cfg(test)]
+mod b26_tv_card_tests {
+    use super::*;
+    use crate::assets::Assets;
+    use crate::collision::CollisionMask;
+    use crate::render::{self, HQ_H, HQ_W};
+    use crate::stage::StageId;
+    use crate::surface::RenderSurface;
+
+    #[test]
+    fn tv_card_auto_fades_at_frame_151_continues_to_184_and_latches_level2b_pending() {
+        let ground = CollisionMask::for_stage(StageId::Level2A);
+        let mut game = Game::new();
+        game.screen = AppScreen::Playing;
+        game.start_stage(StageId::Level2A);
+        game.score = 777;
+        game.lives = 4;
+        game.batarangs = 12;
+
+        // Overlap `checkpoint_2a_tv` to trigger 41-frame fadeout -> MusicStop@39 -> TvCard@40.
+        let tv_cp = crate::stage::labs2a::CHECKPOINTS
+            .iter()
+            .find(|c| c.name == "checkpoint_2a_tv")
+            .expect("checkpoint_2a_tv exists");
+        let (x, y, _, _) = tv_cp.game_bounds();
+        let desc = StageId::Level2A.descriptor();
+        game.player.x = (x + 20.0) - desc.level_origin_game_local.x;
+        game.player.y = (y + 20.0) - desc.level_origin_game_local.y;
+        let _ = game.take_audio_events();
+        let mut input = InputState::default();
+        game.tick(&mut input, &ground);
+        assert!(game.level2a_exit_reached);
+        assert_eq!(game.fadeout_tick, Some(0));
+
+        let mut stopped_music = false;
+        let mut started_intro = false;
+        for _ in 0..42 {
+            game.tick(&mut input, &ground);
+            let evs = game.take_audio_events();
+            if evs.contains(&AudioEvent::MusicStop) {
+                stopped_music = true;
+            }
+            if evs.contains(&AudioEvent::IntroStart) {
+                started_intro = true;
+            }
+            if game.screen == AppScreen::TvCard {
+                break;
+            }
+        }
+        assert!(stopped_music);
+        assert!(started_intro);
+        assert_eq!(game.screen, AppScreen::TvCard);
+        assert_eq!(game.tv_card_tick, 0);
+        assert_eq!(game.tv_card_fadeout_tick, None);
+
+        // Frame 0..150 plays with no fadeout; frame 151 triggers `#34` fadeout while #1479 continues.
+        for _ in 0..150 {
+            game.tick(&mut input, &ground);
+            assert_eq!(game.tv_card_fadeout_tick, None);
+        }
+        assert_eq!(game.tv_card_tick, 150);
+        game.tick(&mut input, &ground);
+        assert_eq!(game.tv_card_tick, 151);
+        assert_eq!(game.tv_card_fadeout_tick, Some(0));
+        assert!(!game.tv_card_complete);
+
+        let mut intro_stopped = false;
+        for step in 0..41 {
+            game.tick(&mut input, &ground);
+            let evs = game.take_audio_events();
+            if evs.contains(&AudioEvent::IntroStop) {
+                intro_stopped = true;
+            }
+            if step < 40 {
+                assert!(!game.tv_card_complete);
+            }
+        }
+        assert!(intro_stopped);
+        assert!(game.tv_card_complete);
+        // `#1479` continued animating during fadeout up to terminal frame 184 and stopped there.
+        assert_eq!(game.tv_card_tick, 184);
+        assert_eq!(game.tv_card_fadeout_tick, Some(40));
+
+        let pending = game.pending_stage_entry().expect("Level2B handoff latched");
+        assert_eq!(pending.from, StageId::Level2A);
+        assert_eq!(pending.to, StageId::Level2B);
+        assert_eq!(pending.outgoing_root_sound_id, 130);
+        assert_eq!(pending.progress.score, 777);
+        assert_eq!(pending.progress.lives, 4);
+        assert_eq!(pending.progress.batarangs, 12);
+        // Level 2B stays latched (None) until B27-B31 implement StageId::Level2B.
+        assert_eq!(game.consume_pending_stage_entry(), None);
+    }
+
+    #[test]
+    fn tv_card_skip_requires_41_frame_fade_and_renders_legacy_and_hq3x() {
+        let assets = Assets::load();
+        assert_eq!(assets.common.tv_card_frames.len(), 185);
+        let mut ground = CollisionMask::for_stage(StageId::Level1C);
+        let mut game = Game::new();
+        game.screen = AppScreen::EscapeCard;
+        game.escape_card_tick = 224;
+        let mut input = InputState::default();
+        assert!(game.skip_escape_card());
+        for _ in 0..41 {
+            game.tick(&mut input, &ground);
+        }
+        assert_eq!(game.consume_pending_stage_entry(), Some(StageId::Level2A));
+        ground = CollisionMask::for_stage(StageId::Level2A);
+
+        // Trigger checkpoint_2a_tv -> TvCard -> early skip (#1480) still runs 41-frame fadeout.
+        let tv_cp = crate::stage::labs2a::CHECKPOINTS
+            .iter()
+            .find(|c| c.name == "checkpoint_2a_tv")
+            .unwrap();
+        let (x, y, _, _) = tv_cp.game_bounds();
+        let desc = StageId::Level2A.descriptor();
+        game.player.x = (x + 20.0) - desc.level_origin_game_local.x;
+        game.player.y = (y + 20.0) - desc.level_origin_game_local.y;
+        for _ in 0..42 {
+            game.tick(&mut input, &ground);
+            if game.screen == AppScreen::TvCard {
+                break;
+            }
+        }
+        assert_eq!(game.screen, AppScreen::TvCard);
+
+        let mut legacy = RenderSurface::new(LOGICAL_W, LOGICAL_H);
+        let mut base = RenderSurface::new(LOGICAL_W, LOGICAL_H);
+        let mut hq = RenderSurface::new(HQ_W, HQ_H);
+
+        render::render(&mut legacy, &game, &assets);
+        let pixels_000 = legacy.pixels.clone();
+        for _ in 0..110 {
+            game.tick(&mut input, &ground);
+        }
+        assert_eq!(game.tv_card_tick, 110);
+        render::render(&mut legacy, &game, &assets);
+        assert_ne!(legacy.pixels, pixels_000, "TvCard frame 110 must visually differ from frame 0");
+
+        render::render_high_quality(&mut base, &mut hq, &game, &assets);
+        let hq_110 = hq.pixels.clone();
+        assert!(hq_110.iter().any(|&p| (p & 0x00ff_ffff) != 0));
+
+        assert!(game.skip_tv_card());
+        assert!(!game.skip_tv_card(), "duplicate skip ignored while fading out");
+        for _ in 0..20 {
+            game.tick(&mut input, &ground);
+        }
+        render::render_high_quality(&mut base, &mut hq, &game, &assets);
+        assert_ne!(hq.pixels, hq_110, "HQ fadeout must dim TvCard");
+        for _ in 0..21 {
+            game.tick(&mut input, &ground);
+        }
+        assert!(game.tv_card_complete);
+        assert_eq!(
+            game.pending_stage_entry().map(|p| p.to),
+            Some(StageId::Level2B)
+        );
     }
 }

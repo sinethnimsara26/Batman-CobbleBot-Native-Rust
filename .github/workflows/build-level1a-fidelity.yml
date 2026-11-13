@@ -2,7 +2,7 @@ name: build-level1a-fidelity
 
 on:
   push:
-    branches: [main, level1a-cxform-fidelity, hq-rendering-phase1-halftone, hq-rendering-phase2-surfaces, hq-rendering-phase3-3x-surface, hq-rendering-phase4-pack-v2, hq-rendering-phase5-batman-3x, hq-rendering-phase6-hud-3x, hq-rendering-phase7-overlays-3x, hq-rendering-phase8-world-objects-3x, hq-rendering-phase9-dpi-awareness, hq-rendering-phase10-scenery-eval, hq-rendering-phase11-backdrop-3x, revive/round11-ci-baseline-2026-11-09, revive/level1a-intro-hud-fidelity-2026-11-09, revive/level2-b02-stage-descriptors-2026-11-11, revive/level2-b03-source-asset-proofs-2026-11-11, revive/level2-b04-pending-transition-2026-11-11, revive/level2-b05-bank-street-source-1x-2026-11-11, revive/level2-b06-bank-street-hq3x-2026-11-11, revive/level2-b07-bank-ground-probes-2026-11-11, revive/level2-b08-bank-props-source-2026-11-12, revive/level2-b09-bank-goon-sprites-2026-11-12, revive/level2-audit-fix-goon-true-clips-2026-11-12, revive/level2-audit-fix-win32-reentry-2026-11-12, revive/level2-audit-fix-music-focus-2026-11-12, revive/level2-audit-fix-stroke-alpha-2026-11-12, revive/level2-audit-fix-bank-full-1x-2026-11-12, revive/level2-audit-fix-bank-full-hq3x-2026-11-12, revive/level2-audit-fix-camera-source-2026-11-12, revive/level2-audit-fix-bank-prop-logic-2026-11-12, revive/level2-audit-fix-collision-bitpack-2026-11-12, revive/level2-audit-fix-coordinate-types-2026-11-12, revive/level2-audit-fix-render-zero-alloc-2026-11-12, revive/level2-audit-fix-split-assets-2026-11-12, revive/level2-b10-goon-ai-2026-11-12, revive/level2-b11-goon-combat-2026-11-12, revive/level2-b12-biker-ai-2026-11-12, revive/level2-b13-stage-activation-2026-11-12, revive/level2-b14-penguin-arena-2026-11-12, revive/level2-b15-penguin-sprites-2026-11-12, revive/level2-b16-penguin-ai-2026-11-12, revive/level2-b17-penguin-combat-2026-11-13, revive/level2-b18-penguin-escape-card-2026-11-13, revive/level2-b19-bank-milestone-qa-2026-11-13, revive/level2-b20-labs2a-scenery-mask-2026-11-13, revive/level2-b21-labs2a-camera-ground-2026-11-13, revive/level2-b22-labs2a-doors-2026-11-13, revive/level2-b23-labs2a-elevators-2026-11-13, revive/level2-b24-labs2a-enemies-2026-11-13]
+    branches: [main, level1a-cxform-fidelity, hq-rendering-phase1-halftone, hq-rendering-phase2-surfaces, hq-rendering-phase3-3x-surface, hq-rendering-phase4-pack-v2, hq-rendering-phase5-batman-3x, hq-rendering-phase6-hud-3x, hq-rendering-phase7-overlays-3x, hq-rendering-phase8-world-objects-3x, hq-rendering-phase9-dpi-awareness, hq-rendering-phase10-scenery-eval, hq-rendering-phase11-backdrop-3x, revive/round11-ci-baseline-2026-11-09, revive/level1a-intro-hud-fidelity-2026-11-09, "revive/level2-*"]
   workflow_dispatch:
 
 concurrency:
@@ -169,6 +169,16 @@ jobs:
           python "$tools/b18_bake_escape_card.py" "$swf" "$work/reports/symbols.json" "$work/reports/root_placements.json" "$work/bitmaps" "$work/escape-card"
           python "$tools/pack_sprite_frames.py" "$work/escape-card" "assets/escape_card_frames.bin" --format-version 2 --logical-pixel-scale 1.0
           Copy-Item "$work/escape-card/escape_card_button_bounds.rs" "assets/escape_card_button_bounds.rs"
+
+          # B26: original root frame 24 (`card:tv`, #1479 185-frame timeline, button #1480).
+          python "$tools/b26_bake_tv_card.py" "$swf" "$work/reports/symbols.json" "$work/reports/root_placements.json" "$work/bitmaps" "$work/tv-card"
+          python "$tools/pack_sprite_frames.py" "$work/tv-card" "assets/tv_card_frames.bin" --format-version 2 --logical-pixel-scale 1.0
+          Copy-Item "$work/tv-card/tv_card_button_bounds.rs" "assets/tv_card_button_bounds.rs"
+          New-Item -ItemType Directory -Force -Path ".generated/b26-tv-card-proof" | Out-Null
+          Copy-Item "$work/tv-card/tv-card-contact-sheet.png" ".generated/b26-tv-card-proof/tv-card-contact-sheet.png"
+          Copy-Item "$work/tv-card/110.png" ".generated/b26-tv-card-proof/110.png"
+          Copy-Item "$work/tv-card/168.png" ".generated/b26-tv-card-proof/168.png"
+          Copy-Item "$work/tv-card/manifest.json" ".generated/b26-tv-card-proof/manifest.json"
 
           python "$tools/render_collision_masks.py" "$swf" "$work/reports/symbols.json" "reverse-engineering/manifests/level-instances.json" "reverse-engineering/generated/collision_masks" --level level1a --level level1b --level level1c_penguin --level level2a
           python "$tools/b07_probe_bank_ground.py" "reverse-engineering/generated/collision_masks/manifest.json" "reverse-engineering/generated/collision_masks/level1b_ground.png" ".generated/b07-bank-ground"
@@ -555,6 +565,20 @@ jobs:
                   with Image.open(".generated/escape-card/224.png") as esc224:
                       assert ImageChops.difference(esc0.convert("RGB"),esc112.convert("RGB")).getbbox(), "escape card failed to animate"
                       assert ImageChops.difference(esc112.convert("RGB"),esc224.convert("RGB")).getbbox(), "escape card static before end"
+          tv_card=json.loads(Path(".generated/tv-card/manifest.json").read_text())
+          assert tv_card["source_root_frame"] == 24
+          assert tv_card["source_card_symbol"] == 1479
+          assert tv_card["frame_count"] == 185
+          assert tv_card["auto_fade_frame_zero_based"] == 151
+          assert tv_card["terminal_frame_zero_based"] == 184
+          assert tv_card["terminal_destination_label"] == "level2b"
+          assert tv_card["unsupported_fills"] == [], tv_card["unsupported_fills"]
+          assert tv_card["missing_bitmap_ids"] == [], tv_card["missing_bitmap_ids"]
+          with Image.open(".generated/tv-card/000.png") as tv0:
+              with Image.open(".generated/tv-card/110.png") as tv110:
+                  with Image.open(".generated/tv-card/168.png") as tv168:
+                      assert ImageChops.difference(tv0.convert("RGB"),tv110.convert("RGB")).getbbox(), "tv card failed to animate"
+                      assert ImageChops.difference(tv110.convert("RGB"),tv168.convert("RGB")).getbbox(), "tv card countdown failed to animate"
           hud=json.loads(Path("assets/hud.json").read_text())
           print("HUD:",hud)
           assert hud["hud_size"] == [283,86], hud["hud_size"]
@@ -1863,6 +1887,10 @@ jobs:
           if ($bankQa.ExitCode -ne 0) { throw "B19 Bank Chapter route QA failed with exit code $($bankQa.ExitCode)" }
           Get-Content ".generated/b19-bank-qa/bank_route_qa_report.json"
 
+          $labs2aQa = Start-Process -FilePath $exe -ArgumentList @("--qa-labs2a-route", ".generated/b26-labs2a-qa") -Wait -PassThru
+          if ($labs2aQa.ExitCode -ne 0) { throw "B26 Labs 2A route QA failed with exit code $($labs2aQa.ExitCode)" }
+          Get-Content ".generated/b26-labs2a-qa/labs2a_route_qa_report.json"
+
           $legacyShots = Get-ChildItem ".generated/visual-smoke/*.png"
           $hqShots = Get-ChildItem ".generated/visual-smoke-hq/*.png"
           if ($legacyShots.Count -ne 20) { throw "Expected 20 legacy smoke screenshots, got $($legacyShots.Count)" }
@@ -2465,6 +2493,20 @@ jobs:
         with:
           name: Batman-CobbleBot-B25-Labs2A-Pickups-Proof
           path: .generated/b25-labs2a-proof/
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Batman-CobbleBot-B26-TvCard-Proof
+          path: .generated/b26-tv-card-proof/
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Batman-CobbleBot-B26-Labs2A-Route-QA
+          path: .generated/b26-labs2a-qa/
           if-no-files-found: error
 
       - uses: actions/upload-artifact@v4
