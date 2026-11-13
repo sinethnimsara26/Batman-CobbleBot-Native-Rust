@@ -1,6 +1,27 @@
 # Persistent development tasks — Batman Rust port
 
 
+## B18 — COMPLETED / Penguin 1C Boss Defeat, card:escape #1267 Timeline & end-to-2A Handoff (2026-11-13)
+
+**VERIFIED NATIVE WINDOWS REGRESSION.** [Draft, OPEN, UNMERGED PR #50](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/50) on `revive/level2-b18-penguin-escape-card-2026-11-13`, based on B17 docs commit `0d66104`. **Exact Windows-tested code SHA `5064a47`**. Final documentation SHA is the separate later `[skip ci]` commit; this file cannot prestate its own commit ID. Full native Windows [#43395035011](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43395035011) **SUCCESS** (`10m55s`) on exact code SHA.
+
+**ENGINEERING & ARCHITECTURE FACTS:**
+1. **Source Extraction & Offline Baker (`reverse-engineering/tools/b18_bake_escape_card.py`):**
+   - Verified canonical `cobblebot.swf` root frame `22` (`DoAction`: `Stop()`, `StartSound id=130`), `#1254` (162 frames held at stopped frame `161`), `#1267` (225 frames, terminal frame `224` `stop(); _root.gotoNext = "level2a"; _root.fadeout.play();`), `#1268` SKIP button (`cond=0x0008` release-inside, UP-state `#128`, bounds `(528,370,573,382)`), and `#34` 41-frame fadeout (frame `39` `StopSounds`, frame `40` `gotoNextScene`).
+   - Bakes `escape_card_frames.bin` (`BCBFRM02`, `225` frames @ `1.0×`, `600x400`, zero missing bitmaps/unsupported fills) + `escape_card_button_bounds.rs`; CI validates `manifest.json` (`source_root_frame == 22`) and multi-frame animation diff (`000/112/224`).
+2. **Rust Stage Handoff, EscapeCard Runtime & Rendering (`src/penguin.rs`, `src/stage.rs`, `src/assets.rs`, `src/game.rs`, `src/render.rs`, `src/win32.rs`):**
+   - Added `LEVEL1C_PICKUP_POINTS` (`src/penguin.rs`), `PendingStageEntry::after_story_card(card, from, outgoing_root_sound_id, progress)` targeting `StageId::Level2A` with `incoming_root_sound_id = 1409` (`src/stage.rs`), and `CommonAssets::escape_card_frames` (`src/assets.rs`).
+   - Wired `StageId::Level1C` & `AppScreen::EscapeCard` in `src/game.rs`: `start_stage(Level1C)` initializes `PenguinBoss` & `PenguinRng`, collects `LEVEL1C_PICKUP_POINTS`, routes `#1192` laser hits into `PlayerState::Electro` (`damage = 5`), removes blocked batarangs, enters 41-frame `#34` fadeout + `MusicStop` upon `DefeatedTrigger` -> `AppScreen::EscapeCard` (`AudioEvent::IntroStart`), advances `#1267` (`0..=224`) without looping, supports `#1268` / `Space|Enter|Esc` SKIP strictly through the 41-frame fadeout + `IntroStop` (`39`), and latches `PendingStageEntry` preserving `RootProgress { score, lives, batarangs }`.
+   - Generalized `render_story_timeline_legacy` & HQ `#34` fadeout for `AppScreen::EscapeCard` plus `StageId::Level1C` pickups (`src/render.rs`), and unified `#129`/`#1268` release-inside SKIP bounds (`src/win32.rs`).
+   - Added 3 end-to-end integration tests (`level1c_boss_defeat_enters_escape_card_with_preserved_progress_and_audio`, `escape_card_plays_225_frame_timeline_never_loops_and_ends_at_level2a`, `escape_card_skip_requires_41_frame_fade_and_routes_laser_electro_plus_batarang_hide`) + extended `#1268` Win32 hit-test coverage, increasing total Rust tests from 98 to 101.
+
+**NATIVE VERIFIED on exact CODE SHA:** `cargo test --release --locked` **101/101 passed in 0.86s**, locked build PASS, relocated standalone EXE **20/20 exact HQ hashes**, child exit 0 and no SWF staged. Render p95 **18.6876ms**, scenery scroll p95 **22.2334ms**, both well below unchanged **40ms** gate. Hosted WinMM audio device 0 / MCI error 277 remains **BLOCKED** (`BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT`).
+
+**RUST PURITY/AUDIT:** Zero unsafe code, zero new external crates, runtime remains 100% native Rust with documented Win32/GDI/WinMM FFI. [Research RE-20261113-024](REVERSE_ENGINEERING_RESEARCH_LEDGER.md) and [independent AUD-20261113-024](RUST_PURITY_AND_ENGINEERING_AUDIT.md) finalized. Reviewed `AGENTS.md` and both mandatory protocols unchanged. Main and accepted Level1A release preserved.
+
+**STOP. ONE NEXT SEPARATELY AUTHORIZED TASK: B19 Bank milestone — integrated original-route `1A -> 1B -> 1C -> escape-card` regression & Windows visual/focus/GUI/performance QA (plus Level 1C runtime arena/boss visual rendering packs)**, preserving existing baseline.
+
+
 ## B17 — COMPLETED / Penguin Combat, Laser Hitbox #1192, Batman Electro & Scoring (2026-11-13)
 
 **VERIFIED NATIVE WINDOWS REGRESSION.** [Draft, OPEN, UNMERGED PR #49](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/49) on `revive/level2-b17-penguin-combat-2026-11-13`, based on B16 docs commit `5ac786d`. **Exact Windows-tested code SHA `2204d88`**. Final documentation SHA is the separate later `[skip ci]` commit; this file cannot prestate its own commit ID. Full native Windows [#43389653417](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43389653417) **SUCCESS** on exact code SHA.

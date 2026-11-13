@@ -911,5 +911,21 @@ Do not erase two historical CI failures: documentation-only #42834460076 and ini
 - **Records & Governance:** RE-20261113-023 and AUD-20261113-023 appended. All six records synchronized. No unsafe code, no external dependencies. PR #49 remains DRAFT/OPEN. STOP.
 
 
+## 2026-11-13 — B18 Penguin 1C Defeat, card:escape #1267 Timeline & end-to-2A Handoff (VERIFIED)
+
+- **Scope & Context:** B18 Level 1C boss defeat transition (`1C -> card:escape`), root frame 22 `card:escape` (`#1267` 225-frame timeline, Sound `#130`, `#1254` stopped hold, `#1268` SKIP button, `#34` 41-frame fadeout), and `end-to-2A` `PendingStageEntry` handoff preserving `RootProgress`; branch `revive/level2-b18-penguin-escape-card-2026-11-13`, draft PR #50 based on B17 docs commit `0d66104`.
+- **Implementation:**
+  1. `reverse-engineering/tools/b18_bake_escape_card.py`: Parses canonical `cobblebot.swf` root frame `22`, verifies `#1254`/`#1267`/`#1268`/`#34` placements and frame `224` terminal `DoAction`, bakes all `225` `600x400` frames + `escape_card_button_bounds.rs` (`(528,370,573,382)`) with zero missing bitmaps/unsupported fills.
+  2. `src/penguin.rs`, `src/stage.rs`, `src/assets.rs`: Exported `LEVEL1C_PICKUP_POINTS`, added `PendingStageEntry::after_story_card(StoryCard::Escape, StageId::Level1C, 130, progress)` (`to = Level2A`, `incoming_root_sound_id = 1409`), and added `CommonAssets::escape_card_frames`.
+  3. `src/game.rs`, `src/render.rs`, `src/win32.rs`: Wired `StageId::Level1C` pickups, `PenguinBoss` combat tick (`LaserElectro`, blocked batarang removal, `DefeatedTrigger` -> 41-frame fade + `MusicStop` -> `AppScreen::EscapeCard` + `AudioEvent::IntroStart`), non-looping `#1267` `0..=224` progression + `#1268`/key SKIP fade -> `PendingStageEntry`, generalized 1× & HQ fade rendering, and unified release-inside `#129`/`#1268` SKIP hit-testing; +3 unit tests (98→101).
+  4. `.github/workflows/build-level1a-fidelity.yml`: Added branch trigger, `b18_bake_escape_card.py` + `pack_sprite_frames.py` asset steps, and `escape-card/manifest.json` + 3-frame diff assertions.
+- **Native Windows CI Execution:**
+  - Full native Windows run [#43395035011](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43395035011) (`build-level1a-fidelity`) completed **SUCCESS** (`10m55s`) on exact code SHA `5064a47`.
+  - Cargo test: **101/101 passed in 0.86s** (`20/20` relocated standalone EXE HQ3× screenshot hashes identical, `child_exit: 0`).
+  - Performance: Render p95 **18.6876ms**, scenery scroll p95 **22.2334ms** (well below 40.0ms gate).
+  - Hosted audio: `BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT`.
+- **Records & Governance:** RE-20261113-024 and AUD-20261113-024 appended. All six records synchronized. No unsafe code, no external dependencies. PR #50 remains DRAFT/OPEN. STOP.
+
+
 
 
