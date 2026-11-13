@@ -1100,3 +1100,33 @@ Do not erase two historical CI failures: documentation-only #42834460076 and ini
   - **ENGINEERING QUALITY:** PASS (exact AVM1 speed, audio cue interval, loop-around boundary, damage routing, child clip frame cycling).
   - **ORIGINAL-GAME FIDELITY:** VERIFIED FOR TESTED SCOPE (Level 1A gameplay intact; Level 1B biker AI accurately mirrors Flash AVM1 bytecode).
   - **HARDWARE SPEAKER AUDIO:** BLOCKED (hosted runner limitation, unchanged).
+
+
+## AUD-20261113-019 — Independent post-code Rust purity/engineering audit of Batch B13 (Level 1B Stage Activation & Transitions)
+
+- **Audit Date:** 2026-11-13
+- **Scope:** `src/game.rs`, `src/render.rs`, `src/assets.rs`, `.github/workflows/build-level1a-fidelity.yml`.
+- **Code SHA:** `95df72a` on branch `revive/level2-b13-stage-activation-2026-11-12` (PR #45).
+- **Actual Changed Code and Engineering Review:**
+  1. Level 1B stage activation, tile packing, checkpoints, ammo pickups, and transitions in pure Rust:
+     - `src/game.rs`:
+       - `Game::start_stage(StageId::Level1B)` sets Level 1B spawn `(-506.5, -258.0)`, facing `-1`, camera target `475.0`, initializes `BankGoonSquad` and `BankBiker`, resets pickups.
+       - `Game::tick_level1b_enemies` ticks `BankGoonSquad` and `BankBiker`, routes combat damage, routes `PlayerHurt` to `apply_player_damage`, awards score, and processes `StageComplete`.
+       - `Game::update_tutorial_checkpoints` checks `CHECKPOINT_1B_01..03` routing to overlays (`fightBtns`, `goLeft`, `goRight`).
+       - `Game::collect_pickups` checks 4 Bank Street pickups `[(-2068.1, 138.5), (-1026.6, 187.3), (-234.35, 197.9), (732.15, 182.45)]`, awarding 5 batarangs, 5 score, and `AudioEvent::Item`.
+       - `Game::update_pit_logic` checks `(player.y + level_origin_y()) > 400.0`, decrements lives, triggers 40-frame fadeout, and cleanly respawns at Level 1B start.
+       - `Game::advance_level_exit` initiates 40-frame exit fade: stops music at frame 39, sets `level1b_complete = true` at frame 40, and latches `pending_stage_entry` targeting `StageId::Level1C`.
+     - `src/render.rs`:
+       - Dynamically selects `&assets.stage.tiles` for Level 1B legacy rendering while preserving Level 1A dual-layer HQ rendering (`&assets.level1a_tiles_hq_base` and `&assets.level1a_detail_tiles_hq`) with alpha upscaling for Level 1B.
+       - Selects `LEVEL1B_PICKUPS` vs `PICKUPS` based on active stage.
+     - `src/assets.rs`:
+       - Loads `assets.stage.tiles` for Level 1B from baked `assets/level1b_tiles.bin`.
+     - `.github/workflows/build-level1a-fidelity.yml`:
+       - Adds baking and packing of the complete 75-tile Bank Street pack (`assets/level1b_tiles.bin`) in CI workflow.
+  2. Added 7 unit tests in `src/game.rs` (`level1b_start_stage_initialization`, `level1b_camera_parameters`, `level1b_pickups_collection`, `level1b_checkpoints_trigger_overlays`, `level1b_pit_fall_triggers_fade_and_respawns_at_1b_start`, `level1b_wave2_clear_triggers_stage_complete_and_transition_to_1c`). Total unit tests increased from 72 to 79.
+  3. CI execution confirmed on GitHub Actions run [#43358920004](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43358920004): 82/82 steps passed, 79/79 tests passed in 0.64s, render p95 `18.3410ms`, scenery scroll p95 `22.1543ms` (< 40ms gate), 15/15 1× hashes identical, 20/20 relocated standalone EXE HQ hashes identical, child exit 0.
+- **Verdicts:**
+  - **PURE-RUST RUNTIME COMPLIANCE:** PASS (with existing direct Win32/GDI/WinMM OS FFI qualifications). Zero new crates, zero unsafe blocks, zero heap allocations in per-tick stage update.
+  - **ENGINEERING QUALITY:** PASS (exact AVM1 coordinates, stage camera parameters, checkpoints, ammo pickups, pit physics, and stage transitions).
+  - **ORIGINAL-GAME FIDELITY:** VERIFIED FOR TESTED SCOPE (Level 1A gameplay and visual regression completely preserved; Level 1B stage activation, checkpoints, pickups, combat step, and transitions accurately mirror Flash AVM1 bytecode).
+  - **HARDWARE SPEAKER AUDIO:** BLOCKED (hosted runner limitation, unchanged).

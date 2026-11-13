@@ -1331,3 +1331,39 @@ Tested original source fixed CODE SHA `26dad6e07ef3dc1ca860aa98b4a8ccfb12912f72`
     - `biker_player_attack_causes_fall_and_flashing_despawn`: verifies Batman attack knockdown, fall animation progression, flashing, and despawn.
   - Windows CI run `43340912013`: 72/72 Rust tests passed in 0.83s, render p95 `24.1619ms`, scenery scroll p95 `30.4693ms` (< 40ms gate), 15/15 historical 1× screenshots identical, 20/20 relocated standalone EXE HQ hashes identical, child exit 0.
 - **Confidence:** HIGH for AVM1 decompilation, biker state machine, hitbox math, and audio cue triggers.
+
+
+## RE-20261113-019 — Level 1B Bank Street Stage Activation, Checkpoints, and Transitions (Batch B13)
+
+- **Batch/Context:** Batch B13; branch `revive/level2-b13-stage-activation-2026-11-12`, draft PR #45 based on B12 docs commit `4330826`.
+- **Target Subsystem:** `src/game.rs`, `src/render.rs`, `src/assets.rs`, `.github/workflows/build-level1a-fidelity.yml`.
+- **Original Architecture & Findings:**
+  1. Bank Street 75-Tile Pack & Dynamic Scenery:
+     - Canonical SWF `cobblebot.swf` contains Level 1B street geometry in DefineSprite `#783` at root frame 20.
+     - Offline tile baker `bake_level_tiles.py` and `pack_level_tiles.py` generate complete 75-tile binary pack `assets/level1b_tiles.bin` in format `BCLVT001` (scale 1, 75 coordinate entries).
+     - Renderer updated to dynamically select `assets.stage.tiles` for Level 1B, while maintaining dual-layer HQ rendering for Level 1A (`assets.level1a_tiles_hq_base` and `assets.level1a_detail_tiles_hq`).
+  2. Level 1B Checkpoints & Tutorial Overlays:
+     - Checkpoints `CHECKPOINT_1B_01..03` traced from Flash root frame 20:
+       - `CHECKPOINT_1B_01`: `(-1794.6, 175.25)` triggers overlay frame 75 (`OVERLAY_FIGHT_BTNS`, tutorial on combat controls).
+       - `CHECKPOINT_1B_02`: `(-1086.6, 219.85)` triggers overlay frame 10 (`OVERLAY_GO_LEFT`).
+       - `CHECKPOINT_1B_03`: `(142.0, 222.0)` triggers overlay frame 1 (`OVERLAY_GO_RIGHT`).
+     - Overlays are dispatched via `Game::update_tutorial_checkpoints` matching player `x` proximity within radius 50.0.
+  3. Bank Street Pickups & Ammo:
+     - 4 original ammo pickups located at `[(-2068.1, 138.5), (-1026.6, 187.3), (-234.35, 197.9), (732.15, 182.45)]` in Level 1B.
+     - Collection check within radius 25.0 awards +5 batarangs, +5 score, and plays `AudioEvent::Item`.
+  4. Pit Collision & Respawn Routing:
+     - Level 1B pit boundary in Flash: when player falls into gaps (`player.y + level_origin_y() > 400.0`), player loses 1 life.
+     - Decrements lives, triggers 40-frame fadeout, and cleanly respawns at Level 1B initial spawn `(-506.5, -258.0)` with facing `-1` and camera reset to `475.0`.
+  5. Wave 2 Stage Clear & Level 1C Transition:
+     - When Wave 2 goons are defeated (`e_kills == 8 && respawned > 0`), `BankGoonSquad` emits `GoonCombatEvent::StageComplete`.
+     - `Game::advance_level_exit` initiates 40-frame exit fade: stops music at frame 39 (`AudioEvent::MusicStop`), sets `level1b_complete = true` at frame 40, and populates `pending_stage_entry = PendingStageEntry::after_source_fade(StageId::Level1B, progress)` targeting `StageId::Level1C`.
+- **Verification Evidence:**
+  - Rust unit tests increased from 72 to 79:
+    - `level1b_start_stage_initialization`: verifies spawn `(-506.5, -258.0)`, facing `-1`, camera target `475.0`, and active stage `Level1B`.
+    - `level1b_camera_parameters`: verifies camera width, height, limits `-6220..600`, and spawn clamping.
+    - `level1b_pickups_collection`: verifies all 4 Level 1B ammo pickups collected, awarding 20 batarangs and 20 score.
+    - `level1b_checkpoints_trigger_overlays`: verifies checkpoints 1B_01, 1B_02, 1B_03 trigger overlay frames 75, 10, 1.
+    - `level1b_pit_fall_triggers_fade_and_respawns_at_1b_start`: verifies falling below `gy > 400.0` loses a life, runs 40-frame fade, and respawns at `(-506.5, -258.0)`.
+    - `level1b_wave2_clear_triggers_stage_complete_and_transition_to_1c`: verifies defeating Wave 2 goons emits `StageComplete`, stops music at frame 39, and creates `pending_stage_entry` to `Level1C` at frame 40.
+  - Windows CI run `43358920004`: 79/79 Rust tests passed in 0.64s, render p95 `18.3410ms`, scenery scroll p95 `22.1543ms` (< 40ms gate), 15/15 historical 1× screenshots identical, 20/20 relocated standalone EXE HQ hashes identical, child exit 0.
+- **Confidence:** HIGH for AVM1 decompilation, stage activation coordinates, camera parameters, checkpoints, ammo pickups, pit physics, and stage transitions.

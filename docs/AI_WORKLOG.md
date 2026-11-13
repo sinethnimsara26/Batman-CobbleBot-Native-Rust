@@ -822,3 +822,29 @@ Do not erase two historical CI failures: documentation-only #42834460076 and ini
   - Fidelity: 15/15 historical 1× screenshots identical, 20/20 relocated standalone EXE HQ3× screenshot hashes identical, child exit 0.
   - Hosted audio: BLOCKED (no hosted audio endpoint, WinMM MCI error 277).
 - **Records & Governance:** RE-20261112-018 and AUD-20261112-018 appended. All six records synchronized. No unsafe code, no external dependencies. PR #44 remains DRAFT/OPEN. STOP.
+
+
+## 2026-11-13 — B13 Level 1B stage activation & transitions (VERIFIED)
+
+- **Scope & Context:** B13 Level 1B (Bank Street) stage activation, transitions, tile packing, checkpoints, ammo pickups, and pit collision/respawn; branch `revive/level2-b13-stage-activation-2026-11-12`, draft PR #45 based on B12 docs commit `4330826`.
+- **Implementation:**
+  1. `src/game.rs`:
+     - Stage Activation (`Game::start_stage(StageId::Level1B)`): sets spawn `(-506.5, -258.0)`, facing `-1`, camera target `475.0`, initializes `BankGoonSquad` and `BankBiker`, and resets pickups.
+     - Enemy AI Step (`Game::tick_level1b_enemies`): ticks `BankGoonSquad` and `BankBiker`, routes combat damage, routes `PlayerHurt` to `apply_player_damage`, awards score, and processes `StageComplete`.
+     - Checkpoints & Overlays (`Game::update_tutorial_checkpoints`): checkpoints `CHECKPOINT_1B_01..03` route to `OVERLAY_FIGHT_BTNS` (frame 75), `OVERLAY_GO_LEFT` (frame 10), and `OVERLAY_GO_RIGHT` (frame 1).
+     - Ammo Pickups (`Game::collect_pickups`): 4 Bank Street pickups `[(-2068.1, 138.5), (-1026.6, 187.3), (-234.35, 197.9), (732.15, 182.45)]` award 5 batarangs, 5 score, and `AudioEvent::Item`.
+     - Pit Collision (`Game::update_pit_logic`): checks `(player.y + level_origin_y()) > 400.0` on Level 1B, decrements lives, triggers 40-frame fadeout, and cleanly respawns at Level 1B start.
+     - Stage Transitions (`Game::advance_level_exit`): exit fade stops music at frame 39, sets `level1b_complete = true` at frame 40, and latches `pending_stage_entry` targeting `StageId::Level1C`.
+  2. `src/render.rs`: Dynamic tile rendering using `&assets.stage.tiles` for Level 1B while maintaining historical dual-layer HQ rendering for Level 1A (`&assets.level1a_tiles_hq_base` and `&assets.level1a_detail_tiles_hq`); stage-aware pickups coordinate selection (`LEVEL1B_PICKUPS` vs `PICKUPS`).
+  3. `src/assets.rs`: Wired `assets.stage.tiles` for Level 1B from `assets/level1b_tiles.bin`.
+  4. Added 7 new unit tests in `src/game.rs` (`level1b_start_stage_initialization`, `level1b_camera_parameters`, `level1b_pickups_collection`, `level1b_checkpoints_trigger_overlays`, `level1b_pit_fall_triggers_fade_and_respawns_at_1b_start`, `level1b_wave2_clear_triggers_stage_complete_and_transition_to_1c`), bringing total Rust tests from 72 to 79.
+  5. `.github/workflows/build-level1a-fidelity.yml`: Added branch trigger and 75-tile Bank Street baking and packing using `bake_level_tiles.py` and `pack_level_tiles.py`.
+- **Native Windows CI Execution:**
+  - Initial run `43357459983` on commit `def8514` failed workflow string assertion `Validate Round 10 selective true-3x scenery layer` which statically required `"draw_tiles_hq(target,game,&assets.level1a_detail_tiles_hq)"` in exact sequence.
+  - Corrected sequence in commit `95df72a` while preserving Level 1B dynamic tile rendering.
+  - Full native Windows run [#43358920004](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43358920004) completed **SUCCESS 82/82 steps** on exact code SHA `95df72a`.
+  - Cargo test: **79/79 passed in 0.64s**.
+  - Performance: Render p95 **18.3410ms**, scenery scroll p95 **22.1543ms** (well below 40.0ms gate).
+  - Fidelity: 15/15 historical 1× screenshots identical, 20/20 relocated standalone EXE HQ3× screenshot hashes identical, child exit 0.
+  - Hosted audio: BLOCKED (no hosted audio endpoint, WinMM MCI error 277).
+- **Records & Governance:** RE-20261113-019 and AUD-20261113-019 appended. All six records synchronized. No unsafe code, no external dependencies. PR #45 remains DRAFT/OPEN. STOP.

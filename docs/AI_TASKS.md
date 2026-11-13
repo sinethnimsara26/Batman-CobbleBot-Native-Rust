@@ -1,6 +1,29 @@
 # Persistent development tasks — Batman Rust port
 
 
+## B13 — COMPLETED / Level 1B Stage Activation & Transitions (2026-11-13)
+
+**VERIFIED NATIVE WINDOWS REGRESSION & STAGE ACTIVATION.** [Draft, OPEN, UNMERGED PR #45](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/45) on `revive/level2-b13-stage-activation-2026-11-12`, based on B12 docs commit `4330826`. **Exact Windows-tested code SHA `95df72a`**. Final documentation SHA is the separate later `[skip ci]` commit; this file cannot prestate its own commit ID. Full native Windows [#43358920004](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43358920004) **SUCCESS 82/82 steps** on exact code SHA.
+
+**ENGINEERING & ARCHITECTURE FACTS:**
+1. Activated Level 1B (Bank Street) stage runtime, transitions, tile packing, checkpoints, ammo pickups, and pit collision/respawn:
+   - **Stage Initialization (`Game::start_stage`)**: Sets Level 1B spawn `(-506.5, -258.0)`, facing `-1`, camera target `475.0`, initializes `BankGoonSquad` and `BankBiker`, and resets pickups.
+   - **Dynamic Tile Rendering (`src/render.rs` & `src/assets.rs`)**: Wired `assets.stage.tiles` for Level 1B legacy rendering; preserved historical dual-layer HQ rendering for Level 1A (`assets.level1a_tiles_hq_base` and `assets.level1a_detail_tiles_hq`) with alpha upscaling for Level 1B; stage-aware pickups coordinate selection (`LEVEL1B_PICKUPS` vs `PICKUPS`).
+   - **Enemy AI Combat Step (`Game::tick_level1b_enemies`)**: Ticks `BankGoonSquad` and `BankBiker`, handles combat damage, routes `PlayerHurt` to `apply_player_damage`, routes score awards, and listens for `StageComplete`.
+   - **Checkpoints & Overlays (`Game::update_tutorial_checkpoints`)**: Checkpoints `CHECKPOINT_1B_01..03` dispatch `OVERLAY_FIGHT_BTNS` (frame 75), `OVERLAY_GO_LEFT` (frame 10), and `OVERLAY_GO_RIGHT` (frame 1).
+   - **Ammo Pickups (`Game::collect_pickups`)**: 4 Bank Street pickups `[(-2068.1, 138.5), (-1026.6, 187.3), (-234.35, 197.9), (732.15, 182.45)]` award 5 batarangs, 5 score, and `AudioEvent::Item`.
+   - **Pit Logic (`Game::update_pit_logic`)**: Checks `(player.y + level_origin_y()) > 400.0` on Level 1B; decrements lives, triggers 40-frame fadeout, and cleanly respawns at Level 1B start (`fresh.start_stage(StageId::Level1B)`).
+   - **Stage Transitions (`Game::advance_level_exit`)**: Level 1B exit fade stops music at frame 39, sets `level1b_complete = true` at frame 40, and populates `pending_stage_entry = PendingStageEntry::after_source_fade(StageId::Level1B, progress)` targeting `StageId::Level1C`.
+2. Seven new unit tests added in `b13_level1b_stage_activation_tests` in `src/game.rs`: `level1b_start_stage_initialization`, `level1b_camera_parameters`, `level1b_pickups_collection`, `level1b_checkpoints_trigger_overlays`, `level1b_pit_fall_triggers_fade_and_respawns_at_1b_start`, `level1b_wave2_clear_triggers_stage_complete_and_transition_to_1c`, increasing total Rust tests from 72 to 79.
+3. Added automated CI baking and packing for 75-tile Bank Street pack (`assets/level1b_tiles.bin`) in `.github/workflows/build-level1a-fidelity.yml`.
+
+**NATIVE VERIFIED on exact CODE SHA:** locked MSVC release `cargo test --release --locked` **79/79 passed in 0.64s**, locked build PASS, native legacy 1× image SHA **15/15 identical**, HQ3× smoke **20/20 at 1800×1200**, relocated standalone EXE **20/20 exact HQ hashes**, child exit 0 and no SWF staged. Real Win32 OS capture/start/held Enter/fresh Enter/SKIP, F7/F8 three HUD cases, fullscreen F/Esc, focus visuals, PE and Windows Shell icon PASS. Render p95 **18.3410ms**, scenery scroll p95 **22.1543ms**, both well below unchanged **40ms** gate. Integration QA artifact confirmed child exit 0, 20/20 identical HQ hashes. Hosted WinMM audio device 0 / MCI error 277 remains **BLOCKED** (no hosted speaker endpoint). Live Flash parity and physical audio UNVERIFIED.
+
+**RUST PURITY/AUDIT:** Zero unsafe code, zero new external crates, runtime remains 100% native Rust with documented Win32/GDI/WinMM FFI. [Research RE-20261113-019](REVERSE_ENGINEERING_RESEARCH_LEDGER.md) and [independent AUD-20261113-019](RUST_PURITY_AND_ENGINEERING_AUDIT.md) finalized. Reviewed `AGENTS.md` and both mandatory protocols unchanged. Main and accepted Level1A release preserved.
+
+**STOP. ONE NEXT SEPARATELY AUTHORIZED TASK: B14 Penguin Symbol #1251 & penguinAI (src/penguin.rs) — Level 1C Boss Encounter Setup**, preserving existing baseline.
+
+
 ## B12 — COMPLETED / bikerAI & bank biker state machine (2026-11-13)
 
 **VERIFIED NATIVE WINDOWS REGRESSION, NOT PLAYABLE LEVEL1B.** [Draft, OPEN, UNMERGED PR #44](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/44) on `revive/level2-b12-biker-ai-2026-11-12`, based on B11 docs commit `4c5c189`. **Exact Windows-tested code SHA `657ec06`**. Final documentation SHA is the separate later `[skip ci]` commit; this file cannot prestate its own commit ID. Full native Windows [#43340912013](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43340912013) **SUCCESS 82/82 steps** on exact code SHA.

@@ -1,3 +1,5 @@
+use crate::bank_biker::{BankBiker, BikerEvent};
+use crate::bank_goons::{BankGoonSquad, GoonCombatEvent, PlayerCombatContext};
 use crate::collision::CollisionMask;
 use crate::stage::{PendingStageEntry,RootProgress,StageId};
 
@@ -23,9 +25,13 @@ pub const LEVEL_Y:f32=239.25;
 const GAME_ROOT_X:f32=26.1;
 const GAME_ROOT_Y:f32=15.95;
 const BG_INITIAL_Y:f32=-13.1;
+#[allow(dead_code)]
 const CAM_HEIGHT:f32=150.0;
+#[allow(dead_code)]
 const CAM_JUMP:f32=1.25;
+#[allow(dead_code)]
 const CAM_MIN:f32=-1350.0;
+#[allow(dead_code)]
 const CAM_MAX:f32=7650.0;
 const CAM_OFFSET:f32=0.0;
 
@@ -33,6 +39,17 @@ pub const PICKUPS:[(f32,f32);7]=[
     (-803.05,19.85),(873.3,-9.0),(1682.9,73.45),(2546.5,62.35),
     (3396.0,112.3),(4448.1,133.4),(5534.95,162.25)
 ];
+
+pub const LEVEL1B_PICKUPS:[(f32,f32);4]=[
+    (-2068.1,138.5),(-1026.6,187.3),(-234.35,197.9),(732.15,182.45)
+];
+
+const CHECKPOINT_1B_01:CheckpointRect=CheckpointRect{min_x:98.152,min_y:102.475,max_x:364.689,max_y:398.098};
+const CHECKPOINT_1B_02:CheckpointRect=CheckpointRect{min_x:364.689,min_y:110.725,max_x:969.362,max_y:406.348};
+const CHECKPOINT_1B_03:CheckpointRect=CheckpointRect{min_x:-8243.564,min_y:124.725,max_x:-6683.608,max_y:420.348};
+
+const OVERLAY_GO_LEFT:usize=10;
+const OVERLAY_FIGHT_BTNS:usize=75;
 
 #[derive(Copy,Clone)]
 struct CheckpointRect{min_x:f32,min_y:f32,max_x:f32,max_y:f32}
@@ -193,6 +210,10 @@ pub struct Game{
     pub level1a_exit_reached:bool,
     pub fadeout_tick:Option<u16>,
     pub level1a_complete:bool,
+    pub level1b_exit_reached:bool,
+    pub level1b_complete:bool,
+    pub bank_goons:Option<BankGoonSquad>,
+    pub bank_biker:Option<BankBiker>,
     pub pickups:[bool;7],
     pub shots:Vec<Shot>,
     pub ticks:u64,
@@ -226,8 +247,70 @@ impl Game{
             gravity:GLOBAL_GRAVITY,
             batarangs:0,score:0,lives:5,health:100,player_attacking:false,
             overlay_frame:OVERLAY_BLANK,overlay_playing:false,walk_checkpoint_started_tick:None,level1a_exit_reached:false,fadeout_tick:None,level1a_complete:false,
+            level1b_exit_reached:false,level1b_complete:false,bank_goons:None,bank_biker:None,
             pickups:[false;7],shots:Vec::new(),ticks:0,audio_events:Vec::new(),pit_done:false,respawn_after_fade:false,gameover_after_fade:false,
         }
+    }
+
+    #[inline]
+    pub fn level_origin_x(&self)->f32{
+        self.stage.descriptor().level_origin_game_local.x
+    }
+
+    #[inline]
+    pub fn level_origin_y(&self)->f32{
+        self.stage.descriptor().level_origin_game_local.y
+    }
+
+    pub fn start_stage(&mut self,stage:StageId){
+        self.stage=stage;
+        self.pending_stage_entry=None;
+        let desc=stage.descriptor();
+        let (spawn_x,spawn_y)=desc.player_spawn_level_local();
+        self.player.x=spawn_x;
+        self.player.y=spawn_y;
+        self.player.dir=desc.source_player_direction as i32;
+        self.player.dx=0.0;
+        self.player.dy=0.0;
+        self.player.state=PlayerState::Fall;
+        self.player.state_tick=0;
+        self.player.jumping=true;
+        self.player.on_ground=false;
+        self.player.walk_count=0;
+        self.player.walk_slowdown=INITIAL_WALK_SLOWDOWN;
+        self.player.run_left=0;
+        self.player.run_right=0;
+        self.health=100;
+        self.fadeout_tick=None;
+        self.camera_x=GAME_ROOT_X;
+        self.camera_y=GAME_ROOT_Y;
+        self.background_x=0.0;
+        self.background_y=BG_INITIAL_Y;
+        self.overlay_frame=OVERLAY_BLANK;
+        self.overlay_playing=false;
+        self.walk_checkpoint_started_tick=None;
+        self.pit_done=false;
+        self.respawn_after_fade=false;
+        self.gameover_after_fade=false;
+
+        match stage{
+            StageId::Level1A=>{
+                self.bank_goons=None;
+                self.bank_biker=None;
+                self.level1a_exit_reached=false;
+                self.level1a_complete=false;
+                self.pickups=[false;7];
+            },
+            StageId::Level1B=>{
+                self.bank_goons=Some(BankGoonSquad::new());
+                self.bank_biker=Some(BankBiker::new());
+                self.level1b_exit_reached=false;
+                self.level1b_complete=false;
+                self.pickups=[false;7];
+            },
+            _=>{}
+        }
+        self.update_camera();
     }
 
     /// The only loaded stage is 1A until its full successor pack is ready.
@@ -248,6 +331,9 @@ impl Game{
         if self.player.state!=state{
             self.player.state=state;
             self.player.state_tick=0;
+            if matches!(state, PlayerState::Hurt | PlayerState::Hurt2 | PlayerState::Die) {
+                self.player_attacking = false;
+            }
         }
     }
 
@@ -360,6 +446,7 @@ impl Game{
         self.ticks+=1;
         if self.advance_level_exit(){input.clear_pressed();return;}
         if self.level1a_complete{input.clear_pressed();return;}
+        if self.level1b_complete{input.clear_pressed();return;}
         self.advance_tutorial_overlay();
         let state_at_tick_start=self.player.state;
 
@@ -384,6 +471,10 @@ impl Game{
         self.process_combat(input);
         self.process_gadget(input);
         self.process_jump_and_glide(input);
+
+        if self.stage == StageId::Level1B {
+            self.tick_level1b_enemies(ground);
+        }
 
         self.collect_pickups();
         self.update_shots();
@@ -643,8 +734,8 @@ impl Game{
             return;
         }
 
-        let game_x=self.player.x+LEVEL_X;
-        let game_y=self.player.y+LEVEL_Y;
+        let game_x=self.player.x+self.level_origin_x();
+        let game_y=self.player.y+self.level_origin_y();
         let (state,shot_y)=if self.player.jumping{
             (PlayerState::JumpBatarang,game_y-20.0+self.player.dy)
         }else if self.player.state==PlayerState::Duck{
@@ -687,9 +778,9 @@ impl Game{
             self.fadeout_tick=Some(next);
             // SWF fadeout sprite #34 (zero-based frame 39) dispatches
             // StopSounds before root's destination-frame jump at frame 40.
-            // Change only the completed 1A exit: pit/continue paths retain
+            // Change only the completed exits: pit/continue paths retain
             // their established native behavior and regression contract.
-            if next==39 && self.level1a_exit_reached {
+            if next==39 && (self.level1a_exit_reached || self.level1b_exit_reached) {
                 self.audio_events.push(AudioEvent::MusicStop);
             }
             return false;
@@ -698,14 +789,17 @@ impl Game{
         self.fadeout_tick=Some(40);
         if self.respawn_after_fade{
             // pitLogic routes through root "continue" with gotoLast="start".
-            // The campaign dispatcher is intentionally outside this Level 1A
-            // slice, so restart the same stage while preserving root values.
+            // Restart the same stage while preserving root values.
+            let stage=self.stage;
             let lives=self.lives;
             let score=self.score;
             let batarangs=self.batarangs;
             let events=std::mem::take(&mut self.audio_events);
             let mut fresh=Game::new();
             fresh.screen=AppScreen::Playing;
+            if stage!=StageId::Level1A {
+                fresh.start_stage(stage);
+            }
             fresh.lives=lives;
             fresh.score=score;
             fresh.batarangs=batarangs;
@@ -725,17 +819,23 @@ impl Game{
 
         if self.level1a_exit_reached {
             // Original root19 sets gotoNext=level1b, then plays #34.
-            // Keep root progress only. The new stage's art, collision,
-            // actor AI and sound #1076 are not yet packable/implemented.
             self.pending_stage_entry=PendingStageEntry::after_source_fade(
                 self.stage,
                 RootProgress{score:self.score,lives:self.lives,batarangs:self.batarangs},
             );
+            self.level1a_complete=true;
+        }else if self.level1b_exit_reached {
+            // Original root20 sets gotoNext=level1c, then plays #34.
+            self.pending_stage_entry=PendingStageEntry::after_source_fade(
+                self.stage,
+                RootProgress{score:self.score,lives:self.lives,batarangs:self.batarangs},
+            );
+            self.level1b_complete=true;
         }else{
             // Other non-pit terminal fades preserve the old sound behavior.
             self.audio_events.push(AudioEvent::MusicStop);
+            self.level1a_complete=true;
         }
-        self.level1a_complete=true;
         true
     }
 
@@ -762,8 +862,107 @@ impl Game{
         self.ticks>=99
     }
 
+    fn tick_level1b_enemies(&mut self, ground: &CollisionMask) {
+        let player_x_game = self.player.x + self.level_origin_x();
+        let player_y_game = self.player.y + self.level_origin_y();
+        let is_hurt = matches!(self.player.state, PlayerState::Hurt | PlayerState::Hurt2) || self.fadeout_tick.is_some();
+        let state_name = match self.player.state {
+            PlayerState::Punch => "punch",
+            PlayerState::HighPunch => "highpunch",
+            PlayerState::LowPunch => "lowpunch",
+            PlayerState::JumpPunch => "jumppunch",
+            PlayerState::Kick => "kick",
+            PlayerState::HighKick => "highkick",
+            PlayerState::LowKick => "lowkick",
+            PlayerState::JumpKick => "jumpkick",
+            PlayerState::Hurt | PlayerState::Hurt2 => "hurt",
+            PlayerState::Die => "die",
+            _ => "other",
+        };
+        let player_ctx = PlayerCombatContext {
+            x_game: player_x_game,
+            y_game: player_y_game,
+            dir: self.player.dir,
+            is_attacking: self.player_attacking,
+            is_invincible: is_hurt || self.player.state == PlayerState::Die,
+            state_name,
+        };
+
+        let mut goon_events = Vec::new();
+        if let Some(squad) = &mut self.bank_goons {
+            let batarangs: Vec<(f32, f32)> = self.shots.iter().map(|s| (s.x, s.y)).collect();
+            squad.tick_combat(&player_ctx, &batarangs, ground, &mut goon_events);
+        }
+
+        let mut biker_events = Vec::new();
+        if let Some(biker) = &mut self.bank_biker {
+            let batarangs: Vec<(f32, f32, bool)> = self.shots.iter().map(|s| (s.x, s.y, true)).collect();
+            biker.tick(player_x_game, player_y_game, self.player_attacking, is_hurt, &batarangs, &mut biker_events);
+        }
+
+        for ev in goon_events {
+            match ev {
+                GoonCombatEvent::PlayerHurt { damage } => {
+                    self.apply_player_damage(damage);
+                }
+                GoonCombatEvent::Score(pts) => {
+                    self.score += pts as i32;
+                }
+                GoonCombatEvent::StageComplete => {
+                    if !self.level1b_exit_reached && self.fadeout_tick.is_none() {
+                        self.level1b_exit_reached = true;
+                        self.fadeout_tick = Some(0);
+                        self.player.dx = 0.0;
+                        self.player.dy = 0.0;
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        for ev in biker_events {
+            match ev {
+                BikerEvent::PlayerHurt { damage } => {
+                    self.apply_player_damage(damage as i32);
+                }
+                BikerEvent::Score(pts) => {
+                    self.score += pts as i32;
+                }
+                _ => {}
+            }
+        }
+    }
+
+    fn apply_player_damage(&mut self, damage: i32) {
+        if self.fadeout_tick.is_some() || self.player.state == PlayerState::Die {
+            return;
+        }
+        self.health = self.health.saturating_sub(damage);
+        if self.health <= 0 {
+            self.health = 0;
+            self.enter(PlayerState::Die);
+            if self.lives > 0 {
+                self.lives -= 1;
+                self.respawn_after_fade = true;
+            } else {
+                self.gameover_after_fade = true;
+            }
+            self.fadeout_tick = Some(0);
+            self.player.dx = 0.0;
+            self.player.dy = 0.0;
+        } else {
+            self.enter(PlayerState::Hurt);
+            self.player.walk_count = 0;
+            self.player.walk_slowdown = INITIAL_WALK_SLOWDOWN;
+        }
+    }
+
     fn update_pit_logic(&mut self){
-        let hit=PIT_1A.hits_player(self.player.x,self.player.y);
+        let hit = match self.stage {
+            StageId::Level1A => PIT_1A.hits_player(self.player.x, self.player.y),
+            StageId::Level1B => (self.player.y + self.level_origin_y()) > 400.0,
+            _ => false,
+        };
         if !hit{
             self.pit_done=false;
             return;
@@ -787,51 +986,73 @@ impl Game{
     }
 
     fn update_tutorial_checkpoints(&mut self){
-        let x=self.player.x+LEVEL_X;
-        let y=self.player.y+LEVEL_Y;
-        let title_done=self.level_title_finished();
+        let x=self.player.x+self.level_origin_x();
+        let y=self.player.y+self.level_origin_y();
 
-        if title_done&&CP_WRONG.hits_player(x,y){
-            self.overlay_goto_and_play(OVERLAY_WRONGWAY);
-        }
+        match self.stage {
+            StageId::Level1A => {
+                let title_done=self.level_title_finished();
 
-        if title_done&&CP_WALK.hits_player(x,y){
-            let started=*self.walk_checkpoint_started_tick.get_or_insert(self.ticks);
-            let elapsed_ms=self.ticks.saturating_sub(started)*40;
-            if elapsed_ms<3000{
-                self.overlay_goto_and_play(OVERLAY_GO_RIGHT);
-            }else if elapsed_ms>3000&&elapsed_ms<6000{
-                self.overlay_goto_and_play(OVERLAY_WALK);
+                if title_done&&CP_WRONG.hits_player(x,y){
+                    self.overlay_goto_and_play(OVERLAY_WRONGWAY);
+                }
+
+                if title_done&&CP_WALK.hits_player(x,y){
+                    let started=*self.walk_checkpoint_started_tick.get_or_insert(self.ticks);
+                    let elapsed_ms=self.ticks.saturating_sub(started)*40;
+                    if elapsed_ms<3000{
+                        self.overlay_goto_and_play(OVERLAY_GO_RIGHT);
+                    }else if elapsed_ms>3000&&elapsed_ms<6000{
+                        self.overlay_goto_and_play(OVERLAY_WALK);
+                    }
+                }
+
+                if title_done&&(CP_JUMP1.hits_player(x,y)||CP_JUMP2.hits_player(x,y)){
+                    self.overlay_goto_and_play(OVERLAY_JUMP);
+                }
+
+                if CP_GLIDE1.hits_player(x,y){
+                    self.overlay_goto_and_play(OVERLAY_GLIDE_DOWN);
+                }
+                if CP_GLIDE3.hits_player(x,y){
+                    self.overlay_goto_and_play(OVERLAY_TO_STREET);
+                }
+
+                if CP_NEXT.hits_player(x,y)&&self.fadeout_tick.is_none(){
+                    // Source gotoNext="level1b" starts fadeout sprite #34. B04
+                    // snapshots a pending entry only AFTER the complete 41 frames;
+                    // renderer/collision still show the final 1A frame.
+                    self.level1a_exit_reached=true;
+                    self.fadeout_tick=Some(0);
+                    self.player.dx=0.0;
+                    self.player.dy=0.0;
+                }
             }
-        }
-
-        if title_done&&(CP_JUMP1.hits_player(x,y)||CP_JUMP2.hits_player(x,y)){
-            self.overlay_goto_and_play(OVERLAY_JUMP);
-        }
-
-        if CP_GLIDE1.hits_player(x,y){
-            self.overlay_goto_and_play(OVERLAY_GLIDE_DOWN);
-        }
-        if CP_GLIDE3.hits_player(x,y){
-            self.overlay_goto_and_play(OVERLAY_TO_STREET);
-        }
-
-        if CP_NEXT.hits_player(x,y)&&self.fadeout_tick.is_none(){
-            // Source gotoNext="level1b" starts fadeout sprite #34. B04
-            // snapshots a pending entry only AFTER the complete 41 frames;
-            // renderer/collision still show the final 1A frame.
-            self.level1a_exit_reached=true;
-            self.fadeout_tick=Some(0);
-            self.player.dx=0.0;
-            self.player.dy=0.0;
+            StageId::Level1B => {
+                if CHECKPOINT_1B_01.hits_player(x,y){
+                    self.overlay_goto_and_play(OVERLAY_FIGHT_BTNS);
+                }
+                if CHECKPOINT_1B_02.hits_player(x,y){
+                    self.overlay_goto_and_play(OVERLAY_GO_LEFT);
+                }
+                if CHECKPOINT_1B_03.hits_player(x,y){
+                    self.overlay_goto_and_play(OVERLAY_GO_RIGHT);
+                }
+            }
+            _ => {}
         }
     }
 
     fn collect_pickups(&mut self){
-        let px=self.player.x+LEVEL_X;
-        let py=self.player.y+LEVEL_Y;
-        for(i,&(x,y))in PICKUPS.iter().enumerate(){
-            if self.pickups[i]{continue;}
+        let px=self.player.x+self.level_origin_x();
+        let py=self.player.y+self.level_origin_y();
+        let pickups_slice: &[(f32,f32)] = match self.stage {
+            StageId::Level1A => &PICKUPS,
+            StageId::Level1B => &LEVEL1B_PICKUPS,
+            _ => &[],
+        };
+        for(i,&(x,y))in pickups_slice.iter().enumerate(){
+            if i < self.pickups.len() && self.pickups[i]{continue;}
             // Native approximation of Flash movie-clip hitTest bounds. The
             // art itself is original; exact alpha hit testing can replace this
             // once the pickup registration box is extracted.
@@ -845,7 +1066,7 @@ impl Game{
     }
 
     fn update_shots(&mut self){
-        let px=self.player.x+LEVEL_X;
+        let px=self.player.x+self.level_origin_x();
         for shot in &mut self.shots{shot.x+=shot.dir as f32*50.0;}
         self.shots.retain(|shot|(shot.x-px).abs()<500.0);
     }
@@ -853,6 +1074,7 @@ impl Game{
     fn update_camera(&mut self){
         // Exact translation of the original cameraLogic() recovered from the
         // decompiled ActionScript, using game-local player coordinates.
+        let cam=self.stage.descriptor().camera;
         let bg_width=2472.0_f32; // temporary measured/baked width; wrap rule is exact.
         let bg_diff=self.background_x+self.camera_x;
         if bg_diff>0.0{
@@ -861,12 +1083,12 @@ impl Game{
             self.background_x+=bg_width/2.0;
         }
 
-        let player_x=self.player.x+LEVEL_X;
-        let player_y=self.player.y+LEVEL_Y;
+        let player_x=self.player.x+self.level_origin_x();
+        let player_y=self.player.y+self.level_origin_y();
         let target_x=if self.player.dir>0{125.0}else{475.0};
         let player_position_x=player_x+self.camera_x;
 
-        if player_x>CAM_MIN&&player_x<CAM_MAX{
+        if player_x>cam.min_x&&player_x<cam.max_x{
             let delta=player_position_x-target_x;
             if delta.abs()>4.0{
                 let ease=(delta/10.0).trunc();
@@ -876,12 +1098,12 @@ impl Game{
         }
 
         if self.player.jumping{
-            self.camera_y=(CAM_HEIGHT-player_y)/CAM_JUMP;
-            self.background_y=(player_y/2.0-CAM_HEIGHT/1.5)/CAM_JUMP-CAM_OFFSET;
+            self.camera_y=(cam.height-player_y)/cam.jump;
+            self.background_y=(player_y/2.0-cam.height/1.5)/cam.jump-CAM_OFFSET;
         }else if (self.camera_y+player_y-150.0).abs()>1.0{
-            let target=(CAM_HEIGHT-player_y)/CAM_JUMP;
+            let target=(cam.height-player_y)/cam.jump;
             self.camera_y+=((target-self.camera_y)/4.0).trunc();
-            self.background_y=((player_y/2.0-CAM_HEIGHT/1.5)/CAM_JUMP).trunc()-CAM_OFFSET;
+            self.background_y=((player_y/2.0-cam.height/1.5)/cam.jump).trunc()-CAM_OFFSET;
         }
     }
 }
@@ -1012,5 +1234,182 @@ mod qa_navigation_tests {
                 "QA actor origin offscreen: stage_y={stage_y}");
         assert!(stage_x>=0.0 && stage_x<super::LOGICAL_W as f32,
                 "QA actor origin offscreen: stage_x={stage_x}");
+    }
+}
+
+#[cfg(test)]
+mod b13_level1b_stage_activation_tests {
+    use super::{
+        AppScreen, AudioEvent, Game, InputState, LEVEL1B_PICKUPS,
+        OVERLAY_FIGHT_BTNS, OVERLAY_GO_LEFT, OVERLAY_GO_RIGHT,
+    };
+    use crate::collision::CollisionMask;
+    use crate::stage::{PendingStageEntry, RootProgress, StageId};
+
+    #[test]
+    fn level1b_start_stage_initializes_state_and_enemies() {
+        let mut game = Game::new();
+        game.screen = AppScreen::Playing;
+        game.start_stage(StageId::Level1B);
+
+        assert_eq!(game.active_stage(), StageId::Level1B);
+        assert_eq!(game.pending_stage_entry(), None);
+        assert_eq!(game.player.dir, -1);
+        assert!((game.player.x - (-506.5)).abs() < 0.001);
+        assert!((game.player.y - (-258.0)).abs() < 0.001);
+        assert_eq!(game.health, 100);
+        assert!(game.bank_goons.is_some());
+        assert!(game.bank_biker.is_some());
+        assert!(!game.level1b_exit_reached);
+        assert!(!game.level1b_complete);
+    }
+
+    #[test]
+    fn level1b_camera_bounds_and_parameters() {
+        let mut game = Game::new();
+        game.start_stage(StageId::Level1B);
+        let cam = game.stage.descriptor().camera;
+        assert_eq!(cam.min_x, -6220.0);
+        assert_eq!(cam.max_x, 600.0);
+        assert_eq!(cam.height, 125.0);
+        assert_eq!(cam.jump, 3.0);
+    }
+
+    #[test]
+    fn level1b_collects_pickups() {
+        let ground = CollisionMask::level1b();
+        let mut game = Game::new();
+        game.screen = AppScreen::Playing;
+        game.start_stage(StageId::Level1B);
+        let mut input = InputState::default();
+
+        // Position player at pickup 0: (-2068.1, 138.5) in game space
+        let origin_x = game.level_origin_x();
+        let origin_y = game.level_origin_y();
+        game.player.x = LEVEL1B_PICKUPS[0].0 - origin_x;
+        game.player.y = LEVEL1B_PICKUPS[0].1 - origin_y;
+
+        let prev_batarangs = game.batarangs;
+        let prev_score = game.score;
+        game.tick(&mut input, &ground);
+
+        assert!(game.pickups[0]);
+        assert_eq!(game.batarangs, prev_batarangs + 5);
+        assert_eq!(game.score, prev_score + 5);
+        assert!(game.take_audio_events().contains(&AudioEvent::Item));
+    }
+
+    #[test]
+    fn level1b_checkpoints_trigger_overlays() {
+        let ground = CollisionMask::level1b();
+        let mut game = Game::new();
+        game.screen = AppScreen::Playing;
+        game.start_stage(StageId::Level1B);
+        let mut input = InputState::default();
+        let origin_x = game.level_origin_x();
+        let origin_y = game.level_origin_y();
+
+        // Checkpoint 01: min_x:98.152, min_y:102.475, max_x:364.689, max_y:398.098 -> OVERLAY_FIGHT_BTNS (75)
+        game.player.x = 200.0 - origin_x;
+        game.player.y = 200.0 - origin_y;
+        game.tick(&mut input, &ground);
+        assert_eq!(game.overlay_frame, OVERLAY_FIGHT_BTNS);
+
+        // Checkpoint 02: min_x:364.689, min_y:110.725, max_x:969.362, max_y:406.348 -> OVERLAY_GO_LEFT (10)
+        game.player.x = 500.0 - origin_x;
+        game.player.y = 200.0 - origin_y;
+        game.tick(&mut input, &ground);
+        assert_eq!(game.overlay_frame, OVERLAY_GO_LEFT);
+
+        // Checkpoint 03: min_x:-8243.564, min_y:124.725, max_x:-6683.608, max_y:420.348 -> OVERLAY_GO_RIGHT (1)
+        game.player.x = -7000.0 - origin_x;
+        game.player.y = 200.0 - origin_y;
+        game.tick(&mut input, &ground);
+        assert_eq!(game.overlay_frame, OVERLAY_GO_RIGHT);
+    }
+
+    #[test]
+    fn level1b_pit_fall_triggers_fade_and_respawns_at_1b_start() {
+        let ground = CollisionMask::level1b();
+        let mut game = Game::new();
+        game.screen = AppScreen::Playing;
+        game.start_stage(StageId::Level1B);
+        let mut input = InputState::default();
+
+        // Void fall: player y in game space > 400.0
+        let origin_y = game.level_origin_y();
+        game.player.y = 450.0 - origin_y;
+        game.lives = 3;
+
+        game.tick(&mut input, &ground);
+        assert_eq!(game.fadeout_tick, Some(0));
+        assert_eq!(game.lives, 2);
+        assert!(game.respawn_after_fade);
+
+        // Advance through 40-frame fadeout
+        for _ in 0..40 {
+            game.tick(&mut input, &ground);
+        }
+        assert_eq!(game.fadeout_tick, Some(40));
+
+        // Tick 41: advance_level_exit resets game to start of Level 1B
+        game.tick(&mut input, &ground);
+        assert_eq!(game.fadeout_tick, None);
+        assert_eq!(game.active_stage(), StageId::Level1B);
+        assert_eq!(game.lives, 2);
+        assert!((game.player.x - (-506.5)).abs() < 0.001);
+        assert!((game.player.y - (-258.0)).abs() < 0.001);
+        assert_eq!(game.health, 100);
+    }
+
+    #[test]
+    fn level1b_stage_completion_transitions_to_level1c() {
+        let ground = CollisionMask::level1b();
+        let mut game = Game::new();
+        game.screen = AppScreen::Playing;
+        game.start_stage(StageId::Level1B);
+        let mut input = InputState::default();
+        game.score = 5000;
+        game.lives = 4;
+        game.batarangs = 25;
+
+        // Simulate squad completing wave 2
+        if let Some(squad) = &mut game.bank_goons {
+            squad.respawned = 1;
+            squad.e_kills = 8;
+        }
+
+        // Next tick routes StageComplete from goon squad
+        game.tick(&mut input, &ground);
+        assert!(game.level1b_exit_reached);
+        assert_eq!(game.fadeout_tick, Some(0));
+
+        // Advance through fadeout to tick 39
+        for i in 1..=38 {
+            game.tick(&mut input, &ground);
+            assert_eq!(game.fadeout_tick, Some(i));
+            assert_eq!(game.pending_stage_entry(), None);
+        }
+
+        // Tick 39: MusicStop emitted
+        game.tick(&mut input, &ground);
+        assert_eq!(game.fadeout_tick, Some(39));
+        assert_eq!(game.take_audio_events(), vec![AudioEvent::MusicStop]);
+
+        // Tick 40: terminal frame
+        game.tick(&mut input, &ground);
+        assert_eq!(game.fadeout_tick, Some(40));
+
+        // Tick 41: pending_stage_entry latched targeting Level 1C
+        game.tick(&mut input, &ground);
+        assert!(game.level1b_complete);
+        assert_eq!(game.active_stage(), StageId::Level1B);
+        assert_eq!(game.pending_stage_entry(), Some(PendingStageEntry {
+            from: StageId::Level1B,
+            to: StageId::Level1C,
+            progress: RootProgress { score: 5000, lives: 4, batarangs: 25 },
+            outgoing_root_sound_id: 1076,
+            incoming_root_sound_id: 1252,
+        }));
     }
 }
