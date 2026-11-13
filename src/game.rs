@@ -1,7 +1,11 @@
 use crate::bank_biker::{BankBiker, BikerEvent};
 use crate::bank_goons::{BankGoonSquad, GoonCombatEvent, PlayerCombatContext};
 use crate::collision::CollisionMask;
-use crate::stage::{PendingStageEntry,RootProgress,StageId};
+use crate::penguin::{
+    PenguinBoss, PenguinCombatEvent, PenguinPlayerContext, PenguinPlayerHurtKind, PenguinRng,
+    PenguinState, LEVEL1C_PICKUP_POINTS,
+};
+use crate::stage::{PendingStageEntry, RootProgress, StageId, StoryCard};
 
 pub const LOGICAL_W:usize=600;
 pub const LOGICAL_H:usize=400;
@@ -87,9 +91,11 @@ const OVERLAY_WRONGWAY:usize=30;
 const OVERLAY_GLIDE_DOWN:usize=39;
 const OVERLAY_WALK:usize=58;
 const OVERLAY_TO_STREET:usize=140;
+const ESCAPE_CARD_TERMINAL_FRAME:u16=224;
+const ESCAPE_CARD_SOUND_ID:u16=130;
 
 #[derive(Copy,Clone,Debug,PartialEq,Eq)]
-pub enum AppScreen{Title,Instructions,Intro,Playing}
+pub enum AppScreen{Title,Instructions,Intro,Playing,EscapeCard}
 
 #[derive(Copy,Clone,Debug,PartialEq,Eq)]
 pub enum AudioEvent{IntroStart,IntroStop,MusicStart,MusicStop,Jump,Item}
@@ -212,8 +218,18 @@ pub struct Game{
     pub level1a_complete:bool,
     pub level1b_exit_reached:bool,
     pub level1b_complete:bool,
+    pub level1c_exit_reached:bool,
+    pub level1c_complete:bool,
+    /// Original root frame 22 (`card:escape`) story sequence (`0..=224` at 25 fps).
+    pub escape_card_tick:u16,
+    /// Original 41-frame fadeout sprite `#34` started from `#1267` terminal frame or SKIP `#1268`.
+    pub escape_card_fadeout_tick:Option<u16>,
+    escape_card_sound_stopped:bool,
+    pub escape_card_complete:bool,
     pub bank_goons:Option<BankGoonSquad>,
     pub bank_biker:Option<BankBiker>,
+    pub penguin_boss:Option<PenguinBoss>,
+    penguin_rng:PenguinRng,
     pub pickups:[bool;7],
     pub shots:Vec<Shot>,
     pub ticks:u64,
@@ -247,7 +263,10 @@ impl Game{
             gravity:GLOBAL_GRAVITY,
             batarangs:0,score:0,lives:5,health:100,player_attacking:false,
             overlay_frame:OVERLAY_BLANK,overlay_playing:false,walk_checkpoint_started_tick:None,level1a_exit_reached:false,fadeout_tick:None,level1a_complete:false,
-            level1b_exit_reached:false,level1b_complete:false,bank_goons:None,bank_biker:None,
+            level1b_exit_reached:false,level1b_complete:false,
+            level1c_exit_reached:false,level1c_complete:false,
+            escape_card_tick:0,escape_card_fadeout_tick:None,escape_card_sound_stopped:false,escape_card_complete:false,
+            bank_goons:None,bank_biker:None,penguin_boss:None,penguin_rng:PenguinRng::new(0x1C00_1250),
             pickups:[false;7],shots:Vec::new(),ticks:0,audio_events:Vec::new(),pit_done:false,respawn_after_fade:false,gameover_after_fade:false,
         }
     }
@@ -297,15 +316,33 @@ impl Game{
             StageId::Level1A=>{
                 self.bank_goons=None;
                 self.bank_biker=None;
+                self.penguin_boss=None;
                 self.level1a_exit_reached=false;
                 self.level1a_complete=false;
+                self.level1c_exit_reached=false;
+                self.level1c_complete=false;
+                self.escape_card_complete=false;
                 self.pickups=[false;7];
             },
             StageId::Level1B=>{
                 self.bank_goons=Some(BankGoonSquad::new());
                 self.bank_biker=Some(BankBiker::new());
+                self.penguin_boss=None;
                 self.level1b_exit_reached=false;
                 self.level1b_complete=false;
+                self.level1c_exit_reached=false;
+                self.level1c_complete=false;
+                self.escape_card_complete=false;
+                self.pickups=[false;7];
+            },
+            StageId::Level1C=>{
+                self.bank_goons=None;
+                self.bank_biker=None;
+                self.penguin_boss=Some(PenguinBoss::new());
+                self.penguin_rng=PenguinRng::new(0x1C00_1250);
+                self.level1c_exit_reached=false;
+                self.level1c_complete=false;
+                self.escape_card_complete=false;
                 self.pickups=[false;7];
             },
             _=>{}
@@ -382,6 +419,55 @@ impl Game{
         true
     }
 
+    fn stop_escape_card_sound_once(&mut self){
+        if !self.escape_card_sound_stopped {
+            self.escape_card_sound_stopped=true;
+            self.audio_events.push(AudioEvent::IntroStop);
+        }
+    }
+
+    fn advance_escape_card_story(&mut self){
+        if self.escape_card_tick<ESCAPE_CARD_TERMINAL_FRAME {
+            self.escape_card_tick+=1;
+        }
+    }
+
+    /// Source button #1268's release-inside event sets `gotoNext="level2a"` and plays fadeout `#34`.
+    pub fn skip_escape_card(&mut self)->bool{
+        if self.screen!=AppScreen::EscapeCard
+            || self.escape_card_fadeout_tick.is_some()
+            || self.escape_card_complete
+        {
+            return false;
+        }
+        self.escape_card_fadeout_tick=Some(0);
+        true
+    }
+
+    fn begin_escape_card(&mut self){
+        self.screen=AppScreen::EscapeCard;
+        self.escape_card_tick=0;
+        self.escape_card_fadeout_tick=None;
+        self.escape_card_sound_stopped=false;
+        self.escape_card_complete=false;
+        self.fadeout_tick=None;
+        self.level1c_complete=true;
+        // Root frame 22 executes `StartSound 130` (same looping track as frame 18).
+        self.audio_events.push(AudioEvent::IntroStart);
+    }
+
+    fn finish_escape_card_to_level2a(&mut self){
+        self.stop_escape_card_sound_once();
+        self.escape_card_fadeout_tick=Some(40);
+        self.escape_card_complete=true;
+        self.pending_stage_entry=PendingStageEntry::after_story_card(
+            StoryCard::Escape,
+            StageId::Level1C,
+            ESCAPE_CARD_SOUND_ID,
+            RootProgress{score:self.score,lives:self.lives,batarangs:self.batarangs},
+        );
+    }
+
     pub fn tick(&mut self,input:&mut InputState,ground:&CollisionMask){
         match self.screen{
             AppScreen::Title=>{
@@ -440,6 +526,32 @@ impl Game{
                 input.clear_pressed();
                 return
             },
+            AppScreen::EscapeCard=>{
+                // Root frame 22 plays #1267 (`225` frames, `0..=224`), holding
+                // `#1254` at stopped frame `161`. Frame `224` executes
+                // `stop(); _root.gotoNext = "level2a"; _root.fadeout.play();`.
+                if !self.escape_card_complete {
+                    if let Some(frame)=self.escape_card_fadeout_tick{
+                        self.advance_escape_card_story();
+                        if frame>=40 {
+                            self.finish_escape_card_to_level2a();
+                        }else{
+                            let next=frame+1;
+                            self.escape_card_fadeout_tick=Some(next);
+                            if next==39 { self.stop_escape_card_sound_once(); }
+                        }
+                    }else if input.pressed(VK_ENTER)||input.pressed(VK_SPACE)||input.pressed(VK_ESCAPE){
+                        let _=self.skip_escape_card();
+                    }else{
+                        self.advance_escape_card_story();
+                        if self.escape_card_tick>=ESCAPE_CARD_TERMINAL_FRAME {
+                            self.escape_card_fadeout_tick=Some(0);
+                        }
+                    }
+                }
+                input.clear_pressed();
+                return
+            },
             AppScreen::Playing=>{}
         }
 
@@ -447,6 +559,7 @@ impl Game{
         if self.advance_level_exit(){input.clear_pressed();return;}
         if self.level1a_complete{input.clear_pressed();return;}
         if self.level1b_complete{input.clear_pressed();return;}
+        if self.level1c_complete{input.clear_pressed();return;}
         self.advance_tutorial_overlay();
         let state_at_tick_start=self.player.state;
 
@@ -472,8 +585,10 @@ impl Game{
         self.process_gadget(input);
         self.process_jump_and_glide(input);
 
-        if self.stage == StageId::Level1B {
-            self.tick_level1b_enemies(ground);
+        match self.stage {
+            StageId::Level1B => self.tick_level1b_enemies(ground),
+            StageId::Level1C => self.tick_level1c_boss(ground),
+            _ => {}
         }
 
         self.collect_pickups();
@@ -773,6 +888,14 @@ impl Game{
 
     fn advance_level_exit(&mut self)->bool{
         let Some(t)=self.fadeout_tick else{return false;};
+        if self.level1c_exit_reached && !self.respawn_after_fade && !self.gameover_after_fade {
+            let state_name = self.player_combat_state_name();
+            if let Some(boss) = &mut self.penguin_boss {
+                if boss.state == PenguinState::Die {
+                    boss.step_child_frame(state_name, &mut self.penguin_rng);
+                }
+            }
+        }
         if t<40{
             let next=t+1;
             self.fadeout_tick=Some(next);
@@ -780,7 +903,7 @@ impl Game{
             // StopSounds before root's destination-frame jump at frame 40.
             // Change only the completed exits: pit/continue paths retain
             // their established native behavior and regression contract.
-            if next==39 && (self.level1a_exit_reached || self.level1b_exit_reached) {
+            if next==39 && (self.level1a_exit_reached || self.level1b_exit_reached || self.level1c_exit_reached) {
                 self.audio_events.push(AudioEvent::MusicStop);
             }
             return false;
@@ -831,6 +954,9 @@ impl Game{
                 RootProgress{score:self.score,lives:self.lives,batarangs:self.batarangs},
             );
             self.level1b_complete=true;
+        }else if self.level1c_exit_reached {
+            // Original penguinAI sets gotoNext="card:escape", then plays #34.
+            self.begin_escape_card();
         }else{
             // Other non-pit terminal fades preserve the old sound behavior.
             self.audio_events.push(AudioEvent::MusicStop);
@@ -862,11 +988,8 @@ impl Game{
         self.ticks>=99
     }
 
-    fn tick_level1b_enemies(&mut self, ground: &CollisionMask) {
-        let player_x_game = self.player.x + self.level_origin_x();
-        let player_y_game = self.player.y + self.level_origin_y();
-        let is_hurt = matches!(self.player.state, PlayerState::Hurt | PlayerState::Hurt2) || self.fadeout_tick.is_some();
-        let state_name = match self.player.state {
+    fn player_combat_state_name(&self) -> &'static str {
+        match self.player.state {
             PlayerState::Punch => "punch",
             PlayerState::HighPunch => "highpunch",
             PlayerState::LowPunch => "lowpunch",
@@ -875,10 +998,20 @@ impl Game{
             PlayerState::HighKick => "highkick",
             PlayerState::LowKick => "lowkick",
             PlayerState::JumpKick => "jumpkick",
+            PlayerState::CapeSpin => "capespin",
             PlayerState::Hurt | PlayerState::Hurt2 => "hurt",
+            PlayerState::Electro => "electro",
+            PlayerState::Fall => "fall",
             PlayerState::Die => "die",
             _ => "other",
-        };
+        }
+    }
+
+    fn tick_level1b_enemies(&mut self, ground: &CollisionMask) {
+        let player_x_game = self.player.x + self.level_origin_x();
+        let player_y_game = self.player.y + self.level_origin_y();
+        let is_hurt = matches!(self.player.state, PlayerState::Hurt | PlayerState::Hurt2) || self.fadeout_tick.is_some();
+        let state_name = self.player_combat_state_name();
         let player_ctx = PlayerCombatContext {
             x_game: player_x_game,
             y_game: player_y_game,
@@ -933,7 +1066,74 @@ impl Game{
         }
     }
 
+    fn tick_level1c_boss(&mut self, ground: &CollisionMask) {
+        let player_x_game = self.player.x + self.level_origin_x();
+        let player_y_game = self.player.y + self.level_origin_y();
+        let is_hurt = matches!(self.player.state, PlayerState::Hurt | PlayerState::Hurt2) || self.fadeout_tick.is_some();
+        let state_name = self.player_combat_state_name();
+        let player_ctx = PenguinPlayerContext {
+            x_game: player_x_game,
+            y_game: player_y_game,
+            dx: self.player.dx,
+            dir: self.player.dir.clamp(-1, 1) as i8,
+            width: PLAYER_W,
+            attacking: self.player_attacking,
+            invincible: is_hurt || self.player.state == PlayerState::Die,
+            state_name,
+        };
+
+        let mut boss_events = Vec::new();
+        if let Some(boss) = &mut self.penguin_boss {
+            let batarangs: Vec<(f32, f32)> = self.shots.iter().map(|s| (s.x, s.y)).collect();
+            boss.tick_combat(&player_ctx, &batarangs, ground, &mut self.penguin_rng, &mut boss_events);
+        }
+
+        let mut hidden_indices = Vec::new();
+        for ev in boss_events {
+            match ev {
+                PenguinCombatEvent::ZeroPlayerDx => {
+                    self.player.dx = 0.0;
+                }
+                PenguinCombatEvent::HideBatarang { index } => {
+                    hidden_indices.push(index);
+                }
+                PenguinCombatEvent::Score(pts) => {
+                    self.score += pts;
+                }
+                PenguinCombatEvent::PlayerHit { damage, kind } => {
+                    let hurt_state = match kind {
+                        PenguinPlayerHurtKind::MeleeHurt => PlayerState::Hurt,
+                        PenguinPlayerHurtKind::LaserElectro => PlayerState::Electro,
+                    };
+                    self.apply_player_damage_with_state(damage, hurt_state);
+                }
+                PenguinCombatEvent::DefeatedTrigger => {
+                    if !self.level1c_exit_reached && self.fadeout_tick.is_none() {
+                        self.level1c_exit_reached = true;
+                        self.fadeout_tick = Some(0);
+                        self.player.dx = 0.0;
+                        self.player.dy = 0.0;
+                    }
+                }
+                PenguinCombatEvent::Sound(_) | PenguinCombatEvent::ComboHit { .. } => {}
+            }
+        }
+        if !hidden_indices.is_empty() {
+            hidden_indices.sort_unstable();
+            hidden_indices.dedup();
+            for index in hidden_indices.into_iter().rev() {
+                if index < self.shots.len() {
+                    self.shots.remove(index);
+                }
+            }
+        }
+    }
+
     fn apply_player_damage(&mut self, damage: i32) {
+        self.apply_player_damage_with_state(damage, PlayerState::Hurt);
+    }
+
+    fn apply_player_damage_with_state(&mut self, damage: i32, hurt_state: PlayerState) {
         if self.fadeout_tick.is_some() || self.player.state == PlayerState::Die {
             return;
         }
@@ -951,7 +1151,7 @@ impl Game{
             self.player.dx = 0.0;
             self.player.dy = 0.0;
         } else {
-            self.enter(PlayerState::Hurt);
+            self.enter(hurt_state);
             self.player.walk_count = 0;
             self.player.walk_slowdown = INITIAL_WALK_SLOWDOWN;
         }
@@ -1049,6 +1249,7 @@ impl Game{
         let pickups_slice: &[(f32,f32)] = match self.stage {
             StageId::Level1A => &PICKUPS,
             StageId::Level1B => &LEVEL1B_PICKUPS,
+            StageId::Level1C => &LEVEL1C_PICKUP_POINTS,
             _ => &[],
         };
         for(i,&(x,y))in pickups_slice.iter().enumerate(){
@@ -1411,5 +1612,230 @@ mod b13_level1b_stage_activation_tests {
             outgoing_root_sound_id: 1076,
             incoming_root_sound_id: 1252,
         }));
+    }
+}
+
+#[cfg(test)]
+mod b18_penguin_escape_card_tests {
+    use super::{AppScreen, AudioEvent, Game, InputState, PlayerState, Shot, VK_SPACE};
+    use crate::collision::CollisionMask;
+    use crate::penguin::{
+        PenguinBoss, PenguinState, LEVEL1C_PICKUP_POINTS, PENGUIN_KILL_SCORE,
+    };
+    use crate::stage::{PendingStageEntry, RootProgress, StageId};
+
+    #[test]
+    fn level1c_boss_defeat_enters_escape_card_with_preserved_progress_and_audio() {
+        let ground = CollisionMask::level1c();
+        let mut game = Game::new();
+        game.screen = AppScreen::Playing;
+        game.start_stage(StageId::Level1C);
+        game.score = 1230;
+        game.lives = 4;
+        game.batarangs = 12;
+
+        // Collect one Level 1C pickup (+5 batarangs, +5 score, AudioEvent::Item).
+        let (px, py) = LEVEL1C_PICKUP_POINTS[0];
+        game.player.x = px - game.level_origin_x();
+        game.player.y = py - game.level_origin_y();
+        let mut input = InputState::default();
+        game.tick(&mut input, &ground);
+        assert!(game.pickups[0]);
+        assert_eq!(game.batarangs, 17);
+        assert_eq!(game.score, 1235);
+        assert!(game.take_audio_events().contains(&AudioEvent::Item));
+
+        // Put Penguin at 10 HP right in front of Batman and land a punch for +500 & defeat.
+        let origin_x = game.level_origin_x();
+        let origin_y = game.level_origin_y();
+        let (boss_x, boss_y) = {
+            let boss = game.penguin_boss.as_mut().expect("boss initialized in Level1C");
+            boss.health = 10;
+            boss.set_state(PenguinState::Stand);
+            boss.dir = -1;
+            (boss.x, boss.y)
+        };
+        game.player.jumping = false;
+        game.player.on_ground = true;
+        game.player.dx = 0.0;
+        game.player.dy = 0.0;
+        game.player.x = boss_x - 30.0 - origin_x;
+        game.player.y = boss_y - origin_y;
+        game.player.dir = 1;
+        game.player.state = PlayerState::Punch;
+        game.player.state_tick = 1;
+        game.player_attacking = true;
+
+        game.tick(&mut input, &ground);
+        {
+            let boss = game.penguin_boss.as_ref().unwrap();
+            assert_eq!(boss.state, PenguinState::Die);
+        }
+        assert!(game.score >= 1235 + PENGUIN_KILL_SCORE);
+        // On the subsequent frame, penguinAI's `health <= 0` branch sets
+        // `gotoNext = "card:escape"` and plays `#34` fadeout (`DefeatedTrigger`).
+        game.tick(&mut input, &ground);
+        assert!(game.level1c_exit_reached);
+        assert_eq!(game.fadeout_tick, Some(0));
+
+        // 41-frame fadeout runs before entering card:escape; MusicStop fires on frame 39.
+        for i in 1..=38 {
+            game.tick(&mut input, &ground);
+            assert_eq!(game.fadeout_tick, Some(i));
+            assert_eq!(game.screen, AppScreen::Playing);
+        }
+        game.tick(&mut input, &ground);
+        assert_eq!(game.fadeout_tick, Some(39));
+        assert_eq!(game.take_audio_events(), vec![AudioEvent::MusicStop]);
+
+        game.tick(&mut input, &ground);
+        assert_eq!(game.fadeout_tick, Some(40));
+        assert_eq!(game.screen, AppScreen::Playing);
+
+        let expected_score = game.score;
+        game.tick(&mut input, &ground);
+        assert!(game.level1c_complete);
+        assert_eq!(game.screen, AppScreen::EscapeCard);
+        assert_eq!(game.escape_card_tick, 0);
+        assert_eq!(game.escape_card_fadeout_tick, None);
+        assert_eq!(game.score, expected_score);
+        assert_eq!(game.lives, 4);
+        assert_eq!(game.batarangs, 17);
+        assert_eq!(game.take_audio_events(), vec![AudioEvent::IntroStart]);
+    }
+
+    #[test]
+    fn escape_card_plays_225_frame_timeline_never_loops_and_ends_at_level2a() {
+        let ground = CollisionMask::level1c();
+        let mut game = Game::new();
+        game.screen = AppScreen::Playing;
+        game.start_stage(StageId::Level1C);
+        game.score = 4321;
+        game.lives = 3;
+        game.batarangs = 9;
+        game.level1c_exit_reached = true;
+        game.fadeout_tick = Some(40);
+        let mut input = InputState::default();
+        game.tick(&mut input, &ground);
+        assert_eq!(game.screen, AppScreen::EscapeCard);
+        let _ = game.take_audio_events();
+
+        // Advance #1267 from frame 0 through frame 224 (225 frames total).
+        for tick in 1..224 {
+            game.tick(&mut input, &ground);
+            assert_eq!(game.escape_card_tick, tick);
+            assert_eq!(game.escape_card_fadeout_tick, None);
+            assert!(!game.escape_card_complete);
+        }
+
+        // Frame 224 triggers `#1267` DoAction: `stop(); _root.gotoNext = "level2a"; _root.fadeout.play();`.
+        game.tick(&mut input, &ground);
+        assert_eq!(game.escape_card_tick, 224);
+        assert_eq!(game.escape_card_fadeout_tick, Some(0));
+
+        // During the 41-frame fadeout, #1267 remains at frame 224 (never loops to 0).
+        for f in 1..=38 {
+            game.tick(&mut input, &ground);
+            assert_eq!(game.escape_card_tick, 224);
+            assert_eq!(game.escape_card_fadeout_tick, Some(f));
+        }
+        game.tick(&mut input, &ground);
+        assert_eq!(game.escape_card_fadeout_tick, Some(39));
+        assert_eq!(game.take_audio_events(), vec![AudioEvent::IntroStop]);
+
+        game.tick(&mut input, &ground);
+        assert_eq!(game.escape_card_fadeout_tick, Some(40));
+
+        // Final fade tick latches end-to-2A with all progress intact and holds.
+        game.tick(&mut input, &ground);
+        assert!(game.escape_card_complete);
+        assert_eq!(game.escape_card_tick, 224);
+        assert_eq!(
+            game.pending_stage_entry(),
+            Some(PendingStageEntry {
+                from: StageId::Level1C,
+                to: StageId::Level2A,
+                progress: RootProgress {
+                    score: 4321,
+                    lives: 3,
+                    batarangs: 9,
+                },
+                outgoing_root_sound_id: 130,
+                incoming_root_sound_id: 1409,
+            })
+        );
+
+        // Extra ticks must never loop back to frame 0 or re-emit IntroStart.
+        for _ in 0..10 {
+            game.tick(&mut input, &ground);
+            assert_eq!(game.screen, AppScreen::EscapeCard);
+            assert_eq!(game.escape_card_tick, 224);
+            assert!(game.take_audio_events().is_empty());
+        }
+    }
+
+    #[test]
+    fn escape_card_skip_requires_41_frame_fade_and_routes_laser_electro_plus_batarang_hide() {
+        let ground = CollisionMask::level1c();
+        let mut game = Game::new();
+        game.screen = AppScreen::Playing;
+        game.start_stage(StageId::Level1C);
+        let mut input = InputState::default();
+
+        // Laser hitBox active local frame 9 -> Batman enters PlayerState::Electro (`damage = 5`).
+        let boss = game.penguin_boss.as_mut().unwrap();
+        boss.set_state(PenguinState::Attack2);
+        boss.child_frame = 9;
+        boss.dir = -1;
+        let hb = boss.laser_game_aabb();
+        game.player.x = (hb.0 + hb.2) * 0.5 - game.level_origin_x();
+        game.player.y = (hb.1 + hb.3) * 0.5 - game.level_origin_y();
+        game.tick(&mut input, &ground);
+        assert_eq!(game.player.state, PlayerState::Electro);
+        assert_eq!(game.health, 95);
+
+        // Deflected batarang in Attack range removes shot from active projectiles.
+        let mut boss2 = PenguinBoss::new();
+        boss2.health = 200;
+        game.penguin_boss = Some(boss2);
+        let bx = game.penguin_boss.as_ref().unwrap().x;
+        let by = game.penguin_boss.as_ref().unwrap().y;
+        game.shots.push(Shot {
+            x: bx + 5.0,
+            y: by - 35.0,
+            dir: -1,
+        });
+        // Seed until EvaluateBatarang returns Blocked (deterministic RNG trial).
+        game.penguin_rng = super::PenguinRng::new(7);
+        game.tick(&mut input, &ground);
+        assert!(
+            game.shots.is_empty() || game.penguin_boss.as_ref().unwrap().health < 200,
+            "batarang either blocked & removed or damaged boss"
+        );
+
+        // Test EscapeCard skip (#1268 / Space): never bypasses the 41-frame fadeout.
+        game.score = 777;
+        game.lives = 2;
+        game.batarangs = 3;
+        game.level1c_exit_reached = true;
+        game.fadeout_tick = Some(40);
+        game.tick(&mut input, &ground);
+        assert_eq!(game.screen, AppScreen::EscapeCard);
+        let _ = game.take_audio_events();
+
+        input.set(VK_SPACE, true);
+        game.tick(&mut input, &ground);
+        input.set(VK_SPACE, false);
+        assert_eq!(game.escape_card_fadeout_tick, Some(0));
+        assert!(!game.escape_card_complete);
+
+        for _ in 0..41 {
+            game.tick(&mut input, &ground);
+        }
+        assert!(game.escape_card_complete);
+        assert_eq!(
+            game.pending_stage_entry().map(|p| (p.to, p.progress.score)),
+            Some((StageId::Level2A, 777))
+        );
     }
 }

@@ -93,6 +93,8 @@ pub struct CommonAssets {
     pub instructions_screen: Image,
     /// 180 original root-frame-18 story samples, loaded lazily.
     pub intro_frames: LazySpriteSet,
+    /// 225 original root-frame-22 (`card:escape`, #1267) story samples, loaded lazily.
+    pub escape_card_frames: LazySpriteSet,
 }
 
 impl CommonAssets {
@@ -125,6 +127,7 @@ impl CommonAssets {
             title_screen: decode_png(include_bytes!("../assets/title_screen.png")),
             instructions_screen: decode_png(include_bytes!("../assets/instructions_screen.png")),
             intro_frames: decode_sprite_frames_lazy_expected(include_bytes!("../assets/intro_frames.bin"),1.0,"intro_frames"),
+            escape_card_frames: decode_sprite_frames_lazy_expected(include_bytes!("../assets/escape_card_frames.bin"),1.0,"escape_card_frames"),
         }
     }
 }

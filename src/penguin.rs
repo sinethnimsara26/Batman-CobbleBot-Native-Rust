@@ -92,6 +92,13 @@ pub const LEVEL1C_PICKUPS: [Level1cPickupPlacement; 4] = [
     },
 ];
 
+pub const LEVEL1C_PICKUP_POINTS: [(f32, f32); 4] = [
+    (LEVEL1C_PICKUPS[0].pos.x, LEVEL1C_PICKUPS[0].pos.y),
+    (LEVEL1C_PICKUPS[1].pos.x, LEVEL1C_PICKUPS[1].pos.y),
+    (LEVEL1C_PICKUPS[2].pos.x, LEVEL1C_PICKUPS[2].pos.y),
+    (LEVEL1C_PICKUPS[3].pos.x, LEVEL1C_PICKUPS[3].pos.y),
+];
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PenguinState {
     Stand,

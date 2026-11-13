@@ -70,6 +70,22 @@ impl PendingStageEntry {
             incoming_root_sound_id: to.descriptor().root_start_sound_id,
         })
     }
+
+    pub fn after_story_card(
+        card: StoryCard,
+        from: StageId,
+        outgoing_root_sound_id: u16,
+        progress: RootProgress,
+    ) -> Option<Self> {
+        let to = card.next_in_scope()?;
+        Some(Self {
+            from,
+            to,
+            progress,
+            outgoing_root_sound_id,
+            incoming_root_sound_id: to.descriptor().root_start_sound_id,
+        })
+    }
 }
 
 /// Strongly typed coordinates in GAME-local space (child of GAME sprite #1075 / #696 / etc.).
