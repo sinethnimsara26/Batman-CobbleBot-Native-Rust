@@ -1253,3 +1253,50 @@ Tested original source fixed CODE SHA `26dad6e07ef3dc1ca860aa98b4a8ccfb12912f72`
     - `goon_ledge_edge_and_wall_turn_with_collision_mask`: verifies wall turn and boundary ledge turn using bit-packed Level 1B collision mask.
   - Windows CI run `43331247611`: 59/59 Rust tests passed in 0.71s, render p95 `20.8186ms`, scenery scroll p95 `25.3923ms` (< 40ms gate), 15/15 historical 1× screenshots identical, 20/20 relocated standalone EXE HQ hashes identical, child exit 0.
 - **Confidence:** HIGH for AVM1 decompilation, state machine fidelity, and collision boundary mechanics.
+
+
+## RE-20261112-017 — Flash AVM1 Goon Combat AI, Hitboxes, Damage Routing & respawn2 Spawning (Batch B11)
+
+- **Batch/Context:** Batch B11; branch `revive/level2-b11-goon-combat-2026-11-12`, draft PR #43 based on B10 docs commit `27def5e`.
+- **Target Subsystem:** `src/bank_goons.rs`.
+- **Original Architecture & Findings:**
+  1. Symbolically traced and disassembled the combat action sections in `goonAI` (frame 15, body offset 115398) and `respawn2` (body offset 145892, 756 bytes, 199 ops) from `cobblebot-source.swf`.
+  2. Combat interaction mechanics and damage routing:
+     - **Batarang collision**: Batarang bounding check `|bat_x - goon.x| <= 25.0 && (bat_y - goon.y) in [-75.0, 10.0]`. Deals 5 damage, triggers `Sound::Kick`, transitions goon to `Hurt` state.
+     - **Batman melee attacks**:
+       - `Punch`: Deals 10 damage, plays `Sound::Punch`, enters `Hurt` state. Increments Batman's combo counter.
+       - `LowKick`, `HighPunch`, `HighKick`: Deals 15 damage, plays `Sound::Kick` (kicks) or `Sound::Punch2` (high punch), forces goon into knockdown `Fall` state.
+       - Knockdown Sweep: Triggered when `|dx| <= 45.0` during attack, dealing 20 damage, playing `Sound::Punch2`, and forcing knockdown `Fall` state.
+     - **Knockback movement**:
+       - In `Hurt`: slides backward `-6.0 * dir` per tick for duration of hit reaction.
+       - In `Fall`: slides backward `-10.0 * dir` for initial 6 ticks, then settles to ground.
+     - **Goon attack strike window**:
+       - In `Attack`, during child animation frames 4..6 (strike window), tests bounding collision with Batman (`|dx| <= 35.0 && dy <= 50.0`). If hit connects, deals 5 damage to player and emits `PlayerHurt { damage: 5 }` and `Sound(Metal1)`.
+     - **Death, Score, & Flashing Despawn**:
+       - When health <= 0, goon transitions to `Die` state, awards +100 points (`ScoreAward(100)`), and plays `Sound::Bam`.
+       - Goon flashes (`flash > 50`, visible 2 out of 4 frames via `(flash / 2) % 2 == 0`) and completely despawns at `flash > 100`, incrementing `e_kills`.
+  3. `respawn2` Wave 2 Spawning & Stage Completion:
+     - Traced AVM1 bytecode at offset 145892:
+       ```actionscript
+       if (respawned == 0 && eKills > 0 && eKills % enemies.length == 0) {
+           respawned = 1;
+           // spawn 8 goons with 50 health at player_x ± [500..1100]
+       }
+       if (respawned > 0 && eKills == 8) {
+           gotoNext = "level1c";
+           _root.fadeout.play();
+           camHeight += 15;
+       }
+       ```
+     - Initial wave has 10 goons (`enemies.length == 10`). When `e_kills == 10`, `respawn2` activates wave 2: reactivates 8 goons with 50 health in `Walk` state, distributed around the player.
+     - When all 8 wave 2 enemies are defeated (`respawned > 0 && e_kills == 8`), stage clear condition is met (`StageComplete` event emitted, `is_stage_clear() == true`).
+- **Verification Evidence:**
+  - Rust unit tests increased from 59 to 65:
+    - `goon_takes_damage_from_batarang`: verifies batarang hitbox detection, 5 damage, `Kick` sound, and `Hurt` transition.
+    - `goon_takes_damage_from_player_attacks_and_knocks_down`: verifies punch combo, 15 damage knockdown on kick/high punch, and 20 damage sweep.
+    - `goon_attack_damages_player`: verifies frame 4..6 strike window deals 5 player damage.
+    - `goon_death_awards_score_and_despawns`: verifies death at health <= 0, +100 score award, `Bam` sound, flashing, and despawn incrementing `e_kills`.
+    - `respawn2_triggers_wave_2_at_ten_kills`: verifies wave 2 activates 8 enemies with 50 health upon 10 kills.
+    - `defeating_wave_2_triggers_stage_clear`: verifies defeating wave 2 emits `StageComplete` event.
+  - Windows CI run `43336433191`: 65/65 Rust tests passed in 0.73s, render p95 `20.9646ms`, scenery scroll p95 `25.4850ms` (< 40ms gate), 15/15 historical 1× screenshots identical, 20/20 relocated standalone EXE HQ hashes identical, child exit 0.
+- **Confidence:** HIGH for AVM1 decompilation, combat damage routing, hitbox math, and `respawn2` mechanics.

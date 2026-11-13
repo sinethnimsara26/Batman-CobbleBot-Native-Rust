@@ -767,3 +767,33 @@ Do not erase two historical CI failures: documentation-only #42834460076 and ini
   - Fidelity: 15/15 historical 1× screenshots identical, 20/20 relocated standalone EXE HQ3× screenshot hashes identical, child exit 0.
   - Hosted audio: BLOCKED (no hosted audio endpoint, WinMM MCI error 277).
 - **Records & Governance:** RE-20261112-016 and AUD-20261112-016 appended. All six records synchronized. No unsafe code, no external dependencies. PR #42 remains DRAFT/OPEN. STOP.
+
+
+## 2026-11-12 — B11 goon combat AI, damage routing & wave 2 spawning (VERIFIED)
+
+- **Scope & Context:** B11 enemy combat AI; branch `revive/level2-b11-goon-combat-2026-11-12`, draft PR #43 based on B10 docs commit `27def5e`.
+- **Implementation:**
+  1. Reverse-engineered original Flash AVM1 bytecode for combat in `goonAI` (offset 115398) and `respawn2` (offset 145892, 756 bytes, 199 ops) from `cobblebot-source.swf` frame 15.
+  2. `src/bank_goons.rs`: Defined `GoonCombatSound` (`Punch`, `Punch2`, `Kick`, `Bam`, `Metal1`), `PlayerCombatContext` (player state, pos, direction, combo, active attack), and `GoonCombatEvent` (`Sound`, `ScoreAward`, `PlayerHurt`, `WaveSpawned`, `StageComplete`).
+  3. Implemented attack damage and reaction logic:
+     - Batarang hit: bounding box `|dx| <= 25.0 && dy in [-75.0, 10.0]`, deals 5 damage, `Sound::Kick`, enters `Hurt`.
+     - Batman punch: 10 damage, `Sound::Punch`, enters `Hurt`, combo increment.
+     - Batman kicks / high punch: 15 damage, `Sound::Kick` / `Sound::Punch2`, enters `Fall`.
+     - Batman sweep: 20 damage, `Sound::Punch2`, enters `Fall`.
+     - Knockback: `Hurt` slides backward `-6 * dir`; `Fall` slides backward `-10 * dir` for 6 ticks.
+     - Goon strike: in `Attack`, deals 5 damage to player during frames 4..6.
+     - Death: at health <= 0, enters `Die`, awards +100 score, `Sound::Bam`, flashes `flash > 50`, despawns at `flash > 100`, incrementing `e_kills`.
+  4. Implemented `respawn2`:
+     - Initial 10 goons defeated (`e_kills == 10`) triggers wave 2: 8 goons reactivated with 50 health in `Walk` state, spawned at `player_x ± [500..1100]`.
+     - Wave 2 defeated (`respawned > 0 && e_kills == 8`) emits `StageComplete` (`is_stage_clear() == true`).
+  5. Added 6 new unit tests (`goon_takes_damage_from_batarang`, `goon_takes_damage_from_player_attacks_and_knocks_down`, `goon_attack_damages_player`, `goon_death_awards_score_and_despawns`, `respawn2_triggers_wave_2_at_ten_kills`, and `defeating_wave_2_triggers_stage_clear`), bringing total Rust tests from 59 to 65.
+  6. Added branch to `.github/workflows/build-level1a-fidelity.yml`.
+- **Native Windows CI Execution:**
+  - Initial run `43334931899` on commit `8d347c9` had 1 test failure (`goon_attack_damages_player`) due to test initializing `frame = 3` before tick check.
+  - Corrected test frame initialization to `frame = 4` (asserting `frame == 5` post-tick) in commit `3802366`.
+  - Full native Windows run [#43336433191](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43336433191) completed **SUCCESS 82/82 steps** on exact code SHA `3802366`.
+  - Cargo test: **65/65 passed in 0.73s**.
+  - Performance: Render p95 **20.9646ms**, scenery scroll p95 **25.4850ms** (well below 40.0ms gate).
+  - Fidelity: 15/15 historical 1× screenshots identical, 20/20 relocated standalone EXE HQ3× screenshot hashes identical, child exit 0.
+  - Hosted audio: BLOCKED (no hosted audio endpoint, WinMM MCI error 277).
+- **Records & Governance:** RE-20261112-017 and AUD-20261112-017 appended. All six records synchronized. No unsafe code, no external dependencies. PR #43 remains DRAFT/OPEN. STOP.

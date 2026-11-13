@@ -243,6 +243,34 @@ impl Default for GoonRng {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum GoonCombatSound {
+    Punch,
+    Punch2,
+    Kick,
+    Metal(u8),
+    Bam,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PlayerCombatContext {
+    pub x_game: f32,
+    pub y_game: f32,
+    pub dir: i32,
+    pub is_attacking: bool,
+    pub is_invincible: bool,
+    pub state_name: &'static str,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum GoonCombatEvent {
+    Sound(GoonCombatSound),
+    Score(u32),
+    PlayerHurt { damage: i32 },
+    Wave2Spawned { count: usize },
+    StageComplete,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct BankGoon {
     pub name: &'static str,
@@ -263,10 +291,17 @@ pub struct BankGoon {
     pub invincible: bool,
     pub visible: bool,
     pub active: bool,
+    pub hit_count: u32,
+    pub is_wave2: bool,
+    pub spawn_index: usize,
 }
 
 impl BankGoon {
     pub fn from_spawn(spawn: BankGoonSpawn) -> Self {
+        Self::from_spawn_with_index(spawn, 0)
+    }
+
+    pub fn from_spawn_with_index(spawn: BankGoonSpawn, spawn_index: usize) -> Self {
         let family = match spawn.symbol_id {
             880 => GoonFamily::A,
             964 => GoonFamily::B,
@@ -291,6 +326,9 @@ impl BankGoon {
             invincible: false,
             visible: true,
             active: true,
+            hit_count: 0,
+            is_wave2: false,
+            spawn_index,
         }
     }
 
@@ -309,6 +347,210 @@ impl BankGoon {
             self.state = new_state;
             self.frame = 0;
         }
+    }
+
+    /// Check if a flying batarang hits this goon.
+    /// In Flash AVM1: checkBatarang(char) -> char.curBat.
+    /// Goon bounding box: width ~50px (+-25px), height ~85px (y-75 to y+10).
+    pub fn apply_batarang_hit(
+        &mut self,
+        bat_x: f32,
+        bat_y: f32,
+        events: &mut Vec<GoonCombatEvent>,
+    ) -> bool {
+        if !self.active || self.health <= 0 {
+            return false;
+        }
+        if self.state == GoonState::Hurt || self.state == GoonState::Fall || self.state == GoonState::Die {
+            return false;
+        }
+        let hit_x = (bat_x - self.x).abs() <= 25.0;
+        let hit_y = bat_y >= self.y - 75.0 && bat_y <= self.y + 10.0;
+        if hit_x && hit_y {
+            self.health -= 5;
+            events.push(GoonCombatEvent::Sound(GoonCombatSound::Kick));
+            if self.health <= 0 {
+                self.health = 0;
+                self.set_state(GoonState::Die);
+                self.hit_count = 0;
+                events.push(GoonCombatEvent::Score(100));
+                events.push(GoonCombatEvent::Sound(GoonCombatSound::Bam));
+            } else {
+                self.set_state(GoonState::Hurt);
+            }
+            return true;
+        }
+        false
+    }
+
+    /// Check if Batman attacks this goon.
+    /// In Flash AVM1:
+    /// - checkPlayer(char, dir, -120): close-quarters knockdown sweep -> 20 dmg, Fall, Punch2
+    /// - checkPlayer(char, dir, -20): standard attack reach:
+    ///   - lowkick -> 15 dmg, Fall, Kick
+    ///   - highpunch -> 15 dmg, Fall, Punch2
+    ///   - highkick -> 15 dmg, Fall, Kick
+    ///   - punch (default) -> 10 dmg, Hurt, Punch, comboMeter / hitCount++
+    pub fn apply_player_attack(
+        &mut self,
+        player: &PlayerCombatContext,
+        events: &mut Vec<GoonCombatEvent>,
+    ) -> bool {
+        if !self.active || self.health <= 0 || !player.is_attacking {
+            return false;
+        }
+        if self.state == GoonState::Hurt || self.state == GoonState::Fall || self.state == GoonState::Die {
+            return false;
+        }
+
+        let dx = (self.x - player.x_game).abs();
+        let dy = (self.y - player.y_game).abs();
+        if dy > 50.0 {
+            return false;
+        }
+
+        // Close-quarters knockdown (offset -120 in AVM1, dx <= 45.0)
+        if dx <= 45.0 {
+            self.health -= 20;
+            events.push(GoonCombatEvent::Sound(GoonCombatSound::Punch2));
+            self.invincible = true;
+            self.fall_count = 0;
+            if self.health <= 0 {
+                self.health = 0;
+                self.set_state(GoonState::Die);
+                self.hit_count = 0;
+                events.push(GoonCombatEvent::Score(100));
+                events.push(GoonCombatEvent::Sound(GoonCombatSound::Bam));
+            } else {
+                self.set_state(GoonState::Fall);
+            }
+            return true;
+        }
+
+        // Standard attack reach (offset -20 in AVM1, dx <= 90.0)
+        if dx <= 90.0 {
+            let (dmg, sound, new_state) = match player.state_name {
+                "lowkick" => (15, GoonCombatSound::Kick, GoonState::Fall),
+                "highpunch" => (15, GoonCombatSound::Punch2, GoonState::Fall),
+                "highkick" => (15, GoonCombatSound::Kick, GoonState::Fall),
+                _ => (10, GoonCombatSound::Punch, GoonState::Hurt),
+            };
+            self.health -= dmg;
+            events.push(GoonCombatEvent::Sound(sound));
+            if new_state == GoonState::Hurt {
+                self.hit_count += 1;
+            } else {
+                self.fall_count = 0;
+            }
+            if self.health <= 0 {
+                self.health = 0;
+                self.set_state(GoonState::Die);
+                self.hit_count = 0;
+                events.push(GoonCombatEvent::Score(100));
+                events.push(GoonCombatEvent::Sound(GoonCombatSound::Bam));
+            } else {
+                self.set_state(new_state);
+            }
+            return true;
+        }
+
+        false
+    }
+
+    /// Full combat and noncombat tick based on original Flash AVM1 goonAI.
+    pub fn tick_combat(
+        &mut self,
+        player: &PlayerCombatContext,
+        collision: &CollisionMask,
+        rng: &mut GoonRng,
+        events: &mut Vec<GoonCombatEvent>,
+    ) {
+        if !self.active {
+            return;
+        }
+
+        // Die state: flash counter and despawn removal
+        if self.state == GoonState::Die {
+            let clip = self.family.child_clip(GoonState::Die);
+            // Lock to last frame, no parent wrapping or upright popping!
+            self.frame = (self.frame + 1).min(clip.frame_count().saturating_sub(1));
+            self.flash += 1;
+            if self.flash > 50 {
+                self.visible = (self.flash % 4) >= 2;
+            }
+            if self.flash > 100 {
+                self.visible = false;
+                self.active = false;
+            }
+            return;
+        }
+
+        // Hurt state: knockback slide (-6 * dir) and child animation
+        if self.state == GoonState::Hurt {
+            let kx = -6.0 * (self.dir as f32);
+            if !check_goon_wall(collision, self.x, self.y, kx) {
+                self.x += kx;
+            }
+            let clip = self.family.child_clip(GoonState::Hurt);
+            if self.frame + 1 >= clip.frame_count() {
+                self.set_state(GoonState::Stand);
+            } else {
+                self.frame += 1;
+            }
+            return;
+        }
+
+        // Fall state: knockback slide (-10 * dir) for up to 6 ticks, child animation
+        if self.state == GoonState::Fall {
+            if self.fall_count < 6 {
+                let kx = -10.0 * (self.dir as f32);
+                if !check_goon_wall(collision, self.x, self.y, kx) {
+                    self.x += kx;
+                }
+                self.fall_count += 1;
+            }
+            let clip = self.family.child_clip(GoonState::Fall);
+            if self.frame + 1 >= clip.frame_count() {
+                self.set_state(GoonState::Stand);
+            } else {
+                self.frame += 1;
+            }
+            return;
+        }
+
+        // Attack state: strikes player and returns to Stand
+        if self.state == GoonState::Attack {
+            let clip = self.family.child_clip(GoonState::Attack);
+            // Strike window at frames 4..6
+            if self.frame >= 4 && self.frame <= 6 {
+                let range = (self.x - player.x_game).abs();
+                let rangey = (self.y - player.y_game).abs();
+                if range <= 70.0 && rangey <= 40.0 && !player.is_invincible && player.state_name != "hurt" {
+                    events.push(GoonCombatEvent::PlayerHurt { damage: self.strength });
+                    events.push(GoonCombatEvent::Sound(GoonCombatSound::Metal(1)));
+                }
+            }
+            if self.frame + 1 >= clip.frame_count() {
+                self.set_state(GoonState::Stand);
+            } else {
+                self.frame += 1;
+            }
+            return;
+        }
+
+        // In Stand: check if goon decides to attack player
+        if self.state == GoonState::Stand {
+            let range = (self.x - player.x_game).abs();
+            let rangey = (self.y - player.y_game).abs();
+            if range < 70.0 && rangey < 40.0 && self.attack_count > 10.0 {
+                self.set_state(GoonState::Attack);
+                self.attack_count = 0.0;
+                return;
+            }
+        }
+
+        // Other states follow noncombat motion and checks
+        self.tick_noncombat(player.x_game, player.y_game, collision, rng);
     }
 
     /// Step goon noncombat state machine based on exact Flash AVM1 goonAI.
@@ -447,15 +689,44 @@ pub fn check_goon_edge(collision: &CollisionMask, x_game: f32, y_game: f32, dx: 
 pub struct BankGoonSquad {
     pub goons: [BankGoon; 10],
     pub rng: GoonRng,
+    pub e_kills: usize,
+    pub respawned: u32,
 }
 
 impl BankGoonSquad {
     pub fn new() -> Self {
-        let goons = BANK_GOON_SPAWNS.map(BankGoon::from_spawn);
+        let mut idx = 0;
+        let goons = BANK_GOON_SPAWNS.map(|spawn| {
+            let g = BankGoon::from_spawn_with_index(spawn, idx);
+            idx += 1;
+            g
+        });
         Self {
             goons,
             rng: GoonRng::new(0x1337_BCB1_0000),
+            e_kills: 0,
+            respawned: 0,
         }
+    }
+
+    #[inline]
+    pub fn alive_count(&self) -> usize {
+        self.goons.iter().filter(|g| g.active && g.health > 0).count()
+    }
+
+    #[inline]
+    pub fn active_count(&self) -> usize {
+        self.goons.iter().filter(|g| g.active).count()
+    }
+
+    #[inline]
+    pub fn is_wave2_active(&self) -> bool {
+        self.respawned > 0
+    }
+
+    #[inline]
+    pub fn is_stage_clear(&self) -> bool {
+        self.respawned > 0 && self.e_kills >= 8
     }
 
     pub fn tick_noncombat(
@@ -468,12 +739,91 @@ impl BankGoonSquad {
             goon.tick_noncombat(player_x, player_y, collision, &mut self.rng);
         }
     }
+
+    /// Full squad combat tick with batarangs, player melee attacks,
+    /// goon attacks, and second wave activation (`respawn2`).
+    pub fn tick_combat(
+        &mut self,
+        player: &PlayerCombatContext,
+        batarangs: &[(f32, f32)],
+        collision: &CollisionMask,
+        events: &mut Vec<GoonCombatEvent>,
+    ) {
+        // 1. Check batarangs against alive goons
+        for &(bat_x, bat_y) in batarangs {
+            for goon in &mut self.goons {
+                if goon.apply_batarang_hit(bat_x, bat_y, events) {
+                    break;
+                }
+            }
+        }
+
+        // 2. Check player melee attacks against alive goons
+        if player.is_attacking {
+            for goon in &mut self.goons {
+                if goon.apply_player_attack(player, events) {
+                    break;
+                }
+            }
+        }
+
+        // 3. Tick all goons and detect despawn removal
+        for goon in &mut self.goons {
+            let was_active = goon.active;
+            goon.tick_combat(player, collision, &mut self.rng, events);
+            if was_active && !goon.active {
+                self.e_kills += 1;
+            }
+        }
+
+        // 4. Check wave 2 activation (Flash AVM1 respawn2)
+        // If initial wave (10 goons) is defeated:
+        if self.respawned == 0 && self.e_kills >= 10 {
+            self.e_kills = 0;
+            self.respawned = 1;
+
+            // Flash AVM1 respawn2 loops i = 0..7 (8 enemies)
+            for i in 0..8 {
+                let goon = &mut self.goons[i];
+                goon.active = true;
+                goon.visible = true;
+                goon.health = 50;
+                goon.max_health = 50;
+                goon.strength = 5;
+                goon.speed = 9.0;
+                goon.attack_count = 0.0;
+                goon.fall_count = 0;
+                goon.flash = 0;
+                goon.hit_count = 0;
+                goon.is_wave2 = true;
+
+                // Alternate spawns to right and left of player with random offset (500..1100 px)
+                let rand_offset = 500.0 + (self.rng.next_f32() * 600.0);
+                if i % 2 == 0 {
+                    goon.x = player.x_game + rand_offset;
+                    goon.dir = -1;
+                } else {
+                    goon.x = player.x_game - rand_offset;
+                    goon.dir = 1;
+                }
+                goon.set_state(GoonState::Walk);
+            }
+            events.push(GoonCombatEvent::Wave2Spawned { count: 8 });
+        }
+
+        // 5. Check stage exit trigger (Flash AVM1 respawn2 end)
+        // When wave 2 (8 enemies) is defeated:
+        if self.respawned > 0 && self.e_kills >= 8 {
+            events.push(GoonCombatEvent::StageComplete);
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        check_goon_edge, check_goon_wall, BankGoon, BankGoonSquad, GoonFamily, GoonRng, GoonState,
+        check_goon_edge, check_goon_wall, BankGoon, BankGoonSquad, GoonCombatEvent,
+        GoonCombatSound, GoonFamily, GoonRng, GoonState, PlayerCombatContext,
         BANK_GOON_SPAWNS, GOON_A_CLIPS, GOON_B_CLIPS, GOON_LABELS, GOON_TIMELINES,
     };
     use crate::collision::CollisionMask;
@@ -683,5 +1033,253 @@ mod tests {
             assert_eq!(g1.frame, g2.frame);
             assert_eq!(g1.attack_count, g2.attack_count);
         }
+    }
+
+    #[test]
+    fn goon_takes_batarang_damage_and_falls_back_in_hurt() {
+        let ground = CollisionMask::level1b();
+        let mut goon = BankGoon::from_spawn(BANK_GOON_SPAWNS[0]);
+        let mut rng = GoonRng::new(300);
+        let mut events = Vec::new();
+
+        let initial_health = goon.health; // 32
+        // Batarang flying straight at goon body
+        let hit = goon.apply_batarang_hit(goon.x, goon.y - 30.0, &mut events);
+        assert!(hit);
+        assert_eq!(goon.health, initial_health - 5);
+        assert_eq!(goon.state, GoonState::Hurt);
+        assert_eq!(events, vec![GoonCombatEvent::Sound(GoonCombatSound::Kick)]);
+
+        // During Hurt, goon slides back (-6 * dir; dir is -1 so moves right by 6)
+        let pre_x = goon.x;
+        let dummy_player = PlayerCombatContext {
+            x_game: -500.0,
+            y_game: 398.1,
+            dir: 1,
+            is_attacking: false,
+            is_invincible: false,
+            state_name: "stand",
+        };
+        goon.tick_combat(&dummy_player, &ground, &mut rng, &mut events);
+        assert_eq!(goon.x, pre_x + 6.0);
+    }
+
+    #[test]
+    fn goon_takes_punches_and_kicks_with_exact_damage() {
+        let ground = CollisionMask::level1b();
+        let mut rng = GoonRng::new(400);
+
+        // 1. Standard Punch: 10 damage, Hurt state, Sound::Punch
+        let mut goon = BankGoon::from_spawn(BANK_GOON_SPAWNS[0]);
+        let mut events = Vec::new();
+        let p_punch = PlayerCombatContext {
+            x_game: goon.x + 60.0,
+            y_game: goon.y,
+            dir: -1,
+            is_attacking: true,
+            is_invincible: false,
+            state_name: "punch",
+        };
+        assert!(goon.apply_player_attack(&p_punch, &mut events));
+        assert_eq!(goon.health, 22); // 32 - 10
+        assert_eq!(goon.state, GoonState::Hurt);
+        assert_eq!(events, vec![GoonCombatEvent::Sound(GoonCombatSound::Punch)]);
+
+        // 2. Low Kick: 15 damage, Fall state, Sound::Kick
+        let mut goon = BankGoon::from_spawn(BANK_GOON_SPAWNS[0]);
+        events.clear();
+        let p_lowkick = PlayerCombatContext {
+            x_game: goon.x + 60.0,
+            y_game: goon.y,
+            dir: -1,
+            is_attacking: true,
+            is_invincible: false,
+            state_name: "lowkick",
+        };
+        assert!(goon.apply_player_attack(&p_lowkick, &mut events));
+        assert_eq!(goon.health, 17); // 32 - 15
+        assert_eq!(goon.state, GoonState::Fall);
+        assert_eq!(events, vec![GoonCombatEvent::Sound(GoonCombatSound::Kick)]);
+
+        // 3. High Punch: 15 damage, Fall state, Sound::Punch2
+        let mut goon = BankGoon::from_spawn(BANK_GOON_SPAWNS[0]);
+        events.clear();
+        let p_highpunch = PlayerCombatContext {
+            x_game: goon.x + 60.0,
+            y_game: goon.y,
+            dir: -1,
+            is_attacking: true,
+            is_invincible: false,
+            state_name: "highpunch",
+        };
+        assert!(goon.apply_player_attack(&p_highpunch, &mut events));
+        assert_eq!(goon.health, 17); // 32 - 15
+        assert_eq!(goon.state, GoonState::Fall);
+        assert_eq!(events, vec![GoonCombatEvent::Sound(GoonCombatSound::Punch2)]);
+
+        // 4. Close-quarters Knockdown (dx <= 45.0): 20 damage, Fall state, Sound::Punch2
+        let mut goon = BankGoon::from_spawn(BANK_GOON_SPAWNS[0]);
+        events.clear();
+        let p_close = PlayerCombatContext {
+            x_game: goon.x + 30.0, // within 45px!
+            y_game: goon.y,
+            dir: -1,
+            is_attacking: true,
+            is_invincible: false,
+            state_name: "punch",
+        };
+        assert!(goon.apply_player_attack(&p_close, &mut events));
+        assert_eq!(goon.health, 12); // 32 - 20
+        assert_eq!(goon.state, GoonState::Fall);
+        assert_eq!(events, vec![GoonCombatEvent::Sound(GoonCombatSound::Punch2)]);
+    }
+
+    #[test]
+    fn goon_death_score_flashing_and_removal() {
+        let ground = CollisionMask::level1b();
+        let mut rng = GoonRng::new(500);
+        let mut goon = BankGoon::from_spawn(BANK_GOON_SPAWNS[0]);
+        goon.health = 10;
+        let mut events = Vec::new();
+
+        let p_punch = PlayerCombatContext {
+            x_game: goon.x + 60.0,
+            y_game: goon.y,
+            dir: -1,
+            is_attacking: true,
+            is_invincible: false,
+            state_name: "punch",
+        };
+
+        // Taking fatal 10 damage triggers Die, Score(100), Sound(Bam)
+        assert!(goon.apply_player_attack(&p_punch, &mut events));
+        assert_eq!(goon.health, 0);
+        assert_eq!(goon.state, GoonState::Die);
+        assert_eq!(
+            events,
+            vec![
+                GoonCombatEvent::Sound(GoonCombatSound::Punch),
+                GoonCombatEvent::Score(100),
+                GoonCombatEvent::Sound(GoonCombatSound::Bam)
+            ]
+        );
+
+        let dummy_player = PlayerCombatContext {
+            x_game: -500.0,
+            y_game: 398.1,
+            dir: 1,
+            is_attacking: false,
+            is_invincible: false,
+            state_name: "stand",
+        };
+
+        // Tick through flash sequence 1..101
+        for _ in 0..60 {
+            goon.tick_combat(&dummy_player, &ground, &mut rng, &mut events);
+        }
+        assert!(goon.active);
+        assert_eq!(goon.flash, 60);
+
+        // Advance to 101 ticks -> goon becomes inactive (despawned)
+        for _ in 0..41 {
+            goon.tick_combat(&dummy_player, &ground, &mut rng, &mut events);
+        }
+        assert!(!goon.active);
+        assert!(!goon.visible);
+    }
+
+    #[test]
+    fn goon_attack_damages_player() {
+        let ground = CollisionMask::level1b();
+        let mut rng = GoonRng::new(600);
+        let mut goon = BankGoon::from_spawn(BANK_GOON_SPAWNS[0]);
+        goon.state = GoonState::Attack;
+        goon.frame = 4; // strike frame!
+        let mut events = Vec::new();
+
+        let player = PlayerCombatContext {
+            x_game: goon.x + 40.0, // within 70px reach
+            y_game: goon.y,
+            dir: -1,
+            is_attacking: false,
+            is_invincible: false,
+            state_name: "stand",
+        };
+
+        goon.tick_combat(&player, &ground, &mut rng, &mut events);
+        assert_eq!(goon.frame, 5);
+        assert_eq!(
+            events,
+            vec![
+                GoonCombatEvent::PlayerHurt { damage: 5 },
+                GoonCombatEvent::Sound(GoonCombatSound::Metal(1))
+            ]
+        );
+    }
+
+    #[test]
+    fn respawn2_triggers_wave2_with_8_enemies_and_50_health() {
+        let ground = CollisionMask::level1b();
+        let mut squad = BankGoonSquad::new();
+        let mut events = Vec::new();
+
+        let player = PlayerCombatContext {
+            x_game: -1000.0,
+            y_game: 398.1,
+            dir: 1,
+            is_attacking: false,
+            is_invincible: false,
+            state_name: "stand",
+        };
+
+        // Simulate killing all 10 wave 1 goons
+        for goon in &mut squad.goons {
+            goon.health = 0;
+            goon.active = false;
+        }
+        squad.e_kills = 10;
+        assert_eq!(squad.respawned, 0);
+
+        // Next squad combat tick detects 10 kills and spawns Wave 2!
+        squad.tick_combat(&player, &[], &ground, &mut events);
+        assert_eq!(squad.respawned, 1);
+        assert_eq!(squad.e_kills, 0);
+        assert!(squad.is_wave2_active());
+        assert_eq!(events, vec![GoonCombatEvent::Wave2Spawned { count: 8 }]);
+
+        // First 8 goons are reactivated with 50 health in Walk state
+        for i in 0..8 {
+            let g = &squad.goons[i];
+            assert!(g.active);
+            assert!(g.visible);
+            assert_eq!(g.health, 50);
+            assert_eq!(g.max_health, 50);
+            assert_eq!(g.speed, 9.0);
+            assert_eq!(g.state, GoonState::Walk);
+            assert!(g.is_wave2);
+        }
+    }
+
+    #[test]
+    fn wave2_completion_triggers_stage_exit() {
+        let ground = CollisionMask::level1b();
+        let mut squad = BankGoonSquad::new();
+        let mut events = Vec::new();
+
+        let player = PlayerCombatContext {
+            x_game: -1000.0,
+            y_game: 398.1,
+            dir: 1,
+            is_attacking: false,
+            is_invincible: false,
+            state_name: "stand",
+        };
+
+        squad.respawned = 1; // Wave 2 is active
+        squad.e_kills = 8;   // All 8 wave 2 enemies defeated
+
+        squad.tick_combat(&player, &[], &ground, &mut events);
+        assert!(squad.is_stage_clear());
+        assert_eq!(events, vec![GoonCombatEvent::StageComplete]);
     }
 }
