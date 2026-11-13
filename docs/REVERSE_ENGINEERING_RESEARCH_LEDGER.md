@@ -1222,3 +1222,34 @@ Tested original source fixed CODE SHA `26dad6e07ef3dc1ca860aa98b4a8ccfb12912f72`
     - `assets_deref_transparent_access`: verifies transparent `Deref` access to common symbols.
   - Windows CI run `43317649029`: 54/54 Rust tests passed in 1.10s, render p95 `22.2483ms`, scenery scroll p95 `27.7404ms` (< 40ms gate), 15/15 historical 1× screenshots identical, 20/20 relocated standalone EXE HQ hashes identical, child exit 0.
 - **Confidence:** HIGH for memory partitioning, trait ergonomics, and stage transition readiness.
+
+
+## RE-20261112-016 — Flash AVM1 goonAI Noncombat AI State Machine & bank_goons.rs (Batch B10)
+
+- **Batch/Context:** Batch B10; branch `revive/level2-b10-goon-ai-2026-11-12`, draft PR #42 based on AUDIT-FIX-12 docs commit `9982421`.
+- **Target Subsystem:** `src/bank_goons.rs`.
+- **Original Architecture & Findings:**
+  1. Symbolically traced and disassembled the complete 3,947-byte AVM1 bytecode of `goonAI` (frame 15, body offset 115409, 1,010 ops), `checkWall` (offset 99990, 120 ops), and `checkEdge` (offset 99830, 114 ops) from `cobblebot-source.swf`.
+  2. Determined exact Flash distance metrics and noncombat state transitions:
+     - Proximity activation: Goons remain in `Idle` until `range < 400.0 && rangey < 400.0`, at which point they transition to `Stand`.
+     - Player facing: When `range > 180.0 && rangey < 400.0`, the goon faces the player (`dir = -1` if `goon.x > player.x` else `1`).
+     - Close retreat: When `range < 50.0 && rangey < 400.0` and not attacking, the goon transitions to `Retreat`.
+     - Decision interval: In `Stand`, if `decision_timer == 0` (reset every 12–25 ticks via deterministic PRNG), goon evaluates whether to `Walk` toward player or `Retreat`.
+     - Movement speed: In `Walk`, moves at 9.0 units/tick (`this.speed = 9.0`); in `Retreat`, moves away at 4.5 units/tick.
+     - Wall check: `checkWall(this, -50, dx)` tests `hitTest(goon.x + dx, goon.y - 25.0, true)`.
+     - Edge check: `checkEdge(this, 50, dx)` tests `hitTest(goon.x + 50 * dir, goon.y + 4.0, true)` against stage ground mask.
+     - When a wall is hit or ledge edge is encountered, the goon reverses direction (`dir = -dir`) and returns to `Stand`.
+  3. Implemented `GoonState` enum (`Idle`, `Stand`, `Walk`, `Retreat`, `Attack`, `Hurt`, `Fall`, `Die`, `Intro`), `GoonFamily` (`A` `#880` 55 true child frames across 7 clips, `B` `#964` 66 true child frames across 7 clips), `GoonRng` (deterministic zero-allocation 64-bit XorShift64* PRNG), `BankGoon`, and `BankGoonSquad` managing all 10 named spawns in `src/bank_goons.rs`.
+  4. Collision integration:
+     - Level 1B collision ground mask (`#782`) has dimensions `12102 × 1413` with origin `(-11196, -886)`.
+     - Stage placement: `level_x = game_x - 1034.65`, `level_y = game_y - 239.25`.
+     - Continuous ground spans from `game_x = -10159.4` to `game_x = 1937.7` at street level (`game_y = 398.1`). Beyond `1937.7` is the right boundary void.
+- **Verification Evidence:**
+  - Rust unit tests increased from 54 to 59:
+    - `bank_goon_spawn_initialization_and_child_bounds`: verifies correct spawn positions, depths, and family clip assignments.
+    - `bank_goon_squad_tick_advances_all_and_tracks_alive`: verifies full squad tick and alive count tracking.
+    - `goon_xorshift64_rng_is_deterministic`: verifies identical sequence generation across independent seeds and runs.
+    - `goon_noncombat_chase_and_retreat_decisions`: verifies proximity activation, facing, and close retreat triggers.
+    - `goon_ledge_edge_and_wall_turn_with_collision_mask`: verifies wall turn and boundary ledge turn using bit-packed Level 1B collision mask.
+  - Windows CI run `43331247611`: 59/59 Rust tests passed in 0.71s, render p95 `20.8186ms`, scenery scroll p95 `25.3923ms` (< 40ms gate), 15/15 historical 1× screenshots identical, 20/20 relocated standalone EXE HQ hashes identical, child exit 0.
+- **Confidence:** HIGH for AVM1 decompilation, state machine fidelity, and collision boundary mechanics.

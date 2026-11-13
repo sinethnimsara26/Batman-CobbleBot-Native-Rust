@@ -1,6 +1,30 @@
 # Persistent development tasks — Batman Rust port
 
 
+## B10 — COMPLETED / goonAI noncombat AI state machine & bank goon squad (2026-11-12)
+
+**VERIFIED NATIVE WINDOWS REGRESSION, NOT PLAYABLE LEVEL1B.** [Draft, OPEN, UNMERGED PR #42](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/42) on `revive/level2-b10-goon-ai-2026-11-12`, based on AF12 docs commit `9982421`. **Exact Windows-tested code SHA `2cffd9d`**. Final documentation SHA is the separate later `[skip ci]` commit; this file cannot prestate its own commit ID. Full native Windows [#43331247611](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43331247611) **SUCCESS 82/82 steps** on exact code SHA.
+
+**ENGINEERING & ARCHITECTURE FACTS:**
+1. Reverse-engineered original Flash AVM1 bytecode for `goonAI` (3,947 bytes, 1,010 ops at body offset 115409), `checkWall` (120 bytes at offset 99990), and `checkEdge` (114 bytes at offset 99830) from `cobblebot-source.swf` frame 15.
+2. Implemented `GoonState` enum (`Idle`, `Stand`, `Walk`, `Retreat`, `Attack`, `Hurt`, `Fall`, `Die`, `Intro`) and `GoonFamily` (`A` `#880` 55 true child frames across 7 clips, `B` `#964` 66 true child frames across 7 clips) in `src/bank_goons.rs`.
+3. Implemented `GoonRng` (deterministic 64-bit XorShift64* PRNG) to replicate Flash `Math.random()` decision branching without external crates or non-deterministic system randomness.
+4. Implemented `BankGoon` struct: properties `x`, `y`, `dir`, `state`, `health` (32), `strength` (5), `speed` (9.0), child frame counters, timers, and noncombat state transitions:
+   - Proximity activation: `idle` -> `stand` when `range < 400.0 && rangey < 400.0`.
+   - Player facing: faces player when `range > 180.0 && rangey < 400.0`.
+   - Close retreat: enters `retreat` when `range < 50.0 && rangey < 400.0`.
+   - Decision tick: in `stand`, chooses between `walk`, `retreat`, or staying in `stand` based on RNG and distance.
+   - Ground edge and wall detection: `check_goon_wall` and `check_goon_edge` using Level 1B collision mask; turns around when encountering walls or missing ground.
+5. Implemented `BankGoonSquad` managing all 10 named spawns (`goon1`..`goon10`) across their source GAME depths (`1105`..`1123`).
+6. Five new unit tests added: `bank_goon_spawn_initialization_and_child_bounds`, `bank_goon_squad_tick_advances_all_and_tracks_alive`, `goon_xorshift64_rng_is_deterministic`, `goon_noncombat_chase_and_retreat_decisions`, and `goon_ledge_edge_and_wall_turn_with_collision_mask`, increasing total Rust tests from 54 to 59.
+
+**NATIVE VERIFIED on exact CODE SHA:** locked MSVC release `cargo test --release --locked` **59/59 passed in 0.71s**, locked build PASS, native legacy 1× image SHA **15/15 identical**, HQ3× smoke **20/20 at 1800×1200**, relocated standalone EXE **20/20 exact HQ hashes**, child exit 0 and no SWF staged. Real Win32 OS capture/start/held Enter/fresh Enter/SKIP, F7/F8 three HUD cases, fullscreen F/Esc, focus visuals, PE and Windows Shell icon PASS. Render p95 **20.8186ms**, scenery scroll p95 **25.3923ms**, both well below unchanged **40ms** gate. Integration QA artifact confirmed child exit 0, 20/20 identical HQ hashes. Hosted WinMM audio device 0 / MCI error 277 remains **BLOCKED** (no hosted speaker endpoint). Live Flash parity and physical audio UNVERIFIED.
+
+**RUST PURITY/AUDIT:** Zero unsafe code, zero new external crates, runtime remains 100% native Rust with documented Win32/GDI/WinMM FFI. [Research RE-20261112-016](REVERSE_ENGINEERING_RESEARCH_LEDGER.md) and [independent AUD-20261112-016](RUST_PURITY_AND_ENGINEERING_AUDIT.md) finalized. Reviewed `AGENTS.md` and both mandatory protocols unchanged. Main and accepted Level1A release preserved.
+
+**STOP. ONE NEXT SEPARATELY AUTHORIZED TASK: B11 enemy combat (`goonAI` attacks, player hitboxes, damage, fall, die, score, and `respawn2`)**, preserving existing baseline.
+
+
 ## AUDIT-FIX-12 / R-04 — COMPLETED / CommonAssets & StageAssets partitioning (2026-11-12)
 
 **VERIFIED NATIVE WINDOWS REGRESSION, NOT PLAYABLE LEVEL1B.** [Draft, OPEN, UNMERGED PR #41](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/41) on `revive/level2-audit-fix-split-assets-2026-11-12`, based on AF11 docs commit `0fc1ca2`. **Exact Windows-tested code SHA `427da5a`**. Final documentation SHA is the separate later `[skip ci]` commit; this file cannot prestate its own commit ID. Full native Windows [#43317649029](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43317649029) **SUCCESS 82/82 steps** on exact code SHA.

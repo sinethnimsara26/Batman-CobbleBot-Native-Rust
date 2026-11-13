@@ -740,3 +740,30 @@ Do not erase two historical CI failures: documentation-only #42834460076 and ini
   - Fidelity: 15/15 historical 1× screenshots identical, 20/20 relocated standalone EXE HQ3× screenshot hashes identical, child exit 0.
   - Hosted audio: BLOCKED (no hosted audio endpoint, WinMM MCI error 277).
 - **Records & Governance:** RE-20261112-015 and AUD-20261112-015 appended. All six records synchronized. No unsafe code, no external dependencies. PR #41 remains DRAFT/OPEN. STOP.
+
+
+## 2026-11-12 — B10 goonAI noncombat AI state machine & bank goon squad (VERIFIED)
+
+- **Scope & Context:** B10 enemy AI; branch `revive/level2-b10-goon-ai-2026-11-12`, draft PR #42 based on AUDIT-FIX-12 docs commit `9982421`.
+- **Implementation:**
+  1. Reverse-engineered original Flash AVM1 bytecode for `goonAI` (3,947 bytes, 1,010 ops at body offset 115409), `checkWall` (120 bytes at offset 99990), and `checkEdge` (114 bytes at offset 99830) from `cobblebot-source.swf` frame 15.
+  2. `src/bank_goons.rs`: Defined `GoonState` enum (`Idle`, `Stand`, `Walk`, `Retreat`, `Attack`, `Hurt`, `Fall`, `Die`, `Intro`) and `GoonFamily` (`A` `#880`, `B` `#964`) with exact per-clip true child descriptors (`GOON_A_CLIPS`, `GOON_B_CLIPS`).
+  3. Implemented `GoonRng` (deterministic 64-bit XorShift64* PRNG) to replicate Flash `Math.random()` decision branching without external crates or non-deterministic system randomness.
+  4. Implemented `BankGoon` struct: properties `x`, `y`, `dir`, `state`, `health` (32), `strength` (5), `speed` (9.0), child frame counters, timers, and noncombat state transitions:
+     - Proximity activation: `idle` -> `stand` when `range < 400.0 && rangey < 400.0`.
+     - Player facing: faces player when `range > 180.0 && rangey < 400.0`.
+     - Close retreat: enters `retreat` when `range < 50.0 && rangey < 400.0`.
+     - Decision tick: in `stand`, chooses between `walk`, `retreat`, or staying in `stand` based on RNG and distance.
+     - Ground edge and wall detection: `check_goon_wall` and `check_goon_edge` using Level 1B collision mask; turns around when encountering walls or missing ground.
+  5. Implemented `BankGoonSquad` managing all 10 named spawns (`goon1`..`goon10`) across their source GAME depths (`1105`..`1123`).
+  6. Added 5 new unit tests (`bank_goon_spawn_initialization_and_child_bounds`, `bank_goon_squad_tick_advances_all_and_tracks_alive`, `goon_xorshift64_rng_is_deterministic`, `goon_noncombat_chase_and_retreat_decisions`, and `goon_ledge_edge_and_wall_turn_with_collision_mask`), bringing total Rust tests from 54 to 59.
+  7. Added branch to `.github/workflows/build-level1a-fidelity.yml`.
+- **Native Windows CI Execution:**
+  - Initial run `43329479061` on commit `d884db1` failed on `goon_ledge_edge_and_wall_turn_with_collision_mask` because `x_game = 1000.0` was inside the continuous street pavement (`solid = true`).
+  - Corrected test edge coordinates to `x_game = 2500.0` (outside right boundary void) and `goon.x = 1930.0` walking right (`dx = 50.0` probes missing ground at `1980.0`) in commit `2cffd9d`.
+  - Full native Windows run [#43331247611](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43331247611) completed **SUCCESS 82/82 steps** on exact code SHA `2cffd9d`.
+  - Cargo test: **59/59 passed in 0.71s**.
+  - Performance: Render p95 **20.8186ms**, scenery scroll p95 **25.3923ms** (well below 40.0ms gate).
+  - Fidelity: 15/15 historical 1× screenshots identical, 20/20 relocated standalone EXE HQ3× screenshot hashes identical, child exit 0.
+  - Hosted audio: BLOCKED (no hosted audio endpoint, WinMM MCI error 277).
+- **Records & Governance:** RE-20261112-016 and AUD-20261112-016 appended. All six records synchronized. No unsafe code, no external dependencies. PR #42 remains DRAFT/OPEN. STOP.
