@@ -313,6 +313,11 @@ fn render_backdrop_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
 }
 
 fn draw_root_backdrop_legacy(fb:&mut RenderSurface,assets:&Assets){
+    if matches!(assets.stage.stage_id, crate::stage::StageId::Level2A | crate::stage::StageId::Level2B) {
+        // Root frames 23/25 place symbol #14 at depth 1 (solid black lab backdrop) with no moon.
+        fb.fill(0xff000000);
+        return;
+    }
     // Original root gameplay backdrop, frame 19:
     // depth 1 = symbol 131 at identity; depth 2 = symbol 134 at (300,130).
     blit(
@@ -330,6 +335,11 @@ fn draw_root_backdrop_legacy(fb:&mut RenderSurface,assets:&Assets){
 }
 
 fn draw_root_backdrop_hq(fb:&mut RenderSurface,assets:&Assets){
+    if matches!(assets.stage.stage_id, crate::stage::StageId::Level2A | crate::stage::StageId::Level2B) {
+        // Root frames 23/25 place symbol #14 at depth 1 (solid black lab backdrop) with no moon.
+        fb.fill(0xff000000);
+        return;
+    }
     // Symbol 131 is exactly one opaque RGB color across the visible stage:
     // (161,22,0). Its transparent pixels are only native-bounds bake padding.
     // Filling the presentation surface with that recovered source color is
@@ -365,11 +375,17 @@ fn city_geometry(game:&Game,assets:&Assets)->(i32,i32,i32,i32){
 }
 
 fn draw_city_background_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
+    if matches!(assets.stage.stage_id, crate::stage::StageId::Level2A | crate::stage::StageId::Level2B) {
+        return;
+    }
     let(bg_x,bg_y,bg_w,bg_h)=city_geometry(game,assets);
     blit(fb,&assets.city_background,bg_x,bg_y,bg_w,bg_h,false);
 }
 
 fn draw_city_background_alpha(fb:&mut RenderSurface,game:&Game,assets:&Assets){
+    if matches!(assets.stage.stage_id, crate::stage::StageId::Level2A | crate::stage::StageId::Level2B) {
+        return;
+    }
     let(bg_x,bg_y,bg_w,bg_h)=city_geometry(game,assets);
     blit_alpha(fb,&assets.city_background,bg_x,bg_y,bg_w,bg_h,false);
 }
@@ -1188,5 +1204,35 @@ mod tests{
         }
         assert_eq!(digit_count(-1), 1);
         assert_eq!(digit_count(-999), 1);
+    }
+
+    #[test]
+    fn labs2a_renders_multifloor_tiles_over_black_backdrop_legacy_and_hq(){
+        let mut assets=crate::assets::Assets::load();
+        assets.load_stage(crate::stage::StageId::Level2A);
+        let mut game=crate::game::Game::new();
+        game.screen=crate::game::AppScreen::Playing;
+        game.start_stage(crate::stage::StageId::Level2A);
+        game.ticks=45;
+
+        let mut fb1x=RenderSurface::new(LOGICAL_W,super::LOGICAL_H);
+        let mut scratch=RenderSurface::new(LOGICAL_W,super::LOGICAL_H);
+        let mut fbhq=RenderSurface::new(HQ_W,super::HQ_H);
+
+        for (cam_x,cam_y) in [(0.0f32,0.0f32),(-1800.0,-2400.0),(-4800.0,-3600.0),(-4200.0,-6800.0)]{
+            game.camera_x=cam_x;
+            game.camera_y=cam_y;
+            super::render(&mut fb1x,&game,&assets);
+            super::render_high_quality(&mut scratch,&mut fbhq,&game,&assets);
+            let non_black_1x=fb1x.pixels.iter().filter(|&&p|(p&0x00ff_ffff)!=0).count();
+            let non_black_hq=fbhq.pixels.iter().filter(|&&p|(p&0x00ff_ffff)!=0).count();
+            assert!(non_black_1x>5_000,"legacy 1x Labs 2A render at ({cam_x},{cam_y}) must show lab geometry");
+            assert!(non_black_hq>45_000,"HQ Labs 2A render at ({cam_x},{cam_y}) must show lab geometry");
+            // Root #14 solid black void outside the mid-lab room wing (no cityscape/red-sky bleed)
+            if (cam_x,cam_y)==(-4800.0,-3600.0){
+                assert_eq!(fb1x.pixels[300*LOGICAL_W]&0x00ff_ffff,0,"mid-lab void margin must use #14 black backdrop");
+                assert_eq!(fbhq.pixels[900*HQ_W]&0x00ff_ffff,0,"HQ mid-lab void margin must use #14 black backdrop");
+            }
+        }
     }
 }

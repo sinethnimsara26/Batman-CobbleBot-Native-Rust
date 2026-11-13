@@ -568,6 +568,73 @@ impl StoryCard {
     }
 }
 
+/// Source-separated door or front door-jamb placement in GAME-local space.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct LabsDoorPlacement {
+    pub name: &'static str,
+    pub symbol_id: u16,
+    pub depth: u16,
+    pub x: f32,
+    pub y: f32,
+    pub sx: f32,
+    pub sy: f32,
+}
+
+/// Source-separated elevator platform placement with AVM1 vertical `limit` target.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct LabsElevatorPlacement {
+    pub name: &'static str,
+    pub symbol_id: u16,
+    pub depth: u16,
+    pub x: f32,
+    pub y: f32,
+    pub sx: f32,
+    pub limit_y: i32,
+}
+
+/// Source-separated checkpoint or camera-zone trigger box (`#153`) in GAME-local space.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct LabsTriggerPlacement {
+    pub name: &'static str,
+    pub symbol_id: u16,
+    pub depth: u16,
+    pub x: f32,
+    pub y: f32,
+    pub sx: f32,
+    pub sy: f32,
+}
+
+/// Source-separated enemy placement in GAME-local space.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct LabsEnemyPlacement {
+    pub name: &'static str,
+    pub symbol_id: u16,
+    pub depth: u16,
+    pub x: f32,
+    pub y: f32,
+    pub sx: f32,
+}
+
+/// Source-separated health or Batarang ammo pickup placement in GAME-local space.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct LabsPickupPlacement {
+    pub name: &'static str,
+    pub symbol_id: u16,
+    pub depth: u16,
+    pub x: f32,
+    pub y: f32,
+    pub sx: f32,
+}
+
+/// B20: Level 2A (`#1402`) separated dynamic & foreground objects generated from canonical SWF.
+pub mod labs2a {
+    use super::{
+        LabsDoorPlacement, LabsElevatorPlacement, LabsEnemyPlacement,
+        LabsPickupPlacement, LabsTriggerPlacement,
+    };
+    include!("../assets/labs2a_objects.rs");
+}
+
 #[cfg(test)]
 mod tests {
     use super::{GameDepth, GamePos, LevelDepth, LevelPos, SourceScene, StageId, StoryCard, STAGES};
@@ -792,5 +859,30 @@ mod tests {
         assert_eq!(d.camera.horizontal_step(d.player_spawn_game_local.x, 0.0, 1), 0.0);
         // Inside arena (e.g. x=600.0, right-facing target=125): delta = 475 -> camera shifts left
         assert_eq!(d.camera.horizontal_step(600.0, 0.0, 1), -47.0);
+    }
+
+    #[test]
+    fn labs2a_object_separation_matches_source_counts_and_elevator_limits() {
+        use super::labs2a;
+        assert_eq!(labs2a::DOORS.len(), 18);
+        assert_eq!(labs2a::DOOR_JAMBS.len(), 18);
+        assert_eq!(labs2a::ELEVATORS.len(), 3);
+        assert_eq!(labs2a::CHECKPOINTS.len(), 4);
+        assert_eq!(labs2a::CAMERAS.len(), 10);
+        assert_eq!(labs2a::GOONS.len(), 9);
+        assert_eq!(labs2a::EAGLES.len(), 1);
+        assert_eq!(labs2a::HEALTH_PICKUPS.len(), 1);
+        assert_eq!(labs2a::BATARANG_PICKUPS.len(), 9);
+
+        assert_eq!(labs2a::ELEVATORS[0].name, "elevator_01_2685");
+        assert_eq!(labs2a::ELEVATORS[0].limit_y, 2685);
+        assert_eq!(labs2a::ELEVATORS[1].limit_y, 3480);
+        assert_eq!(labs2a::ELEVATORS[2].limit_y, 5420);
+        assert_eq!(labs2a::EAGLES[0].name, "eagle1");
+        assert_eq!(labs2a::EAGLES[0].symbol_id, 1393);
+        assert_eq!(labs2a::HEALTH_PICKUPS[0].name, "health01");
+        assert_eq!(labs2a::HEALTH_PICKUPS[0].symbol_id, 1401);
+        assert!(labs2a::DOORS.iter().all(|d| d.symbol_id == 1325));
+        assert!(labs2a::DOOR_JAMBS.iter().all(|j| j.depth > 374));
     }
 }

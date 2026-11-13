@@ -41,12 +41,23 @@ impl CollisionMask {
         )
     }
 
+    /// B20: original root23/level #1317 named ground #1316 (Labs 2A),
+    /// in LEVEL-local pixels. The baked mask comes from the SHA-locked FWS at build time.
+    pub fn level2a() -> Self {
+        decode_mask(
+            include_bytes!("../reverse-engineering/generated/collision_masks/level2a_ground.png"),
+            -1542,
+            -2307,
+        )
+    }
+
     /// Returns the runtime collision mask for the given gameplay stage.
     pub fn for_stage(stage_id: crate::stage::StageId) -> Self {
         match stage_id {
             crate::stage::StageId::Level1A => Self::level1a(),
             crate::stage::StageId::Level1B => Self::level1b(),
             crate::stage::StageId::Level1C => Self::level1c(),
+            crate::stage::StageId::Level2A => Self::level2a(),
             _ => panic!("CollisionMask::for_stage: stage {:?} collision mask not yet embedded", stage_id),
         }
     }
@@ -358,6 +369,34 @@ mod penguin_arena_source_probes {
         assert!(ground.solid(-1500.0, 0.0), "left arena wall at lx=-1500");
         assert!(ground.solid(850.0, 0.0), "right arena wall at lx=850");
         // Bit-packed memory savings check (~325 KB)
+        assert!(ground.memory_usage_bytes() <= (ground.w * ground.h) / 7);
+    }
+}
+
+#[cfg(test)]
+mod labs2a_source_probes {
+    use super::CollisionMask;
+    use crate::stage::StageId;
+
+    #[test]
+    fn labs2a_ground_dimensions_and_spawn_shaft_match_source() {
+        let ground = CollisionMask::level2a();
+        assert_eq!((ground.origin_x, ground.origin_y), (-1542, -2307));
+        assert_eq!((ground.w, ground.h), (8781, 10060));
+        let stage = StageId::Level2A.descriptor();
+        let spawn = stage.player_spawn_level_pos();
+        assert!((spawn.x - (-982.90)).abs() < 0.05 && (spawn.y - (-122.85)).abs() < 0.05);
+        assert!(
+            !ground.solid_level_pos(spawn),
+            "level2a spawn (227.2, 115.4 game-local) must be open inside the entry elevator shaft"
+        );
+        // Entry shaft walls enclose the spawn shaft horizontally; lower shaft floor sits at game_y ~ 2648.
+        let left_wall_lx = 160.0 - stage.level_origin_game_local.x;
+        let right_wall_lx = 510.0 - stage.level_origin_game_local.x;
+        assert!(ground.solid(left_wall_lx, spawn.y), "left entry shaft wall solid");
+        assert!(ground.solid(right_wall_lx, spawn.y), "right entry shaft wall solid");
+        assert!(ground.solid(spawn.x, 2410.0), "shaft base floor solid at level_y=2410");
+        assert!(!ground.solid(spawn.x, 2409.0), "shaft interior open immediately above base floor");
         assert!(ground.memory_usage_bytes() <= (ground.w * ground.h) / 7);
     }
 }

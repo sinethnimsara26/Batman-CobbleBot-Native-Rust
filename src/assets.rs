@@ -183,11 +183,22 @@ impl StageAssets {
         }
     }
 
+    pub fn load_level2a() -> Self {
+        Self {
+            stage_id: crate::stage::StageId::Level2A,
+            background: decode_png(include_bytes!("../assets/root_bg_131.png")),
+            tiles: LevelTileSet::new_expected(include_bytes!("../assets/level2a_tiles.bin"),1.0,12,"level2a_tiles"),
+            tiles_hq_base: LevelTileSet::empty(1.0),
+            detail_tiles_hq: LevelTileSet::empty(3.0),
+        }
+    }
+
     pub fn load(stage_id: crate::stage::StageId) -> Self {
         match stage_id {
             crate::stage::StageId::Level1A => Self::load_level1a(),
             crate::stage::StageId::Level1B => Self::load_level1b(),
             crate::stage::StageId::Level1C => Self::load_level1c(),
+            crate::stage::StageId::Level2A => Self::load_level2a(),
             _ => panic!("StageAssets::load: stage {:?} assets not yet embedded", stage_id),
         }
     }
@@ -570,5 +581,24 @@ mod tests{
         assert_eq!(assets.stage.stage_id,crate::stage::StageId::Level1B);
         assets.load_stage(crate::stage::StageId::Level1C);
         assert_eq!(assets.stage.stage_id,crate::stage::StageId::Level1C);
+    }
+
+    #[test]
+    fn b20_labs2a_tile_pack_and_scenery_invariants(){
+        let stage_2a=super::StageAssets::load(crate::stage::StageId::Level2A);
+        assert_eq!(stage_2a.stage_id,crate::stage::StageId::Level2A);
+        assert!((stage_2a.tiles.logical_pixel_scale-1.0).abs()<0.0001);
+        assert_eq!(stage_2a.tiles.index.len(),177);
+        assert_eq!(stage_2a.tiles_hq_base.index.len(),0);
+        assert_eq!(stage_2a.detail_tiles_hq.index.len(),0);
+        assert!(stage_2a.tiles.index.contains_key(&(0,0)),"rooftop shaft tile (0,0) must exist");
+        assert!(stage_2a.tiles.index.contains_key(&(1800,2400)),"upper lab tile (1800,2400) must exist");
+        assert!(stage_2a.tiles.index.contains_key(&(4800,3600)),"mid lab tile (4800,3600) must exist");
+        assert!(stage_2a.tiles.index.contains_key(&(4200,6800)),"tv exit tile (4200,6800) must exist");
+
+        let mut assets=super::Assets::load();
+        assets.load_stage(crate::stage::StageId::Level2A);
+        assert_eq!(assets.stage.stage_id,crate::stage::StageId::Level2A);
+        assert_eq!(assets.stage.tiles.index.len(),177);
     }
 }
