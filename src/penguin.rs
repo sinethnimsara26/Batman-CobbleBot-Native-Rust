@@ -1,10 +1,10 @@
-//! Batches B14-B16: Level 1C Penguin (`boss` / `#1250`) source-backed metadata, pickup layout,
+//! Batches B14-B17: Level 1C Penguin (`boss` / `#1250`) source-backed metadata, pickup layout,
 //! 99-frame outer timeline, 162-frame true nested child timelines, attack FX geometry,
-//! and source-faithful `penguinAI` movement, dodge, block, facing, and approach AI.
+//! and complete `penguinAI` movement/combat state machine.
 //!
 //! Dormant runtime extracted verbatim from canonical `cobblebot.swf` (`root` frame 21/22,
-//! `#1251` `game`, `#1250` `boss`, `#1103..#1249` child clips, and `penguinAI`). Live gameplay
-//! combat/laser scoring (B17) and Level 1C switching/escape card (B18) remain gated for next batches.
+//! `#1251` `game`, `#1250` `boss`, `#1103..#1249` child clips, `checkPlayer`/`checkBatarang`,
+//! and `penguinAI`). Live stage switching & `card:escape` end sequence remain gated for B18.
 
 #![allow(dead_code)]
 
@@ -595,6 +595,49 @@ pub enum PenguinBatarangOutcome {
     Hurt,
 }
 
+/// Sound effects triggered by Flash AVM1 `penguinAI`.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PenguinSound {
+    Punch,
+    Punch2,
+    Kick,
+    Bam,
+}
+
+/// Batman hit reaction flavor produced by Penguin attacks (`hurt` vs `electro`).
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PenguinPlayerHurtKind {
+    /// Close-range `attack`/`attack2` contact: sets `playerState = "hurt"` and `playerInvincible = true`.
+    MeleeHurt,
+    /// `laser.hitBox` (`#1192`) contact: sets `playerState = "electro"` without `playerInvincible`.
+    LaserElectro,
+}
+
+/// Player snapshot passed into `PenguinBoss::tick_combat` matching root AVM1 globals.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PenguinPlayerContext<'a> {
+    pub x_game: f32,
+    pub y_game: f32,
+    pub dx: f32,
+    pub dir: i8,
+    pub width: f32,
+    pub attacking: bool,
+    pub invincible: bool,
+    pub state_name: &'a str,
+}
+
+/// Side-effect events emitted by `PenguinBoss::tick_combat`.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum PenguinCombatEvent {
+    ZeroPlayerDx,
+    HideBatarang { index: usize },
+    Sound(PenguinSound),
+    Score(i32),
+    ComboHit { combo_count: u16 },
+    PlayerHit { damage: i32, kind: PenguinPlayerHurtKind },
+    DefeatedTrigger,
+}
+
 /// Source-faithful Level 1C Penguin boss state (`_root.game.boss`, `#1250`, `_global.penguinAI`).
 #[derive(Clone, Debug, PartialEq)]
 pub struct PenguinBoss {
@@ -742,56 +785,74 @@ impl PenguinBoss {
         }
     }
 
-    /// Evaluates batarang overlap during `penguinAI`: blocks if `rng * 5.0 > 2.0` (`60%`),
-    /// otherwise flags `Hurt` (`false` combat branch wired in B17).
-    pub fn evaluate_batarang(
-        &mut self,
-        player_x: f32,
-        batarangs: &[(f32, f32)],
-        rng: &mut PenguinRng,
-    ) -> PenguinBatarangOutcome {
-        if self.health <= 0 {
-            return PenguinBatarangOutcome::None;
-        }
-        let hit = batarangs.iter().any(|&(bx, by)| {
-            (bx - self.x).abs() <= 25.0 && by >= self.y - 75.0 && by <= self.y + 10.0
-        });
-        if !hit
-            || matches!(
-                self.state,
-                PenguinState::Hurt
-                    | PenguinState::Fall
-                    | PenguinState::Block
-                    | PenguinState::Dodge
-            )
-        {
-            return PenguinBatarangOutcome::None;
-        }
+    #[inline]
+    fn batman_body_aabb(player_x: f32, player_y: f32, player_width: f32) -> (f32, f32, f32, f32) {
+        let half_w = (player_width * 0.5).max(25.0) + 10.0;
+        (player_x - half_w, player_y - 45.0, player_x + half_w, player_y + 75.0)
+    }
 
-        self.face_x(player_x);
-        if rng.next_f32() * 5.0 > 2.0 {
-            self.set_state(PenguinState::Block);
-            PenguinBatarangOutcome::Blocked
-        } else {
-            PenguinBatarangOutcome::Hurt
+    #[inline]
+    fn aabb_overlaps(a: (f32, f32, f32, f32), b: (f32, f32, f32, f32)) -> bool {
+        a.0 <= b.2 && a.2 >= b.0 && a.1 <= b.3 && a.3 >= b.1
+    }
+
+    #[inline]
+    fn point_in_aabb(px: f32, py: f32, aabb: (f32, f32, f32, f32)) -> bool {
+        px >= aabb.0 && px <= aabb.2 && py >= aabb.1 && py <= aabb.3
+    }
+
+    /// World-space (`GamePos`) bounding box of Penguin's `#1192` `laser.hitBox` in current facing.
+    #[inline]
+    pub fn laser_game_aabb(&self) -> (f32, f32, f32, f32) {
+        let local = PENGUIN_LASER_HITBOX.boss_local_aabb(self.dir as f32);
+        let sx = PENGUIN_INITIAL_SCALE_X.abs();
+        let sy = PENGUIN_INITIAL_SCALE_Y;
+        (
+            self.x + local.0 * sx,
+            self.y + local.1 * sy,
+            self.x + local.2 * sx,
+            self.y + local.3 * sy,
+        )
+    }
+
+    /// Evaluates active `#1205` `laser.hitBox` (`#1192`) overlap on local frames `9..=10`.
+    #[inline]
+    pub fn laser_hits_player(&self, player: &PenguinPlayerContext<'_>) -> bool {
+        self.state == PenguinState::Attack2
+            && PENGUIN_LASER_HITBOX.is_active_on_local_frame(self.child_frame)
+            && Self::aabb_overlaps(
+                self.laser_game_aabb(),
+                Self::batman_body_aabb(player.x_game, player.y_game, player.width),
+            )
+    }
+
+    /// Source `checkPlayer(this, dir, offset)`: tests `(this._x + playerWidth * dir + playerDx, this._y + offset)`
+    /// against Batman's hit area.
+    #[inline]
+    pub fn check_player_point(&self, player: &PenguinPlayerContext<'_>, y_offset: f32) -> bool {
+        let test_x = self.x + player.width * (self.dir as f32) + player.dx;
+        let test_y = self.y + y_offset;
+        Self::point_in_aabb(
+            test_x,
+            test_y,
+            Self::batman_body_aabb(player.x_game, player.y_game, player.width),
+        )
+    }
+
+    fn apply_kill_with_score(&mut self, score: i32, events: &mut Vec<PenguinCombatEvent>) {
+        if self.health <= 0 {
+            self.health = 0;
+            self.set_state(PenguinState::Die);
+            events.push(PenguinCombatEvent::Score(score));
         }
     }
 
-    /// Executes `penguinAI` boundary clamp, Y settle, range/facing logic, state physics
-    /// (`Walk`, `Dodge`, `Hurt`, `Fall`), optional batarang block, and approach `Walk` transition.
-    pub fn tick_noncombat(
+    fn step_motion_and_range(
         &mut self,
         player_x: f32,
         player_dir: i8,
-        player_state: &str,
-        batarangs: &[(f32, f32)],
         collision: &CollisionMask,
-        rng: &mut PenguinRng,
-    ) -> PenguinBatarangOutcome {
-        if !self.active || self.health <= 0 {
-            return PenguinBatarangOutcome::None;
-        }
-
+    ) {
         // 1. Arena X-clamp boundary bounce (`0..2300` -> dodge back inside with dy = -12)
         if self.x > PENGUIN_ARENA_MAX_X {
             self.dir = 1;
@@ -844,7 +905,7 @@ impl PenguinBoss {
             self.attack_count = 0;
         }
 
-        // 4. Per-state physics
+        // 4. Per-state physics (`attack2` laser handled by combat branch)
         let dir_f = self.dir as f32;
         match self.state {
             PenguinState::Walk => {
@@ -899,11 +960,9 @@ impl PenguinBoss {
             }
             _ => {}
         }
+    }
 
-        // 5. Batarang block check
-        let bat_outcome = self.evaluate_batarang(player_x, batarangs, rng);
-
-        // 6. Approach walk fallback when not busy (`!checkWall(this, enemyHeight)`)
+    fn maybe_enter_walk(&mut self, collision: &CollisionMask) {
         if !check_penguin_wall(collision, self.x, self.y, self.enemy_height, 0.0)
             && !matches!(
                 self.state,
@@ -917,9 +976,204 @@ impl PenguinBoss {
         {
             self.set_state(PenguinState::Walk);
         }
+    }
 
+    fn evaluate_batarang_indexed(
+        &mut self,
+        player_x: f32,
+        batarangs: &[(f32, f32)],
+        rng: &mut PenguinRng,
+    ) -> (PenguinBatarangOutcome, Option<usize>) {
+        if self.health <= 0 {
+            return (PenguinBatarangOutcome::None, None);
+        }
+        let hit_idx = batarangs.iter().position(|&(bx, by)| {
+            (bx - self.x).abs() <= 25.0 && by >= self.y - 75.0 && by <= self.y + 10.0
+        });
+        let Some(idx) = hit_idx else {
+            return (PenguinBatarangOutcome::None, None);
+        };
+        if matches!(
+            self.state,
+            PenguinState::Hurt | PenguinState::Fall | PenguinState::Block | PenguinState::Dodge
+        ) {
+            return (PenguinBatarangOutcome::None, None);
+        }
+
+        self.face_x(player_x);
+        if rng.next_f32() * 5.0 > 2.0 {
+            self.set_state(PenguinState::Block);
+            (PenguinBatarangOutcome::Blocked, Some(idx))
+        } else {
+            (PenguinBatarangOutcome::Hurt, Some(idx))
+        }
+    }
+
+    /// Evaluates batarang overlap during `penguinAI`: blocks if `rng * 5.0 > 2.0` (`60%`),
+    /// otherwise returns `Hurt`.
+    pub fn evaluate_batarang(
+        &mut self,
+        player_x: f32,
+        batarangs: &[(f32, f32)],
+        rng: &mut PenguinRng,
+    ) -> PenguinBatarangOutcome {
+        self.evaluate_batarang_indexed(player_x, batarangs, rng).0
+    }
+
+    /// Executes noncombat `penguinAI` boundary clamp, Y settle, range/facing logic,
+    /// state physics (`Walk`, `Dodge`, `Hurt`, `Fall`), batarang block test, and approach `Walk`.
+    pub fn tick_noncombat(
+        &mut self,
+        player_x: f32,
+        player_dir: i8,
+        player_state: &str,
+        batarangs: &[(f32, f32)],
+        collision: &CollisionMask,
+        rng: &mut PenguinRng,
+    ) -> PenguinBatarangOutcome {
+        if !self.active || self.health <= 0 {
+            return PenguinBatarangOutcome::None;
+        }
+        self.step_motion_and_range(player_x, player_dir, collision);
+        let bat_outcome = self.evaluate_batarang(player_x, batarangs, rng);
+        self.maybe_enter_walk(collision);
         self.step_child_frame(player_state, rng);
         bat_outcome
+    }
+
+    /// Executes full `penguinAI` tick including active `#1192` laser damage (`"electro"`),
+    /// batarang `-5` HP & `+500` score, `checkPlayer(dir)` (`lowkick`/`punch`/`kick` & close attack),
+    /// `checkPlayer(dir, -120)` (`-20` knockdown slam & `+100` score), approach `Walk`, and defeat trigger.
+    pub fn tick_combat(
+        &mut self,
+        player: &PenguinPlayerContext<'_>,
+        batarangs: &[(f32, f32)],
+        collision: &CollisionMask,
+        rng: &mut PenguinRng,
+        events: &mut Vec<PenguinCombatEvent>,
+    ) {
+        if !self.active {
+            return;
+        }
+
+        if self.health <= 0 {
+            self.set_state(PenguinState::Die);
+            if !self.bammed {
+                self.bammed = true;
+                events.push(PenguinCombatEvent::Sound(PenguinSound::Bam));
+            }
+            events.push(PenguinCombatEvent::DefeatedTrigger);
+            self.step_child_frame(player.state_name, rng);
+            return;
+        }
+
+        self.step_motion_and_range(player.x_game, player.dir, collision);
+
+        // Active `attack2` laser hitbox (#1192) -> Batman "electro" (`done` de-bounces while overlapping)
+        if self.state == PenguinState::Attack2 {
+            if self.laser_hits_player(player) {
+                if !self.done {
+                    self.done = true;
+                    if player.state_name != "capespin"
+                        && player.state_name != "electro"
+                        && !player.invincible
+                    {
+                        events.push(PenguinCombatEvent::PlayerHit {
+                            damage: self.stength,
+                            kind: PenguinPlayerHurtKind::LaserElectro,
+                        });
+                    }
+                }
+            } else {
+                self.done = false;
+            }
+        }
+
+        // Batarang check: 60% Block + hide batarang, 40% -5 HP + Hurt (+500 kill)
+        let (bat_outcome, bat_idx) = self.evaluate_batarang_indexed(player.x_game, batarangs, rng);
+        match bat_outcome {
+            PenguinBatarangOutcome::Blocked => {
+                if let Some(index) = bat_idx {
+                    events.push(PenguinCombatEvent::HideBatarang { index });
+                }
+            }
+            PenguinBatarangOutcome::Hurt => {
+                self.health -= 5;
+                self.set_state(PenguinState::Hurt);
+                self.apply_kill_with_score(PENGUIN_KILL_SCORE, events);
+            }
+            PenguinBatarangOutcome::None => {}
+        }
+
+        // Combat player contact branches (`checkPlayer(dir)` / `checkPlayer(dir, -120)` / approach `Walk`)
+        if self.health > 0 {
+            if self.check_player_point(player, 0.0) {
+                events.push(PenguinCombatEvent::ZeroPlayerDx);
+                if player.attacking
+                    && !matches!(
+                        self.state,
+                        PenguinState::Hurt | PenguinState::Fall | PenguinState::Attack
+                    )
+                {
+                    if player.state_name == "lowkick" {
+                        self.health -= 15;
+                        self.set_state(PenguinState::Fall);
+                        self.fall_count = 0;
+                        events.push(PenguinCombatEvent::Sound(PenguinSound::Kick));
+                        events.push(PenguinCombatEvent::ComboHit { combo_count: 50 });
+                    } else if matches!(player.state_name, "punch" | "lowpunch" | "kick") {
+                        self.health -= 10;
+                        self.set_state(PenguinState::Hurt);
+                        events.push(PenguinCombatEvent::Sound(PenguinSound::Punch));
+                        events.push(PenguinCombatEvent::ComboHit { combo_count: 50 });
+                    }
+                    self.apply_kill_with_score(PENGUIN_KILL_SCORE, events);
+                } else if matches!(self.state, PenguinState::Attack | PenguinState::Attack2)
+                    && player.state_name != "hurt"
+                    && player.state_name != "fall"
+                    && !player.invincible
+                {
+                    events.push(PenguinCombatEvent::PlayerHit {
+                        damage: self.stength,
+                        kind: PenguinPlayerHurtKind::MeleeHurt,
+                    });
+                } else if !matches!(
+                    self.state,
+                    PenguinState::Dodge
+                        | PenguinState::Attack
+                        | PenguinState::Attack2
+                        | PenguinState::Hurt
+                        | PenguinState::Fall
+                ) {
+                    self.set_state(PenguinState::Attack);
+                    self.fall_count = 0;
+                }
+            } else if self.check_player_point(player, -120.0) {
+                events.push(PenguinCombatEvent::ZeroPlayerDx);
+                if player.attacking
+                    && !matches!(
+                        self.state,
+                        PenguinState::Hurt
+                            | PenguinState::Fall
+                            | PenguinState::Dodge
+                            | PenguinState::Attack
+                            | PenguinState::Attack2
+                    )
+                {
+                    events.push(PenguinCombatEvent::Sound(PenguinSound::Punch2));
+                    self.health -= 20;
+                    self.set_state(PenguinState::Fall);
+                    self.fall_count = 0;
+                    // Source bytecode @127850 explicitly adds +100 (not +500) on `-120` overhead kill.
+                    self.apply_kill_with_score(100, events);
+                    events.push(PenguinCombatEvent::ComboHit { combo_count: 20 });
+                }
+            } else {
+                self.maybe_enter_walk(collision);
+            }
+        }
+
+        self.step_child_frame(player.state_name, rng);
     }
 }
 
@@ -1263,5 +1517,277 @@ mod tests {
         assert!(!check_penguin_wall(&mask, 1200.0, boss.enemy_y, -50.0, -6.0));
         assert!(check_penguin_wall(&mask, 2557.0, boss.enemy_y, -50.0, 6.0));
         assert!(check_penguin_wall(&mask, -236.0, boss.enemy_y, -50.0, -6.0));
+    }
+
+    #[test]
+    fn penguin_attack2_laser_hitbox_electro_done_and_capespin_immunity() {
+        let mask = CollisionMask::level1c();
+        let mut rng = PenguinRng::new(0x1A5E_2001);
+        let mut events = Vec::new();
+        let mut boss = PenguinBoss::new();
+        boss.x = 1000.0;
+        boss.dir = -1;
+        boss.set_state(PenguinState::Attack2);
+        boss.child_frame = 8; // local frame 8 -> before active window 9..=10
+
+        let mut player = PenguinPlayerContext {
+            x_game: 800.0, // inside boss -x laser (-339..-74)
+            y_game: 290.0,
+            dx: 0.0,
+            dir: 1,
+            width: 50.0,
+            attacking: false,
+            invincible: false,
+            state_name: "stand",
+        };
+
+        // Frame 8: laser hitbox inactive -> done=false, advances to frame 9
+        boss.tick_combat(&player, &[], &mask, &mut rng, &mut events);
+        assert!(events.iter().all(|e| !matches!(e, PenguinCombatEvent::PlayerHit { .. })));
+        assert!(!boss.done);
+        assert_eq!(boss.child_frame, 9);
+
+        // Frame 9: laser hitbox #1192 active -> deals 5 damage + LaserElectro, sets done=true
+        events.clear();
+        boss.tick_combat(&player, &[], &mask, &mut rng, &mut events);
+        assert_eq!(
+            events,
+            vec![PenguinCombatEvent::PlayerHit {
+                damage: 5,
+                kind: PenguinPlayerHurtKind::LaserElectro,
+            }]
+        );
+        assert!(boss.done);
+        assert_eq!(boss.child_frame, 10);
+
+        // Frame 10 while playerState == "electro": #1205 gotoAndPlay(_currentframe - 1) holds beam & done suppresses double hit
+        player.state_name = "electro";
+        events.clear();
+        boss.tick_combat(&player, &[], &mask, &mut rng, &mut events);
+        assert!(events.is_empty());
+        assert_eq!(boss.child_frame, 9);
+
+        // Advance out of hold once player exits electro -> frame 11 deactivates hitbox & clears done
+        player.state_name = "stand";
+        boss.child_frame = 11;
+        boss.tick_combat(&player, &[], &mask, &mut rng, &mut events);
+        assert!(!boss.done);
+
+        // CapeSpin deflects active frame 9 beam without PlayerHit
+        boss.child_frame = 9;
+        player.state_name = "capespin";
+        events.clear();
+        boss.tick_combat(&player, &[], &mask, &mut rng, &mut events);
+        assert!(boss.done);
+        assert!(events.is_empty());
+    }
+
+    #[test]
+    fn penguin_batarang_block_vs_5_hp_hurt_and_500_kill_score() {
+        let mask = CollisionMask::level1c();
+        let mut events = Vec::new();
+        let player = PenguinPlayerContext {
+            x_game: 300.0,
+            y_game: 290.0,
+            dx: 0.0,
+            dir: 1,
+            width: 50.0,
+            attacking: false,
+            invincible: false,
+            state_name: "stand",
+        };
+
+        // Find seeds triggering block vs unblocked 5 dmg hurt.
+        let mut block_seed = None;
+        let mut hurt_seed = None;
+        for seed in 1u64..128 {
+            let mut rng = PenguinRng::new(seed);
+            let mut trial = PenguinBoss::new();
+            trial.x = 1000.0;
+            events.clear();
+            trial.tick_combat(
+                &player,
+                &[(trial.x, trial.y - 30.0)],
+                &mask,
+                &mut rng,
+                &mut events,
+            );
+            if trial.state == PenguinState::Block && block_seed.is_none() {
+                assert!(events.contains(&PenguinCombatEvent::HideBatarang { index: 0 }));
+                assert_eq!(trial.health, 200);
+                block_seed = Some(seed);
+            } else if trial.state == PenguinState::Hurt && hurt_seed.is_none() {
+                assert_eq!(trial.health, 195);
+                hurt_seed = Some(seed);
+            }
+            if block_seed.is_some() && hurt_seed.is_some() {
+                break;
+            }
+        }
+        assert!(block_seed.is_some() && hurt_seed.is_some());
+
+        // Lethal batarang hit at 5 HP awards +500 score, enters Die, and triggers Bam once.
+        let mut rng = PenguinRng::new(hurt_seed.unwrap());
+        let mut dying = PenguinBoss::new();
+        dying.x = 1000.0;
+        dying.health = 5;
+        events.clear();
+        dying.tick_combat(
+            &player,
+            &[(dying.x, dying.y - 30.0)],
+            &mask,
+            &mut rng,
+            &mut events,
+        );
+        assert_eq!(dying.health, 0);
+        assert_eq!(dying.state, PenguinState::Die);
+        assert!(events.contains(&PenguinCombatEvent::Score(500)));
+
+        // Post-death tick triggers Bam once + DefeatedTrigger (`card:escape` hook for B18).
+        events.clear();
+        dying.tick_combat(&player, &[], &mask, &mut rng, &mut events);
+        assert!(events.contains(&PenguinCombatEvent::Sound(PenguinSound::Bam)));
+        assert!(events.contains(&PenguinCombatEvent::DefeatedTrigger));
+        events.clear();
+        dying.tick_combat(&player, &[], &mask, &mut rng, &mut events);
+        assert!(!events.contains(&PenguinCombatEvent::Sound(PenguinSound::Bam)));
+    }
+
+    #[test]
+    fn penguin_melee_check_player_lowkick_punch_and_500_kill_branches() {
+        let mask = CollisionMask::level1c();
+        let mut rng = PenguinRng::new(0xC0B0_2002);
+        let mut events = Vec::new();
+        let mut boss = PenguinBoss::new();
+        boss.x = 1000.0;
+        boss.dir = -1;
+
+        // Batman in range not attacking -> triggers Boss Attack (fall_count = 0), then MeleeHurt
+        let passive_player = PenguinPlayerContext {
+            x_game: 950.0, // within checkPlayer(dir=-1) around 1000 - 50 = 950
+            y_game: 290.0,
+            dx: 0.0,
+            dir: 1,
+            width: 50.0,
+            attacking: false,
+            invincible: false,
+            state_name: "stand",
+        };
+        boss.tick_combat(&passive_player, &[], &mask, &mut rng, &mut events);
+        assert_eq!(boss.state, PenguinState::Attack);
+        assert_eq!(boss.fall_count, 0);
+        assert!(events.contains(&PenguinCombatEvent::ZeroPlayerDx));
+
+        // Next tick while Boss in Attack -> deals stength (5) MeleeHurt
+        events.clear();
+        boss.tick_combat(&passive_player, &[], &mask, &mut rng, &mut events);
+        assert!(events.contains(&PenguinCombatEvent::PlayerHit {
+            damage: 5,
+            kind: PenguinPlayerHurtKind::MeleeHurt,
+        }));
+
+        // Batman lowkick from Stand -> 15 dmg, Fall, Kick SFX, combo 50
+        boss.set_state(PenguinState::Stand);
+        let lowkick_player = PenguinPlayerContext {
+            attacking: true,
+            state_name: "lowkick",
+            ..passive_player
+        };
+        events.clear();
+        boss.tick_combat(&lowkick_player, &[], &mask, &mut rng, &mut events);
+        assert_eq!(boss.health, 185);
+        assert_eq!(boss.state, PenguinState::Fall);
+        assert!(events.contains(&PenguinCombatEvent::Sound(PenguinSound::Kick)));
+        assert!(events.contains(&PenguinCombatEvent::ComboHit { combo_count: 50 }));
+
+        // Batman punch from Stand at 10 HP -> 10 dmg lethal -> +500 score & Die
+        boss.set_state(PenguinState::Stand);
+        boss.health = 10;
+        let punch_player = PenguinPlayerContext {
+            attacking: true,
+            state_name: "punch",
+            ..passive_player
+        };
+        events.clear();
+        boss.tick_combat(&punch_player, &[], &mask, &mut rng, &mut events);
+        assert_eq!(boss.health, 0);
+        assert_eq!(boss.state, PenguinState::Die);
+        assert!(events.contains(&PenguinCombatEvent::Sound(PenguinSound::Punch)));
+        assert!(events.contains(&PenguinCombatEvent::Score(500)));
+    }
+
+    #[test]
+    fn penguin_overhead_check_player_minus120_slam_20_dmg_and_100_source_score() {
+        let mask = CollisionMask::level1c();
+        let mut rng = PenguinRng::new(0x0E12_0003);
+        let mut events = Vec::new();
+        let mut boss = PenguinBoss::new();
+        boss.x = 1000.0;
+        boss.dir = -1;
+        boss.health = 40;
+
+        // Aerial Batman at y = 200 sits above offset 0 (316.2 > 275) but hits offset -120 (196.2)
+        let aerial_player = PenguinPlayerContext {
+            x_game: 950.0,
+            y_game: 200.0,
+            dx: 0.0,
+            dir: 1,
+            width: 50.0,
+            attacking: true,
+            invincible: false,
+            state_name: "jumpkick",
+        };
+        assert!(!boss.check_player_point(&aerial_player, 0.0));
+        assert!(boss.check_player_point(&aerial_player, -120.0));
+
+        boss.tick_combat(&aerial_player, &[], &mask, &mut rng, &mut events);
+        assert_eq!(boss.health, 20);
+        assert_eq!(boss.state, PenguinState::Fall);
+        assert!(events.contains(&PenguinCombatEvent::Sound(PenguinSound::Punch2)));
+        assert!(events.contains(&PenguinCombatEvent::ComboHit { combo_count: 20 }));
+
+        // Lethal -120 slam from 20 HP emits exact source +100 score branch
+        boss.set_state(PenguinState::Stand);
+        events.clear();
+        boss.tick_combat(&aerial_player, &[], &mask, &mut rng, &mut events);
+        assert_eq!(boss.health, 0);
+        assert_eq!(boss.state, PenguinState::Die);
+        assert!(events.contains(&PenguinCombatEvent::Score(100)));
+    }
+
+    #[test]
+    fn penguin_hurt_random_recovery_and_fall_recovery_to_dodge() {
+        let mut boss = PenguinBoss::new();
+        boss.set_state(PenguinState::Attack);
+        boss.child_frame = 9;
+        let mut rng = PenguinRng::new(0x5555_0001);
+        boss.step_child_frame("stand", &mut rng);
+        assert_eq!(boss.state, PenguinState::Dodge);
+        assert_eq!(boss.dy, -18.0);
+
+        boss.set_state(PenguinState::Fall);
+        boss.child_frame = 20;
+        boss.step_child_frame("stand", &mut rng);
+        assert_eq!(boss.state, PenguinState::Dodge);
+        assert_eq!(boss.dy, -20.0);
+
+        let mut saw_stand = false;
+        let mut saw_attack = false;
+        for seed in 1u64..64 {
+            let mut trial = PenguinBoss::new();
+            trial.set_state(PenguinState::Hurt);
+            trial.child_frame = 5;
+            let mut trng = PenguinRng::new(seed);
+            trial.step_child_frame("stand", &mut trng);
+            if trial.state == PenguinState::Stand {
+                saw_stand = true;
+            } else if trial.state == PenguinState::Attack {
+                saw_attack = true;
+            }
+            if saw_stand && saw_attack {
+                break;
+            }
+        }
+        assert!(saw_stand && saw_attack);
     }
 }
