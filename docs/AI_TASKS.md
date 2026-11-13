@@ -1,6 +1,27 @@
 # Persistent development tasks — Batman Rust port
 
 
+## B16 — COMPLETED / penguinAI Movement, Dodge, Block, Facing & Approach (2026-11-13)
+
+**VERIFIED NATIVE WINDOWS REGRESSION.** [Draft, OPEN, UNMERGED PR #48](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/48) on `revive/level2-b16-penguin-ai-2026-11-12`, based on B15 docs commit `07fd792`. **Exact Windows-tested code SHA `8ce03ca`**. Final documentation SHA is the separate later `[skip ci]` commit; this file cannot prestate its own commit ID. Full native Windows [#43387097167](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43387097167) **SUCCESS** on exact code SHA.
+
+**ENGINEERING & ARCHITECTURE FACTS:**
+1. **Source Decompilation & Level 1C Camera/Init Constants (`src/penguin.rs`):**
+   - Verified `penguinAI` (offset `124287`, `3,920` bytes), `checkWall` (`99990`, `120` bytes), `checkPlayer` (`100151`), `checkBatarang` (`100723`), and Level 1C root DoAction (`cameraLogic`, `camMin=250`, `camMax=2150`, `camHeight=270`, `camJump=4`, `camZoom=100`, `bgScroll=6`, `globalGravity=5`, `boss` `health=200`, `speed=6`, `stength=5`, `dir=1`, `enemyWidth=50`, `enemyHeight=50`).
+   - Added Level 1C camera/dodge/gravity constants (`PENGUIN_DODGE_WALL_RIGHT_X=2100.0`, `PENGUIN_DODGE_WALL_LEFT_X=100.0`, `PENGUIN_DODGE_INITIAL_DY=-12.0`, `PENGUIN_DODGE_VX=15.0`, `PENGUIN_DODGE_MAX_TICKS=20`, `PENGUIN_GLOBAL_GRAVITY=5.0`, `PENGUIN_CAM_*`).
+2. **Dormant Pure-Rust `PenguinBoss` State Machine (`src/penguin.rs`):**
+   - Added `PenguinRng` (deterministic XorShift64* PRNG), `PenguinBatarangOutcome`, `check_penguin_wall`, and `PenguinBoss` (`new()` with `health=200`, `speed=6.0`, `stength=5` typo field + `strength()`, `enemy_y=316.2`, `step_child_frame()`, `evaluate_batarang()`, and `tick_noncombat()`).
+   - Implements arena `0..2300` boundary dodge bounce (`dy=-12`), vertical settle (`30%` decay outside `Dodge`), range rules (`180 < range < 320` -> `Attack2` quota `attackCount < 3`, `range < 180` same-direction flee flip, `range > 360` face + reset `attackCount`), `Walk`/`Dodge`/`Hurt`/`Fall` physics, inner dodge guards (`2100`/`100`, `fallCount >= 20` landing reset), `60%` batarang block (`rand * 5.0 > 2.0` -> `Block`), and approach `Walk` transition (`!checkWall(this, enemyHeight)`).
+   - Added 5 source-step behavioral unit tests (`penguin_boss_init_defaults_preserve_200hp_speed6_camera_and_stength_typo`, `penguin_range_facing_attack2_quota_and_close_flee_flip`, `penguin_arena_boundary_bounce_and_dodge_parabolic_arc`, `penguin_dodge_inner_wall_guards_and_smooth_y_settle`, `penguin_batarang_rng_block_and_level1c_collision_wall_stop`), increasing total Rust tests from 88 to 93.
+   - Updated `.github/workflows/build-level1a-fidelity.yml` push branch trigger list.
+
+**NATIVE VERIFIED on exact CODE SHA:** `cargo test --release --locked` **93/93 passed in 0.80s**, locked build PASS, relocated standalone EXE **20/20 exact HQ hashes**, child exit 0 and no SWF staged. Render p95 **28.4254ms**, scenery scroll p95 **26.5765ms**, both below unchanged **40ms** gate. Hosted WinMM audio device 0 / MCI error 277 remains **BLOCKED** (`BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT`).
+
+**RUST PURITY/AUDIT:** Zero unsafe code, zero new external crates, runtime remains 100% native Rust with documented Win32/GDI/WinMM FFI. [Research RE-20261113-022](REVERSE_ENGINEERING_RESEARCH_LEDGER.md) and [independent AUD-20261113-022](RUST_PURITY_AND_ENGINEERING_AUDIT.md) finalized. Reviewed `AGENTS.md` and both mandatory protocols unchanged. Main and accepted Level1A release preserved.
+
+**STOP. ONE NEXT SEPARATELY AUTHORIZED TASK: B17 Penguin `attack`/`attack2`/`laser` hitbox `#1192`, Batman `electro`/hit response, boss HP/knockdowns and `+500` scoring (`src/penguin.rs`)**, preserving existing baseline.
+
+
 ## B15 — COMPLETED / Level 1C Penguin #1250 99-Frame Outer Timeline, 162 True Child Frames & Attack FX (2026-11-13)
 
 **VERIFIED NATIVE WINDOWS REGRESSION & LEVEL 1C PENGUIN SPRITE PROOF.** [Draft, OPEN, UNMERGED PR #47](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/47) on `revive/level2-b15-penguin-sprites-2026-11-12`, based on B14 docs commit `c50de8c`. **Exact Windows-tested code SHA `0f12090`**. Final documentation SHA is the separate later `[skip ci]` commit; this file cannot prestate its own commit ID. Full native Windows [#43370831028](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43370831028) **SUCCESS** and original source proof [#43370830995](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43370830995) **SUCCESS** on exact code SHA.
