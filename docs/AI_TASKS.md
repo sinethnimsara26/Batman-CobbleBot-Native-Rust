@@ -1,6 +1,18 @@
 # Persistent development tasks — Batman Rust port
 
 
+## B21 — COMPLETED / `Labs 2A` Ground `#1316`, Vertical `cameraLogic2` / `cameraLogic3` & 10 Camera Triggers (2026-11-13)
+
+**VERIFIED NATIVE WINDOWS REGRESSION.** Code SHA [`ad22717`](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/commit/ad22717) on Draft PR [#53](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/53) passed [CI Run #43410324958](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43410324958) (`SUCCESS` in `14m38s`):
+- `cargo test --release --locked`: `110 passed; 0 failed` in `1.80s` (CI) / `1.63s` (local).
+- Relocated installation & HQ smoke: `20/20` HQ hashes identical (`sha256: 1ac9fa1d04a86fd27e79dce98dd9846bf180719c10b499634c74a3ccc35cc056`), `child_exit: 0`, `render_p95_ms: 22.3942`, `scenery_p95_ms: 27.8796`.
+- Added `LabsCameraMode`, `#153`/`#28` exact `LabsTriggerPlacement::hits_player`, grounded-gated `camera_01..10` zone transitions, `cameraLogic2` (`camHeight = 275`, `onPlatform` target offset) vs `cameraLogic3` (`camHeight = game._y - player._y + 500`, `1/3` floor tracking, `1/4` airborne easing, `150/450` horizontal target), `#1316` left shaft descent & landing, and `b21_labs2a_camera_ground_tests`.
+- Audio note: `intro_audio_focus: BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT` (WinMM MCI 277 on hosted runner without audio hardware).
+
+### Next Authorized Batch: **B22 — `doorOpen` + `18` Doors (`#1325`/`#1324`) + `18` Jambs (`#1394..1396`) + `assets/door_frames.bin`**
+- Branch `revive/level2-b22-labs2a-doors-2026-11-13` off the B21 `[skip ci]` docs closeout commit.
+- Bake/pack `assets/door_frames.bin` (20-frame `#1325` door + `#1394..1396` jamb overlays), implement AVM1 `doorOpen` (`#1318` sensor overlap -> frame 1 `"open"` + sound `#1323` -> hold frame 10 -> `"close"`), render doors behind `player` and jambs in front of `player`, and verify on Windows CI.
+
 ## B20 — COMPLETED / `Labs 2A` (`#1317`) 1× Tile Pack, `#1316` Collision Mask & `Level2A` Object Separation (2026-11-13)
 
 **VERIFIED NATIVE WINDOWS REGRESSION.** Code SHA [`3f463c4`](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/commit/3f463c4) on Draft PR [#52](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/52) passed [CI Run #43407646037](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43407646037) (`SUCCESS` in `9m34s`):

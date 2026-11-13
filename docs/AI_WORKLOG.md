@@ -952,3 +952,13 @@ Do not erase two historical CI failures: documentation-only #42834460076 and ini
   - Embedded `CollisionMask::level2a()` in `CollisionMask::for_stage` (`src/collision.rs`), `StageAssets::load_level2a()` in `StageAssets::load` (`src/assets.rs`), `pub mod labs2a` typed placements (`18` doors `#1325`, `18` jambs `#1394..1396`, `3` elevators `2685/3480/5420`, `4` checkpoints, `10` camera triggers, `9` goons `#1365`, `1` eagle `#1393`, `1` health `#1401`, `9` batarang pickups `#695`) in `src/stage.rs`, and `#14` pure black backdrop gating for `Level2A | Level2B` in `src/render.rs`.
   - Updated `.github/workflows/build-level1a-fidelity.yml` with `level2a` mask bake, `level2a_tiles.bin` bake/pack, `b20_bake_labs2a_scenery.py` verification, and `Batman-CobbleBot-B20-Labs2A-Scenery-Proof` upload. Added 4 Rust unit tests (`104 -> 108`).
 - **CI Proof:** `108 passed; 0 failed` (`1.22s`), `hq_smoke_hashes_identical: 20` (`sha256: b4c69f245265bff65f4caa9eb5a5c32502d6133897418b8a5b442f8490f5e193`), `child_exit: 0`, `render_p95_ms: 13.2068`, `scenery_p95_ms: 17.6241`, `intro_audio_focus: BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT` (WinMM MCI 277).
+
+## B21 — `Labs 2A` `#1316` Runtime Ground, `cameraLogic2` / `cameraLogic3` & 10 Camera Triggers (VERIFIED FINAL)
+- **Date:** 2026-11-13
+- **Branch / PR:** `revive/level2-b21-labs2a-camera-ground-2026-11-13` (Draft PR #53 -> `revive/level2-b20-labs2a-scenery-mask-2026-11-13`)
+- **Verified Code SHA:** `ad22717`
+- **Windows CI Run:** [`#43410324958`](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43410324958) (`14m38s`, SUCCESS)
+- **Summary:**
+  - Added `LabsCameraMode` and exact `#153`/`#28` trigger bounds + `hits_player` + `camera_mode` mapping on `LabsTriggerPlacement` (`src/stage.rs`).
+  - Wired `StageId::Level2A` runtime `start_stage` (`player.dy = 3.0`, `CameraLogic2`, `cam_height = 275.0`), `update_labs_camera_triggers` (`!player.jumping` gating across `labs2a::CAMERAS`), `cameraLogic2` / `cameraLogic3` camera updates sharing `apply_camera_horizontal_ease`, and `b21_labs2a_camera_ground_tests` (+2 tests -> `110`) in `src/game.rs`.
+- **CI Proof:** `110 passed; 0 failed` (`1.80s`), `hq_smoke_hashes_identical: 20` (`sha256: 1ac9fa1d04a86fd27e79dce98dd9846bf180719c10b499634c74a3ccc35cc056`), `child_exit: 0`, `render_p95_ms: 22.3942`, `scenery_p95_ms: 27.8796`, `intro_audio_focus: BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT` (WinMM MCI 277).
