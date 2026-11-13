@@ -1393,3 +1393,28 @@ Tested original source fixed CODE SHA `26dad6e07ef3dc1ca860aa98b4a8ccfb12912f72`
   - Windows CI fidelity run `#43366474557` (`build-level1a-fidelity`): SUCCESS on code SHA `94c4035`; `85/85` tests passed, render p95 `23.017ms`, scenery scroll p95 `22.1898ms` (< 40ms gate), 15/15 1× identical, 20/20 relocated standalone EXE HQ hashes identical, child exit 0.
 - **Confidence:** HIGH for SWF display list extraction, `#1094` collision mask geometry, `#1095` tile coverage, root21 HUD transform, and `#1250` clip hierarchy.
 
+
+## RE-20261113-021 — Level 1C Penguin #1250 Outer Timeline, True Child Clips, DoAction Scripts & Attack FX (Batch B15)
+
+- **Batch/Context:** Batch B15; branch `revive/level2-b15-penguin-sprites-2026-11-12`, draft PR #47 based on B14 docs commit `c50de8c`.
+- **Target Subsystem:** `src/penguin.rs`, `reverse-engineering/tools/b15_bake_penguin_sprites.py`, `.github/workflows/b15-original-penguin-sprites-source.yml`, `.github/workflows/build-level1a-fidelity.yml`.
+- **Original Architecture & Findings:**
+  1. `#1250` (`boss`) Outer vs Direct-Child Timeline Separation:
+     - `DefineSprite` `#1250` (`99` frames, `0` internal `DoAction` blocks because `penguinAI` drives `gotoAndStop(state)` every tick) places 10 direct-child MovieClips at depth 1: `stand:#1103(21)`, `walk:#1117(8)`, `jump:#1135(9)`, `dodge:#1149(10)`, `block:#1156(14)`, `attack:#1172(10)`, `attack2("laser"):#1205(23)`, `hurt:#1207(6)`, `fall:#1224(21)`, `die:#1249(40)` (`162` total true child frames).
+     - Exact child `DoAction` frame indices verified from SWF tag stream: `#1103` (`[]`, loop), `#1117` (`[]`, loop), `#1135` (`[8]`, `Stop`), `#1149` (`[9]`, `Stop`), `#1156` (`[13]`, `_parent.state="stand"`), `#1172` (`[9]`, `_parent.state="dodge"; _parent.dy=-18`), `#1205` (`[10, 22]`, frame 10 electro hold-loop `if(_root.playerState=="electro") gotoAndPlay(_currentframe-1)` & frame 22 `_parent.state="stand"`), `#1207` (`[5]`, `random(10)>3 ? stand : attack`), `#1224` (`[20]`, `_parent.fallCount=0; _parent.dy=-20; _parent.state="dodge"`), `#1249` (`[39]`, `Stop`).
+  2. Grandchild Attack / Deflect / Flash / Debris FX & `laser.hitBox` (`#1192`) Geometry:
+     - `#1156` (`block`): frame `1` depth `10` places `#695` (`item_br03`, deflected batarang FX); frame `9` depth `1` places `#1103`.
+     - `#1205` (`attack2` / `laser`): `#1184` (f7, d2), `#1185` (f7, d4), `#1187` (f8, d4), `#1189` (f8, d5), `#1190` (f9, d4), and invisible `DefineSprite` `#1192` (wrapping shape `#1191`, `name="hitBox"`, depth `10`, `cxform mult=[256,256,256,0]`, placed at local frame `9` and removed via `RemoveObject2(depth=10)` at local frame `11`).
+     - `#1192` raw bounds `[-88.9953125, -37.8247108, 197.3953125, 37.8247108]` transform via `sx=0.8508148, tx=-245.75, ty=45.7` to `[-321.46853, 7.87529, -77.80314, 83.52471]` in `#1205`-local space and `[-450.76234, -66.13024, -98.97639, 43.08676]` in unflipped `#1250` boss-local space (firing left `-x`).
+     - `#1224` (`fall`): frame `0` depth `1` places `#1103` with white-flash `cxform` (`mult=[0,0,0,256], add=[255,255,255,0]`).
+     - `#1249` (`die`): frame `13` depths `1,3,5,7,9` place explosion debris `#1240, #1242, #1244, #1246, #1248`; frames `38..39` fade alpha to `0` (`non_empty=160/162`).
+  3. Common Baked Registration & Canvas (`bake_player_states.py --symbol 1250 --scale 1 --output-scale 1`):
+     - Canvas `[938, 410]`, registration origin `(535.05466, 168.02714)`, `manifest_sha256: 1f67e475a6b15cd9617c1d91a6f26a383f73cf95762bd125d7f5f1d325703675`.
+     - Outer 1× render: `99/99` non-empty `[659, 303]`; 10 true 6×->HQ3× label-start views: `10/10` non-empty `[1977, 909]`; zero missing bitmaps or unsupported fills.
+- **Verification Evidence:**
+  - Rust unit tests increased from 85 to 88 (+3 B15 tests in `src/penguin.rs`).
+  - Windows CI source proof `#43370830995` (`b15-original-penguin-sprites-source`): SUCCESS (artifact `#14012027592`, `2020659` bytes, contact sheet `1bce0b9a...`, report `8db8aa30...`).
+  - Windows CI fidelity run `#43370831028` (`build-level1a-fidelity`): SUCCESS on code SHA `0f12090`; `88/88` tests passed in 1.00s, render p95 `19.0911ms`, scenery scroll p95 `24.1687ms` (< 40ms gate), 20/20 relocated standalone EXE HQ hashes identical, child exit 0.
+- **Confidence:** HIGH for `#1250` child clip extraction, AVM1 child scripts, `#1192` hitbox transform math, and lossless raster parity.
+
+

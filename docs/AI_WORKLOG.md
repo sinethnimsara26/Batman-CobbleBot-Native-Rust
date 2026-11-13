@@ -866,3 +866,20 @@ Do not erase two historical CI failures: documentation-only #42834460076 and ini
   - Hosted audio: `BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT` (`audio_hardware_verified: false`).
 - **Records & Governance:** RE-20261113-020 and AUD-20261113-020 appended. All six records synchronized. No unsafe code, no external dependencies. PR #46 remains DRAFT/OPEN. STOP.
 
+
+## 2026-11-13 — B15 Level 1C Penguin #1250 99-Frame Outer Timeline, 162 True Child Frames & Attack FX (VERIFIED)
+
+- **Scope & Context:** B15 Level 1C Penguin (`#1250` `boss`) source sprite/timeline/FX baking and dormant Rust placement/action/hitbox metadata; branch `revive/level2-b15-penguin-sprites-2026-11-12`, draft PR #47 based on B14 docs commit `c50de8c`.
+- **Implementation:**
+  1. `src/penguin.rs`: Added `PENGUIN_TOTAL_BAKED_CHILD_FRAMES = 162`, `PENGUIN_SPRITE_CANVAS_1X = (938, 410)`, `PENGUIN_ANCHOR_IN_BITMAP_1X = (535.05466, 168.02714)`, `PenguinChildAction` enum & per-state terminal AVM1 actions, `baked_start_frame..baked_end_frame` (`0..162`) and depth-1 `child_sx/sy/tx/ty` transforms on `PenguinLabelSpan`, `PENGUIN_LASER_ELECTRO_HOLD_LOCAL_FRAME = 10`, `PENGUIN_LASER_HITBOX` (`#1192`, active `#1205` local frames `9..=10` / baked `81..=82`), `PENGUIN_NESTED_FX_PLACEMENTS` (`14` grandchild FX entries), and 3 unit tests, bringing total Rust tests from 85 to 88.
+  2. `reverse-engineering/tools/b15_bake_penguin_sprites.py`: Verified canonical SWF (`3d9e1992...`) `#1250` (`DefineSprite` tag 39, `0` parent `DoAction` blocks because driven externally by `penguinAI`, exact child `DoAction` frames across all 10 clips), rendered `99/99` 1× outer frames (`[659, 303]`), `10/10` 6×->HQ3× label-start views (`[1977, 909]`), baked `162` true nested child frames (`160/162` non-empty; final 2 `die` frames alpha-0 fadeout) via `bake_player_states.py` (`[938, 410]`), verified all grandchild FX placements, and generated `B15_PENGUIN_SPRITES_CONTACT_SHEET.png` (`[1700, 636]`, `1bce0b9a...`) + `B15_PENGUIN_SPRITES_SOURCE_REPORT.json` (`8db8aa30...`).
+  3. `.github/workflows/b15-original-penguin-sprites-source.yml` & `.github/workflows/build-level1a-fidelity.yml`: Added source proof workflow uploading artifact `B15-CobbleBot-Original-Penguin-Sprites-Source-Proofs` and added branch trigger to fidelity workflow.
+- **Native Windows CI Execution:**
+  - Source proof run [#43370830995](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43370830995) (`b15-original-penguin-sprites-source`) completed **SUCCESS** on exact code SHA `0f12090`; artifact `#14012027592` (`2020659` bytes; `99/99` outer 1×, `10/10` outer HQ3×, `162` true child frames `160/162` non-empty, `manifest_sha256: 1f67e475...`).
+  - Full native Windows run [#43370831028](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43370831028) (`build-level1a-fidelity`) completed **SUCCESS** on exact code SHA `0f12090`.
+  - Cargo test: **88/88 passed in 1.00s** (`20/20` relocated standalone EXE HQ3× screenshot hashes identical, `child_exit: 0`).
+  - Performance: Render p95 **19.0911ms**, scenery scroll p95 **24.1687ms** (well below 40.0ms gate).
+  - Hosted audio: `BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT`.
+- **Records & Governance:** RE-20261113-021 and AUD-20261113-021 appended. All six records synchronized. No unsafe code, no external dependencies. PR #47 remains DRAFT/OPEN. STOP.
+
+

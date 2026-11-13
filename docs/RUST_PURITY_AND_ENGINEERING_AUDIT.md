@@ -1149,3 +1149,23 @@ Do not erase two historical CI failures: documentation-only #42834460076 and ini
   - **ENGINEERING QUALITY:** PASS (strongly typed `GamePos`/`LevelPos`, bit-packed `#1094` mask, verified direct-child timeline table without parent-wrap confusion).
   - **ORIGINAL-GAME FIDELITY:** VERIFIED FOR TESTED SCOPE (Level 1A/1B regressions completely preserved; Level 1C root21 display list, `#1094` collision mask, and `#1095` arena tiles match canonical `cobblebot.swf` verbatim).
   - **HARDWARE SPEAKER AUDIO:** BLOCKED (`BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT`, unchanged).
+
+
+## AUD-20261113-021 — Independent post-code Rust purity/engineering audit of Batch B15 (Level 1C Penguin #1250 Sprites, Timelines & Attack FX)
+
+- **Audit Date:** 2026-11-13
+- **Scope:** `src/penguin.rs`, `reverse-engineering/tools/b15_bake_penguin_sprites.py`, `.github/workflows/b15-original-penguin-sprites-source.yml`, `.github/workflows/build-level1a-fidelity.yml`.
+- **Code SHA:** `0f12090` on branch `revive/level2-b15-penguin-sprites-2026-11-12` (PR #47).
+- **Actual Changed Code and Engineering Review:**
+  1. Pure-Rust dormant Level 1C Penguin animation/FX contract (`src/penguin.rs`):
+     - Extends `PenguinLabelSpan` with const `baked_start_frame..baked_end_frame` (`0..162`), exact depth-1 `child_sx/sy/tx/ty` placement transforms, and `PenguinChildAction` enum encoding all 10 source child clip scripts without runtime heap allocations or dynamic dispatch.
+     - Adds `PENGUIN_SPRITE_CANVAS_1X` (`(938, 410)`), `PENGUIN_ANCHOR_IN_BITMAP_1X` (`(535.05466, 168.02714)`), `PenguinLaserHitBoxSpec` / `PENGUIN_LASER_HITBOX` (`#1192` with `const fn` child/boss AABB projection and local-frame `9..=10` active window), and `PENGUIN_NESTED_FX_PLACEMENTS` (`14` verified grandchild FX placements).
+     - Adds 3 unit tests bringing total Rust tests from 85 to 88; leaves Level 1A/1B execution untouched.
+  2. Offline source baker `reverse-engineering/tools/b15_bake_penguin_sprites.py` & `.github/workflows/b15-original-penguin-sprites-source.yml` run strictly in dev/CI and ship zero Flash/Python assets into the runtime binary.
+  3. CI execution confirmed on GitHub Actions runs [#43370830995](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43370830995) (`b15-original-penguin-sprites-source` SUCCESS, artifact `#14012027592`, `2020659` bytes) and [#43370831028](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43370831028) (`build-level1a-fidelity` SUCCESS): `88/88` tests passed in `1.00s`, render p95 `19.0911ms`, scenery scroll p95 `24.1687ms` (< 40ms gate), 20/20 relocated standalone EXE HQ hashes identical, child exit 0.
+- **Verdicts:**
+  - **PURE-RUST RUNTIME COMPLIANCE:** PASS (with existing direct Win32/GDI/WinMM OS FFI qualifications). Zero new crates, zero unsafe blocks, zero runtime allocations added.
+  - **ENGINEERING QUALITY:** PASS (`const fn` AABB geometry, typed `PenguinChildAction` variants, explicit separation between 99-frame outer timeline and 162-frame true child sequence).
+  - **ORIGINAL-GAME FIDELITY:** VERIFIED FOR TESTED SCOPE (Level 1A/1B regressions completely preserved; `#1250` outer frames, HQ3× label starts, 162 true child frames, child `DoAction` hooks, and grandchild FX/#1192 `hitBox` verified verbatim against canonical SWF).
+  - **HARDWARE SPEAKER AUDIO:** BLOCKED (`BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT`, unchanged).
+
