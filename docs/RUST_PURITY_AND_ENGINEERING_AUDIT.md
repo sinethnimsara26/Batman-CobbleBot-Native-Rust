@@ -1026,3 +1026,25 @@ Do not erase two historical CI failures: documentation-only #42834460076 and ini
   - **ENGINEERING QUALITY:** PASS (clean separation of concerns, zero memory bloat across stages, zero-cost `Deref` abstractions).
   - **ORIGINAL-GAME FIDELITY:** VERIFIED FOR TESTED SCOPE (Level 1A gameplay intact; 15/15 1× hashes and 20/20 relocated standalone EXE HQ hashes identical).
   - **HARDWARE SPEAKER AUDIO:** BLOCKED (hosted runner limitation, unchanged).
+
+
+## AUD-20261112-016 — Independent post-code Rust purity/engineering audit of Batch B10 (Goon AI)
+
+- **Audit Date:** 2026-11-12
+- **Scope:** `src/bank_goons.rs`, `.github/workflows/build-level1a-fidelity.yml`
+- **Code SHA:** `2cffd9d` on branch `revive/level2-b10-goon-ai-2026-11-12` (PR #42).
+- **Actual Changed Code and Engineering Review:**
+  1. Implemented complete noncombat AVM1 `goonAI` state machine in pure Rust inside `src/bank_goons.rs`:
+     - `GoonState`: `Idle`, `Stand`, `Walk`, `Retreat`, `Attack`, `Hurt`, `Fall`, `Die`, `Intro`.
+     - `GoonFamily`: `A` (`#880`) and `B` (`#964`) with exact true nested child clip ranges (`GOON_A_CLIPS`, `GOON_B_CLIPS`).
+     - `GoonRng`: 64-bit XorShift64* deterministic PRNG. Avoids external crates and non-deterministic system RNG.
+     - `BankGoon`: full state tracking, speed 9.0, health 32, strength 5, child frame advancing, distance calculations, proximity activation, facing, and close retreat.
+     - `check_goon_wall` & `check_goon_edge`: collision detection using bit-packed Level 1B collision mask.
+     - `BankGoonSquad`: manages all 10 named spawns (`goon1`..`goon10`) at their canonical GAME depths.
+  2. Added 5 unit tests (`bank_goon_spawn_initialization_and_child_bounds`, `bank_goon_squad_tick_advances_all_and_tracks_alive`, `goon_xorshift64_rng_is_deterministic`, `goon_noncombat_chase_and_retreat_decisions`, and `goon_ledge_edge_and_wall_turn_with_collision_mask`). Total unit tests increased from 54 to 59.
+  3. CI execution confirmed on GitHub Actions run [#43331247611](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43331247611): 82/82 steps passed, 59/59 tests passed in 0.71s, render p95 `20.8186ms`, scenery scroll p95 `25.3923ms` (< 40ms gate), 15/15 1× hashes identical, 20/20 relocated standalone EXE HQ hashes identical, child exit 0.
+- **Verdicts:**
+  - **PURE-RUST RUNTIME COMPLIANCE:** PASS (with existing direct Win32/GDI/WinMM OS FFI qualifications). Zero new crates, zero unsafe blocks, zero heap allocations in AI tick.
+  - **ENGINEERING QUALITY:** PASS (deterministic PRNG, clean state machine, bit-packed collision integration).
+  - **ORIGINAL-GAME FIDELITY:** VERIFIED FOR TESTED SCOPE (Level 1A gameplay intact; Level 1B goon noncombat state machine accurately mirrors Flash AVM1 bytecode).
+  - **HARDWARE SPEAKER AUDIO:** BLOCKED (hosted runner limitation, unchanged).
