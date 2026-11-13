@@ -103,6 +103,8 @@ pub struct CommonAssets {
     pub biker_frames: LazySpriteSet,
     /// 162 Level 1C Penguin (`#1250`) child frames across all 10 source labels, loaded lazily.
     pub penguin_frames: LazySpriteSet,
+    /// 23 Labs 2A/2B animated door (`#1325` frames `0..=19`) and jamb (`#1394..=#1396` frames `20..=22`) sprites.
+    pub door_frames: LazySpriteSet,
 }
 
 impl CommonAssets {
@@ -140,6 +142,7 @@ impl CommonAssets {
             goon_b_frames: decode_sprite_frames_lazy_expected(include_bytes!("../assets/goon_b_frames.bin"),1.0,"goon_b_frames"),
             biker_frames: decode_sprite_frames_lazy_expected(include_bytes!("../assets/biker_frames.bin"),1.0,"biker_frames"),
             penguin_frames: decode_sprite_frames_lazy_expected(include_bytes!("../assets/penguin_frames.bin"),1.0,"penguin_frames"),
+            door_frames: decode_sprite_frames_lazy_expected(include_bytes!("../assets/door_frames.bin"),1.0,"door_frames"),
         }
     }
 }
@@ -577,6 +580,7 @@ mod tests{
         assert_eq!(assets.goon_b_frames.len(),66);
         assert_eq!(assets.biker_frames.len(),9);
         assert_eq!(assets.penguin_frames.len(),162);
+        assert_eq!(assets.door_frames.len(),23);
         assets.load_stage(crate::stage::StageId::Level1B);
         assert_eq!(assets.stage.stage_id,crate::stage::StageId::Level1B);
         assets.load_stage(crate::stage::StageId::Level1C);

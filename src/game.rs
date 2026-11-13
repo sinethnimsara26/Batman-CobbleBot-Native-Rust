@@ -98,7 +98,15 @@ const ESCAPE_CARD_SOUND_ID:u16=130;
 pub enum AppScreen{Title,Instructions,Intro,Playing,EscapeCard}
 
 #[derive(Copy,Clone,Debug,PartialEq,Eq)]
-pub enum AudioEvent{IntroStart,IntroStop,MusicStart,MusicStop,Jump,Item}
+pub enum AudioEvent{IntroStart,IntroStop,MusicStart,MusicStop,Jump,Item,DoorOpen}
+
+/// Runtime state of a single Labs sliding door (`#1325`/`#1324`), matching AVM1
+/// 0-based timeline frames `0..=19` (`Stop()` at `0` closed & `9` open; sound `#1323` on `1`).
+#[derive(Copy,Clone,Debug,PartialEq,Eq,Default)]
+pub struct LabsDoorState {
+    pub frame: u8,
+    pub playing: bool,
+}
 
 #[derive(Copy,Clone,Debug,PartialEq,Eq)]
 pub enum PlayerState{
@@ -236,6 +244,7 @@ pub struct Game{
     penguin_rng:PenguinRng,
     pub pickups:[bool;7],
     pub shots:Vec<Shot>,
+    pub labs_doors:Vec<LabsDoorState>,
     pub ticks:u64,
     audio_events:Vec<AudioEvent>,
     pit_done:bool,
@@ -275,7 +284,7 @@ impl Game{
             level1c_exit_reached:false,level1c_complete:false,
             escape_card_tick:0,escape_card_fadeout_tick:None,escape_card_sound_stopped:false,escape_card_complete:false,
             bank_goons:None,bank_biker:None,penguin_boss:None,penguin_rng:PenguinRng::new(0x1C00_1250),
-            pickups:[false;7],shots:Vec::new(),ticks:0,audio_events:Vec::new(),pit_done:false,respawn_after_fade:false,gameover_after_fade:false,
+            pickups:[false;7],shots:Vec::new(),labs_doors:Vec::new(),ticks:0,audio_events:Vec::new(),pit_done:false,respawn_after_fade:false,gameover_after_fade:false,
         }
     }
 
@@ -355,6 +364,11 @@ impl Game{
                 self.penguin_boss=None;
             }
         }
+        self.labs_doors=if stage==StageId::Level2A{
+            vec![LabsDoorState::default();crate::stage::labs2a::DOORS.len()]
+        }else{
+            Vec::new()
+        };
         self.update_camera();
     }
 
@@ -637,6 +651,7 @@ impl Game{
         self.update_pit_logic();
         self.update_tutorial_checkpoints();
         self.update_labs_camera_triggers();
+        self.update_labs_doors();
         self.update_camera();
 
         if self.player.state==state_at_tick_start{
@@ -1318,6 +1333,37 @@ impl Game{
         match self.stage{
             StageId::Level2A=>&labs2a::CAMERAS,
             _=>&[],
+        }
+    }
+
+    fn update_labs_doors(&mut self){
+        if self.stage!=StageId::Level2A||self.labs_doors.is_empty(){return;}
+        let placements=&crate::stage::labs2a::DOORS;
+        if self.labs_doors.len()!=placements.len(){return;}
+
+        let player_x=self.player.x+self.level_origin_x();
+        let player_y=self.player.y+self.level_origin_y();
+        for (state,&door) in self.labs_doors.iter_mut().zip(placements.iter()){
+            // AVM1 _global.doorOpen: overlapping #1325 opens closed doors (frame 0 -> "open");
+            // leaving #1325 closes open doors (frame 9 -> "close"). While overlapping, the jump
+            // past the close branch keeps the door open even if the player lingers inside.
+            if door.hits_player(player_x,player_y){
+                if state.frame==0 && !state.playing{
+                    state.playing=true;
+                }
+            }else if state.frame==9 && !state.playing{
+                state.playing=true;
+            }
+
+            if state.playing{
+                state.frame=(state.frame+1)%20;
+                if state.frame==1{
+                    self.audio_events.push(AudioEvent::DoorOpen);
+                }
+                if state.frame==0 || state.frame==9{
+                    state.playing=false;
+                }
+            }
         }
     }
 
@@ -2255,5 +2301,78 @@ mod b21_labs2a_camera_ground_tests {
             }
         }
         assert_eq!((l2, l3), (5, 5));
+    }
+}
+
+#[cfg(test)]
+mod b22_labs2a_door_tests {
+    use super::{AppScreen, AudioEvent, Game, InputState};
+    use crate::collision::CollisionMask;
+    use crate::stage::{labs2a, StageId};
+
+    #[test]
+    fn labs2a_initializes_18_closed_doors_and_leaves_bank_stages_empty() {
+        let mut game = Game::new();
+        assert!(game.labs_doors.is_empty());
+
+        game.start_stage(StageId::Level2A);
+        assert_eq!(game.labs_doors.len(), 18);
+        assert!(game.labs_doors.iter().all(|d| d.frame == 0 && !d.playing));
+
+        game.start_stage(StageId::Level1A);
+        assert!(game.labs_doors.is_empty());
+    }
+
+    #[test]
+    fn labs2a_door_opens_emits_sound_holds_open_and_closes_on_exit() {
+        let ground = CollisionMask::for_stage(StageId::Level2A);
+        let mut game = Game::new();
+        game.start_stage(StageId::Level2A);
+        game.screen = AppScreen::Playing;
+
+        // Place Batman directly centered on doorway gx=614, gy=2573 where BOTH
+        // door_01 (gx<=725.41) and door_02 (gx>=503.34) sensors overlap Batman simultaneously!
+        game.player.x = 614.0 - game.level_origin_x();
+        game.player.y = 2573.0 - game.level_origin_y();
+        game.player.jumping = false;
+        game.player.on_ground = true;
+
+        let mut input = InputState::default();
+        game.tick(&mut input, &ground);
+        assert_eq!(game.labs_doors[0].frame, 1);
+        assert_eq!(game.labs_doors[1].frame, 1);
+        assert!(game.labs_doors[0].playing);
+        let door_sounds = game
+            .take_audio_events()
+            .into_iter()
+            .filter(|e| *e == AudioEvent::DoorOpen)
+            .count();
+        assert_eq!(door_sounds, 2, "paired doors 0 & 1 must both emit DoorOpen sound #1323 on frame 1");
+
+        // Advance 8 ticks -> frame reaches 9 (open) and Stop() halts playback.
+        for _ in 0..8 {
+            game.tick(&mut input, &ground);
+        }
+        assert_eq!((game.labs_doors[0].frame, game.labs_doors[0].playing), (9, false));
+        assert_eq!((game.labs_doors[1].frame, game.labs_doors[1].playing), (9, false));
+
+        // While still overlapping the doorway sensor, doors must stay open at frame 9.
+        for _ in 0..4 {
+            game.tick(&mut input, &ground);
+        }
+        assert_eq!((game.labs_doors[0].frame, game.labs_doors[0].playing), (9, false));
+
+        // Move Batman away outside all door sensors; doors advance 10..19 -> 0 (closed).
+        game.player.x = 200.0 - game.level_origin_x();
+        game.player.y = 2573.0 - game.level_origin_y();
+        game.tick(&mut input, &ground);
+        assert_eq!((game.labs_doors[0].frame, game.labs_doors[0].playing), (10, true));
+
+        for _ in 0..10 {
+            game.tick(&mut input, &ground);
+        }
+        assert_eq!((game.labs_doors[0].frame, game.labs_doors[0].playing), (0, false));
+        assert_eq!((game.labs_doors[1].frame, game.labs_doors[1].playing), (0, false));
+        assert_eq!(labs2a::DOOR_JAMBS.len(), 18);
     }
 }
