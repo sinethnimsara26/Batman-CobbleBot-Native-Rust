@@ -1251,3 +1251,10 @@ Do not erase two historical CI failures: documentation-only #42834460076 and ini
   - Zero `unsafe` code added; zero new external crates; `Cargo.lock` untouched.
   - Shared `apply_camera_horizontal_ease` eliminates horizontal camera pan duplication across `cameraLogic`, `cameraLogic2`, and `cameraLogic3`.
   - Pure-Rust fixed-step simulation (`110 passed; 0 failed`) verifies exact `camera_01..10` trigger bounds (`#153`/`#28`), airborne non-triggering invariant, `#1316` entry shaft glide/landing/wall-clamping (`camMin = 200`), and `cameraLogic2 <-> cameraLogic3` convergence with zero impact on `Level1A` / `Level1B` / `Level1C`.
+
+### AUD-20261113-028 — B22 `Labs 2A` `doorOpen`, `#1325`/`#1394..1396` Depth Split & Door SFX Audit
+- **Batch / Branch:** `B22` on `revive/level2-b22-labs2a-doors-2026-11-13` (Draft PR #54, code SHA `32bed64`, CI [#43415499947](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43415499947))
+- **Audit Checks (PASS):**
+  - Zero `unsafe` code added outside existing WinMM MCI FFI boundary (`audio.rs` `open_sfx_mp3`/`replay_sfx` deduplicated); zero new external crates; `Cargo.lock` untouched.
+  - Shared `scaled_game_bounds` / `aabb_hits_player` (`src/stage.rs`) and `draw_lazy_world_sprite` (`src/render.rs`) eliminate coordinate/blitting duplication across triggers, doors, jambs, and enemies while adding offscreen early-out culling (`render_p95_ms: 21.3299 < 40.0`).
+  - `Game.labs_doors` allocates once on `start_stage(Level2A)` with zero per-tick allocations; Legacy `1x` + HQ `3x` doorway animation and foreground jamb occlusion verified deterministically (`113 passed; 0 failed`) alongside untouched `20/20` HQ smokes and `15/15` Legacy baseline pixels.

@@ -962,3 +962,13 @@ Do not erase two historical CI failures: documentation-only #42834460076 and ini
   - Added `LabsCameraMode` and exact `#153`/`#28` trigger bounds + `hits_player` + `camera_mode` mapping on `LabsTriggerPlacement` (`src/stage.rs`).
   - Wired `StageId::Level2A` runtime `start_stage` (`player.dy = 3.0`, `CameraLogic2`, `cam_height = 275.0`), `update_labs_camera_triggers` (`!player.jumping` gating across `labs2a::CAMERAS`), `cameraLogic2` / `cameraLogic3` camera updates sharing `apply_camera_horizontal_ease`, and `b21_labs2a_camera_ground_tests` (+2 tests -> `110`) in `src/game.rs`.
 - **CI Proof:** `110 passed; 0 failed` (`1.80s`), `hq_smoke_hashes_identical: 20` (`sha256: 1ac9fa1d04a86fd27e79dce98dd9846bf180719c10b499634c74a3ccc35cc056`), `child_exit: 0`, `render_p95_ms: 22.3942`, `scenery_p95_ms: 27.8796`, `intro_audio_focus: BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT` (WinMM MCI 277).
+
+## B22 — `Labs 2A` `doorOpen`, 18 Animated Doors, 18 Front Jambs & Sound `#1323` (VERIFIED FINAL)
+- **Date:** 2026-11-13
+- **Branch / PR:** `revive/level2-b22-labs2a-doors-2026-11-13` (Draft PR #54 -> `revive/level2-b21-labs2a-camera-ground-2026-11-13`)
+- **Verified Code SHA:** `32bed64`
+- **Windows CI Run:** [`#43415499947`](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43415499947) (`14m22s`, SUCCESS)
+- **Summary:**
+  - Added `reverse-engineering/tools/b22_bake_labs_doors.py` + CI proof `Batman-CobbleBot-B22-Labs2A-Doors-Proof` packing `assets/door_frames.bin` (`35,041` bytes, `23` `BCBFRM02` frames at `1.0x`: `#1325`/`#1324` `0..=19` + `#1394..=#1396` `20..=22`) and staging `assets/door_open.mp3` (`2,912` bytes, `#1323`).
+  - Added `scaled_game_bounds` / `aabb_hits_player` + `LabsDoorPlacement::{sensor_bounds, hits_player, jamb_pack_frame}` (`src/stage.rs`), `CommonAssets::door_frames` (`src/assets.rs`), `AudioEvent::DoorOpen` + `bcb_door` (`src/audio.rs`), `LabsDoorState` + `update_labs_doors` (`src/game.rs`), `draw_lazy_world_sprite`, `draw_labs_doors_scaled` (before Batman) and `draw_world_foreground_scaled` (front jambs after Batman, before HUD) in `src/render.rs`, and 3 tests (`110 -> 113`).
+- **CI Proof:** `113 passed; 0 failed` (`1.92s`), `hq_smoke_hashes_identical: 20` (`sha256: cdfaa21fbb7afd97077700600060fdf8436b03ab66b2957b4eb77f0dbba5abbc`), `child_exit: 0`, `render_p95_ms: 21.3299`, `scenery_p95_ms: 26.3881`, `intro_audio_focus: BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT` (WinMM MCI 277).

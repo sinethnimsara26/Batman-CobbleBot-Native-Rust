@@ -1,6 +1,13 @@
 # AI handoff — current recovery checkpoint
 
 
+## FINAL VERIFIED — B22 `Labs 2A` `doorOpen`, 18 Animated Doors, 18 Front Jambs & Sound `#1323`; STOP (2026-11-13)
+
+- **Branch / Draft PR:** `revive/level2-b22-labs2a-doors-2026-11-13` -> Draft PR [#54](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/54) (targeting `revive/level2-b21-labs2a-camera-ground-2026-11-13`).
+- **Tested Code SHA:** [`32bed64`](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/commit/32bed64)
+- **Windows CI Status:** [Run #43415499947](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43415499947) — **SUCCESS** (`14m22s`), `113 passed; 0 failed` (`1.92s`), `20/20` HQ hashes identical (`cdfaa21fbb7afd97077700600060fdf8436b03ab66b2957b4eb77f0dbba5abbc`), `child_exit: 0`, `render_p95_ms: 21.3299`, `scenery_p95_ms: 26.3881`, `assets/door_frames.bin` (`35,041` bytes, 23 `BCBFRM02` frames), `assets/door_open.mp3` (`2,912` bytes). Audio: `BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT` (WinMM MCI 277 on headless CI).
+- **Next Authorized Batch:** **B23** (`revive/level2-b23-labs2a-elevators-2026-11-13`) — `elevatorLogic` + `3` Lab elevators (`2685, 3480, 5420`, `#1328`/`#1330`), `onPlatform` vertical carrier & jump-off physics.
+
 ## FINAL VERIFIED — B21 `Labs 2A` `#1316` Runtime Ground, `cameraLogic2` / `cameraLogic3` & 10 Camera Triggers; STOP (2026-11-13)
 
 - **Branch / Draft PR:** `revive/level2-b21-labs2a-camera-ground-2026-11-13` -> Draft PR [#53](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/53) (targeting `revive/level2-b20-labs2a-scenery-mask-2026-11-13`).
