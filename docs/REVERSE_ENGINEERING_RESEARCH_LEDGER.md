@@ -1442,4 +1442,30 @@ Tested original source fixed CODE SHA `26dad6e07ef3dc1ca860aa98b4a8ccfb12912f72`
 - **Confidence:** HIGH for AVM1 `penguinAI` bytecode semantics, Level 1C root22 camera/init parameters, and deterministic Rust behavioral coverage.
 
 
+## RE-20261113-023 — Flash AVM1 Penguin Combat, Laser HitBox #1192 Electro Loop & Exact Source Scoring Branches (Batch B17)
+
+- **Batch/Context:** Batch B17; branch `revive/level2-b17-penguin-combat-2026-11-13`, draft PR #49 based on B16 docs commit `5ac786d`.
+- **Target Subsystem:** `src/penguin.rs`, `.github/workflows/build-level1a-fidelity.yml`.
+- **Original Architecture & Findings:**
+  1. `checkPlayer(character, dir, offset)` Disassembly (`offset = 100151`):
+     - Tests `(character._x + playerWidth * dir + playerDx, character._y + offset)` against `game.player.hitTest(..., true)`; `offset` defaults to `0.0` in 2-arg `checkPlayer(this, dir)` and `-120.0` in 3-arg `checkPlayer(this, dir, -120)`.
+  2. Active `attack2` Laser (`#1205` / `#1192` `hitBox`) -> Batman `"electro"` (`#691` `#669`):
+     - On `attack2` local frames `9..=10`, `#1192` (`boss_local_aabb(dir)` scaled by `(|PENGUIN_INITIAL_SCALE_X|, PENGUIN_INITIAL_SCALE_Y)`) tests overlap with Batman (`~(-339..-74, -50..+32)` relative to boss when facing left).
+     - If overlapping and `!done`: sets `done = true`; unless `playerState` is `"capespin"` or `"electro"` or `playerInvincible`, sets `_root.playerState = "electro"` and subtracts `stength` (`5`) from `playerHealth` (note: does NOT set `playerInvincible`). While `playerState == "electro"`, `#1205` local frame 10 loops `gotoAndPlay(_currentframe - 1)`, and `#691` child `#669` (`electro`, 20 frames) restores `playerState = "stand"`. When hitbox leaves overlap (`false`), `done = false`.
+  3. Unblocked Batarang (`checkBatarang` `else` branch, `40%` when `rand * 5.0 <= 2.0`):
+     - Deals `5` damage (`health -= 5`), transitions to `hurt`, and on `health <= 0` awards `+500` score and enters `die`.
+  4. `checkPlayer(this, dir)` Ground Melee & Boss Contact (`lines 660..891`):
+     - Clears `playerDx = 0`.
+     - If `playerAttacking` and `!hurt/!fall/!attack`: `lowkick` deals `15` dmg + `fall` (`fallCount = 0`) + `Kick` SFX + `comboCount = 50`; `punch`/`lowpunch`/`kick` deals `10` dmg + `hurt` + `Punch` SFX + `comboCount = 50`; lethal kill (`health <= 0`) awards `+500` score and `die`.
+     - Else if Boss is in `attack` or `attack2` and Batman is not `hurt`/`fall`/`playerInvincible`: sets `playerState = "hurt"`, `playerHealth -= stength`, `playerInvincible = true`.
+     - Else if Boss not in `dodge/attack/attack2/hurt/fall`: enters `attack` (`fallCount = 0`).
+  5. `checkPlayer(this, dir, -120)` Overhead Slam (`lines 892..991`):
+     - Clears `playerDx = 0`; if `playerAttacking` and `!hurt/!fall/!dodge/!attack/!attack2`: plays `Punch2` SFX, deals `20` dmg, enters `fall` (`fallCount = 0`), sets `comboCount = 20`, and on lethal kill adds **exact source `+100` score** (`@127850`, differing from the `+500` branch on ground melee/batarang!).
+- **Verification Evidence:**
+  - Rust unit tests increased from 93 to 98 (+5 B17 combat/scoring/laser tests in `src/penguin.rs`).
+  - Windows CI fidelity run `#43389653417` (`build-level1a-fidelity`): SUCCESS on code SHA `2204d88`; `98/98` tests passed in 0.71s, render p95 `17.9633ms`, scenery scroll p95 `22.2513ms` (< 40ms gate), 20/20 relocated standalone EXE HQ hashes identical, child exit 0.
+- **Confidence:** HIGH for complete 3,920-byte `penguinAI` combat parity, `#1192` AABB mapping, and exact `+500`/`+100` scoring branches.
+
+
+
 

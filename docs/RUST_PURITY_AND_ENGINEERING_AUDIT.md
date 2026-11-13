@@ -1189,3 +1189,22 @@ Do not erase two historical CI failures: documentation-only #42834460076 and ini
   - **HARDWARE SPEAKER AUDIO:** BLOCKED (`BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT`, unchanged).
 
 
+## AUD-20261113-023 — Independent post-code Rust purity/engineering audit of Batch B17 (Penguin Combat, Laser Hitbox #1192, Batman Electro & Scoring)
+
+- **Audit Date:** 2026-11-13
+- **Scope:** `src/penguin.rs`, `.github/workflows/build-level1a-fidelity.yml`.
+- **Code SHA:** `2204d88` on branch `revive/level2-b17-penguin-combat-2026-11-13` (PR #49).
+- **Actual Changed Code and Engineering Review:**
+  1. Pure-Rust dormant Level 1C Penguin combat & scoring state machine (`src/penguin.rs`):
+     - Refactored `step_motion_and_range`, `maybe_enter_walk`, and `evaluate_batarang_indexed` so `tick_noncombat` and `tick_combat` share one zero-duplication motion/range/batarang path.
+     - Added typed event/context APIs (`PenguinSound`, `PenguinPlayerHurtKind`, `PenguinPlayerContext`, `PenguinCombatEvent`), exact `#1192` world-space `laser_game_aabb()` / `laser_hits_player()`, AVM1 `check_player_point()` (supporting both `0.0` ground and `-120.0` overhead tests), and `tick_combat()` covering `"electro"` + `done` toggle + `capespin` immunity, batarang `-5` HP vs block (`+500` kill), `lowkick`/`punch`/`lowpunch`/`kick` (`+500` kill), `-120` overhead slam (`+100` source branch), and post-death single `Bam` + `DefeatedTrigger`.
+     - Added 5 comprehensive combat unit tests raising Rust test coverage from 93 to 98 with zero warnings in `src/penguin.rs` and zero changes to live Level 1A/1B paths.
+  2. CI execution confirmed on GitHub Actions run [#43389653417](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43389653417) (`build-level1a-fidelity` SUCCESS): `98/98` tests passed in `0.71s`, render p95 `17.9633ms`, scenery scroll p95 `22.2513ms` (< 40ms gate), 20/20 relocated standalone EXE HQ hashes identical, child exit 0.
+- **Verdicts:**
+  - **PURE-RUST RUNTIME COMPLIANCE:** PASS (with existing direct Win32/GDI/WinMM OS FFI qualifications). Zero new crates, zero unsafe blocks, zero per-tick allocations beyond caller-reused `Vec<PenguinCombatEvent>`.
+  - **ENGINEERING QUALITY:** PASS (eliminated duplicate motion logic across noncombat/combat ticks via shared helpers, exact `#1192` AABB scaling, faithful distinction of `+500` vs `@127850` `+100` scoring branches and `LaserElectro` vs `MeleeHurt` invincibility).
+  - **ORIGINAL-GAME FIDELITY:** VERIFIED FOR TESTED SCOPE (Level 1A/1B regressions preserved; full `penguinAI` combat & child `#1172/#1205/#1207/#1224` terminal transitions match `cobblebot.swf` bytecode).
+  - **HARDWARE SPEAKER AUDIO:** BLOCKED (`BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT`, unchanged).
+
+
+

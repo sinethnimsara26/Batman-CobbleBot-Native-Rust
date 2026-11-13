@@ -1,6 +1,15 @@
 # AI handoff — current recovery checkpoint
 
 
+## FINAL VERIFIED — B17 Penguin Combat, Laser Hitbox #1192, Batman Electro & +500/+100 Scoring; STOP (2026-11-13)
+
+- **Live recovery:** feature branch `revive/level2-b17-penguin-combat-2026-11-13`, draft [PR #49](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/49) OPEN/UNMERGED based on previous B16 docs commit `5ac786d`. **TESTED CODE SHA `2204d88`**; **separate final docs SHA is the subsequent documentation-only branch HEAD, inspect GitHub after push**. Do not treat docs SHA as Windows-tested implementation.
+- **NATIVE WINDOWS PASS:** exact-code [#43389653417](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43389653417) **SUCCESS** (`10m30s`), `cargo test --release --locked` **98/98 tests passed in 0.71s**, Cargo lock unchanged, relocated independent installed EXE **20/20 HQ hashes identical**, exit 0, no source SWF staged. Render p95 **17.9633ms**/scenery scroll **22.2513ms** vs <40ms unchanged. Audio/focus reports `BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT`; original Flash-player runtime fidelity UNVERIFIED.
+- **Scoped code/workflow paths:** `src/penguin.rs` adds `PenguinSound`, `PenguinPlayerHurtKind`, `PenguinPlayerContext`, `PenguinCombatEvent`, shared `step_motion_and_range`/`maybe_enter_walk`/`evaluate_batarang_indexed`, `laser_game_aabb`, `laser_hits_player`, `check_player_point`, and `tick_combat` + 5 unit tests (93→98); `.github/workflows/build-level1a-fidelity.yml` (branch trigger).
+- **All mandatory records:** AGENTS and both protocols READ/unchanged; AI_TASKS, AI_HANDOFF, AI_WORKLOG, RE research **RE-20261113-023**, post-change Rust engineering audit **AUD-20261113-023** updated. Native Rust runtime purity PASS with pre-existing platform FFI qualifiers. Protected `main`, frozen Level1A release SHA `49e8fd343e4f37f045ba71f24fff0999211f0f11`, earlier draft PRs unchanged; PR49 stays DRAFT/OPEN/UNMERGED.
+- **STOP. Exactly ONE NEXT independently authorized batch: B18 Level 1C live activation, boss defeat -> `card:escape` (`#1267`, 225 frames) -> `level2a` transition**; do NOT merge or release.
+
+
 ## FINAL VERIFIED — B16 penguinAI Movement, Dodge, Block, Facing & Approach; STOP (2026-11-13)
 
 - **Live recovery:** feature branch `revive/level2-b16-penguin-ai-2026-11-12`, draft [PR #48](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/48) OPEN/UNMERGED based on previous B15 docs commit `07fd792`. **TESTED CODE SHA `8ce03ca`**; **separate final docs SHA is the subsequent documentation-only branch HEAD, inspect GitHub after push**. Do not treat docs SHA as Windows-tested implementation.

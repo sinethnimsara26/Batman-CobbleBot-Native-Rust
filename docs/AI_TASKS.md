@@ -1,6 +1,27 @@
 # Persistent development tasks — Batman Rust port
 
 
+## B17 — COMPLETED / Penguin Combat, Laser Hitbox #1192, Batman Electro & Scoring (2026-11-13)
+
+**VERIFIED NATIVE WINDOWS REGRESSION.** [Draft, OPEN, UNMERGED PR #49](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/49) on `revive/level2-b17-penguin-combat-2026-11-13`, based on B16 docs commit `5ac786d`. **Exact Windows-tested code SHA `2204d88`**. Final documentation SHA is the separate later `[skip ci]` commit; this file cannot prestate its own commit ID. Full native Windows [#43389653417](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43389653417) **SUCCESS** on exact code SHA.
+
+**ENGINEERING & ARCHITECTURE FACTS:**
+1. **Source Decompilation (`checkPlayer`, `#691` `electro`, `penguinAI` Combat Branches `495..1076`):**
+   - Verified `checkPlayer(character, dir, offset)` (`offset = 0.0` default, `-120.0` overhead): tests `(character._x + playerWidth * dir + playerDx, character._y + offset)` against `game.player`.
+   - Verified `#691` Batman label `"electro"` (`#669`, 20 frames -> resets `_root.playerState = "stand"`) pairing with `#1205` frame 10 electro hold-loop; verified `@127850` `-120` overhead kill adds exact `+100` score vs `+500` on batarang and ground melee kills.
+2. **Dormant Pure-Rust Combat State Machine (`src/penguin.rs`):**
+   - Added `PenguinSound`, `PenguinPlayerHurtKind`, `PenguinPlayerContext`, `PenguinCombatEvent`, shared helpers (`step_motion_and_range`, `maybe_enter_walk`, `evaluate_batarang_indexed`), `laser_game_aabb`, `laser_hits_player`, `check_player_point`, and `PenguinBoss::tick_combat()`.
+   - Implements active `#1192` `laser.hitBox` (`Attack2` local frames `9..=10`) -> `-5` dmg + `LaserElectro`, `done` bounce suppression, `capespin` immunity; unblocked batarang `-5` HP `Hurt` + `+500` kill; `checkPlayer(dir)` (`lowkick` `-15`/`Fall`/`Kick`/`ComboHit(50)`, `punch|lowpunch|kick` `-10`/`Hurt`/`Punch`/`ComboHit(50)`, `+500` kill, `Attack`/`Attack2` `MeleeHurt` `-5`, passive `Attack` entry); `checkPlayer(dir, -120)` (`-20`/`Fall`/`Punch2`/`ComboHit(20)`, `+100` kill); and `health <= 0` single `Bam` + `DefeatedTrigger`.
+   - Added 5 source-step behavioral combat tests (`penguin_attack2_laser_hitbox_electro_done_and_capespin_immunity`, `penguin_batarang_block_vs_5_hp_hurt_and_500_kill_score`, `penguin_melee_check_player_lowkick_punch_and_500_kill_branches`, `penguin_overhead_check_player_minus120_slam_20_dmg_and_100_source_score`, `penguin_hurt_random_recovery_and_fall_recovery_to_dodge`), increasing total Rust tests from 93 to 98.
+   - Updated `.github/workflows/build-level1a-fidelity.yml` push branch trigger list.
+
+**NATIVE VERIFIED on exact CODE SHA:** `cargo test --release --locked` **98/98 passed in 0.71s**, locked build PASS, relocated standalone EXE **20/20 exact HQ hashes**, child exit 0 and no SWF staged. Render p95 **17.9633ms**, scenery scroll p95 **22.2513ms**, both well below unchanged **40ms** gate. Hosted WinMM audio device 0 / MCI error 277 remains **BLOCKED** (`BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT`).
+
+**RUST PURITY/AUDIT:** Zero unsafe code, zero new external crates, runtime remains 100% native Rust with documented Win32/GDI/WinMM FFI. [Research RE-20261113-023](REVERSE_ENGINEERING_RESEARCH_LEDGER.md) and [independent AUD-20261113-023](RUST_PURITY_AND_ENGINEERING_AUDIT.md) finalized. Reviewed `AGENTS.md` and both mandatory protocols unchanged. Main and accepted Level1A release preserved.
+
+**STOP. ONE NEXT SEPARATELY AUTHORIZED TASK: B18 Level 1C live activation, boss defeat -> `card:escape` (`#1267`, 225 frames, Sound `#130`) -> `level2a` transition**, preserving existing baseline.
+
+
 ## B16 — COMPLETED / penguinAI Movement, Dodge, Block, Facing & Approach (2026-11-13)
 
 **VERIFIED NATIVE WINDOWS REGRESSION.** [Draft, OPEN, UNMERGED PR #48](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/48) on `revive/level2-b16-penguin-ai-2026-11-12`, based on B15 docs commit `07fd792`. **Exact Windows-tested code SHA `8ce03ca`**. Final documentation SHA is the separate later `[skip ci]` commit; this file cannot prestate its own commit ID. Full native Windows [#43387097167](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43387097167) **SUCCESS** on exact code SHA.
