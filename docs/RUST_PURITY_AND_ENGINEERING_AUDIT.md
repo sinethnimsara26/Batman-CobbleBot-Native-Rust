@@ -1258,3 +1258,10 @@ Do not erase two historical CI failures: documentation-only #42834460076 and ini
   - Zero `unsafe` code added outside existing WinMM MCI FFI boundary (`audio.rs` `open_sfx_mp3`/`replay_sfx` deduplicated); zero new external crates; `Cargo.lock` untouched.
   - Shared `scaled_game_bounds` / `aabb_hits_player` (`src/stage.rs`) and `draw_lazy_world_sprite` (`src/render.rs`) eliminate coordinate/blitting duplication across triggers, doors, jambs, and enemies while adding offscreen early-out culling (`render_p95_ms: 21.3299 < 40.0`).
   - `Game.labs_doors` allocates once on `start_stage(Level2A)` with zero per-tick allocations; Legacy `1x` + HQ `3x` doorway animation and foreground jamb occlusion verified deterministically (`113 passed; 0 failed`) alongside untouched `20/20` HQ smokes and `15/15` Legacy baseline pixels.
+
+### AUD-20261113-029 — B23 `Labs 2A` `elevatorLogic`, Lockstep Carrier & `#1328`/`#1330` Audit
+- **Batch / Branch:** `B23` on `revive/level2-b23-labs2a-elevators-2026-11-13` (Draft PR #55, code SHA `7c8d33b`, CI [#43421534386](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43421534386))
+- **Runtime Purity & Bounds:**
+  - `0` new `unsafe`, `0` new external crates, `0` per-frame heap allocations; pure Rust `update_labs_elevators` (`src/game.rs`) + `draw_labs_elevators_scaled` (`src/render.rs`) + `CommonAssets::elevator_frames` lazy cache (`src/assets.rs`).
+  - `apply_previous_motion_and_collision` guards `else if !self.on_platform { self.player.y += self.player.dy; }` so lockstep `player.dy = -12` on upward elevators cannot double-integrate before `update_labs_elevators` runs and eject Batman from `#1327` `hitBox`.
+  - `Game.labs_elevators` allocates once on `start_stage(Level2A)` with zero per-tick allocations; `116 passed; 0 failed` alongside untouched `20/20` HQ smokes and `15/15` Legacy baseline pixels.

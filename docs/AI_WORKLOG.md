@@ -972,3 +972,13 @@ Do not erase two historical CI failures: documentation-only #42834460076 and ini
   - Added `reverse-engineering/tools/b22_bake_labs_doors.py` + CI proof `Batman-CobbleBot-B22-Labs2A-Doors-Proof` packing `assets/door_frames.bin` (`35,041` bytes, `23` `BCBFRM02` frames at `1.0x`: `#1325`/`#1324` `0..=19` + `#1394..=#1396` `20..=22`) and staging `assets/door_open.mp3` (`2,912` bytes, `#1323`).
   - Added `scaled_game_bounds` / `aabb_hits_player` + `LabsDoorPlacement::{sensor_bounds, hits_player, jamb_pack_frame}` (`src/stage.rs`), `CommonAssets::door_frames` (`src/assets.rs`), `AudioEvent::DoorOpen` + `bcb_door` (`src/audio.rs`), `LabsDoorState` + `update_labs_doors` (`src/game.rs`), `draw_lazy_world_sprite`, `draw_labs_doors_scaled` (before Batman) and `draw_world_foreground_scaled` (front jambs after Batman, before HUD) in `src/render.rs`, and 3 tests (`110 -> 113`).
 - **CI Proof:** `113 passed; 0 failed` (`1.92s`), `hq_smoke_hashes_identical: 20` (`sha256: cdfaa21fbb7afd97077700600060fdf8436b03ab66b2957b4eb77f0dbba5abbc`), `child_exit: 0`, `render_p95_ms: 21.3299`, `scenery_p95_ms: 26.3881`, `intro_audio_focus: BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT` (WinMM MCI 277).
+
+## B23 — `Labs 2A` `elevatorLogic`, 3 Elevators (`#1328`/`#1330`) & Lockstep Vertical Carrier (VERIFIED FINAL)
+- **Date:** 2026-11-13
+- **Branch / PR:** `revive/level2-b23-labs2a-elevators-2026-11-13` (Draft PR #55 -> `revive/level2-b22-labs2a-doors-2026-11-13`)
+- **Code SHA / CI Run:** `7c8d33b` -> [Run #43421534386](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43421534386) (`SUCCESS`, `12m23s`)
+- **Summary of Changes:**
+  - Added `reverse-engineering/tools/b23_bake_labs_elevators.py` + CI proof `Batman-CobbleBot-B23-Labs2A-Elevators-Proof` packing `assets/elevator_frames.bin` (`13,365` bytes, `2` `BCBFRM02` frames at `1.0x`: `#1328` `465×239` & `#1330` `465×164`, omitting `#1327` alpha-0 `hitBox`).
+  - Added `LabsElevatorPlacement::{hitbox_bounds_at, hits_player_at, pack_frame}` (`src/stage.rs`) and `CommonAssets::elevator_frames` (`src/assets.rs`).
+  - Implemented `LabsElevatorState` + exact AVM1 `_global.elevatorLogic` (`on_platform` mount, `-20`/`-40` lockstep carry with `else if !self.on_platform` double-integration guard, `-36 + dy/3` jump-off, `limit_y` stop) (`src/game.rs`), `draw_labs_elevators_scaled` (`src/render.rs`), and 3 tests (`113 -> 116`).
+- **CI Proof:** `116 passed; 0 failed` (`1.92s`), `hq_smoke_hashes_identical: 20`, relocated EXE SHA-256 `00c8b5947c6eb9d49c46e3166b0d2ad8cc854f6d91469bfea73d2c3848ec66e9`, `child_exit: 0`, `render_p95_ms: 19.2357`, `scenery_p95_ms: 22.5761`, `intro_audio_focus: BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT` (WinMM MCI 277).

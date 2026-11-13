@@ -1,6 +1,16 @@
 # AI handoff — current recovery checkpoint
 
 
+## FINAL VERIFIED — B23 `Labs 2A` `elevatorLogic` & 3 Elevators (`#1328`/`#1330`); STOP (2026-11-13)
+- **Status:** **B23 COMPLETED & CLOSED OUT ON WINDOWS CI.** Code SHA `7c8d33b` PASSED Windows CI ([Run #43421534386](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43421534386), `12m23s`).
+- **Branch / Draft PR:** `revive/level2-b23-labs2a-elevators-2026-11-13` -> Draft PR [#55](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/55) (targeting `revive/level2-b22-labs2a-doors-2026-11-13`).
+- **Verified CI Metrics (`7c8d33b`):**
+  - `cargo test --release --locked`: `116 passed; 0 failed` (`1.92s` CI / `2.10s` local)
+  - `hq_smoke_hashes_identical`: `20`
+  - Installed-copy EXE QA: SHA-256 `00c8b5947c6eb9d49c46e3166b0d2ad8cc854f6d91469bfea73d2c3848ec66e9`, `child_exit: 0`, `render_p95_ms: 19.2357`, `scenery_p95_ms: 22.5761`, `intro_audio_focus: BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT` (`audio_hardware_verified: false`).
+  - Baked artifact proof (`Batman-CobbleBot-B23-Labs2A-Elevators-Proof`): `assets/elevator_frames.bin` (`13,365` bytes, `2` `BCBFRM02` frames at `1.0x`: `#1328` `465×239`, `#1330` `465×164`).
+- **Next Authorized Batch:** **B24** (`revive/level2-b24-labs2a-enemies-2026-11-13`) — `Labs 2A` `9` Goons (`#1365`, `70 HP`, `strength=10`, `speed=6`, `dir=1`) & `eagle1` (`#1393`, `birdAI`).
+
 ## FINAL VERIFIED — B22 `Labs 2A` `doorOpen`, 18 Animated Doors, 18 Front Jambs & Sound `#1323`; STOP (2026-11-13)
 
 - **Branch / Draft PR:** `revive/level2-b22-labs2a-doors-2026-11-13` -> Draft PR [#54](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/54) (targeting `revive/level2-b21-labs2a-camera-ground-2026-11-13`).

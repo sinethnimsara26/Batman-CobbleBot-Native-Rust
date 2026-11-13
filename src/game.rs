@@ -108,6 +108,15 @@ pub struct LabsDoorState {
     pub playing: bool,
 }
 
+/// Runtime state of a single Labs elevator (`#1328`/`#1330`), matching AVM1 `_global.elevatorLogic`.
+#[derive(Copy,Clone,Debug,PartialEq)]
+pub struct LabsElevatorState {
+    pub y: f32,
+    pub dy: f32,
+    pub moving: bool,
+    pub active: bool,
+}
+
 #[derive(Copy,Clone,Debug,PartialEq,Eq)]
 pub enum PlayerState{
     Stand,Walk,Run,Jump,Fall,Glide,Land,Duck,Up,
@@ -216,6 +225,7 @@ pub struct Game{
     cam_height:f32,
     on_platform:bool,
     current_platform_x:f32,
+    current_platform_idx:Option<usize>,
     gravity:f32,
     pub batarangs:i32,
     pub score:i32,
@@ -245,6 +255,7 @@ pub struct Game{
     pub pickups:[bool;7],
     pub shots:Vec<Shot>,
     pub labs_doors:Vec<LabsDoorState>,
+    pub labs_elevators:Vec<LabsElevatorState>,
     pub ticks:u64,
     audio_events:Vec<AudioEvent>,
     pit_done:bool,
@@ -277,6 +288,7 @@ impl Game{
             cam_height:CAM_HEIGHT,
             on_platform:false,
             current_platform_x:0.0,
+            current_platform_idx:None,
             gravity:GLOBAL_GRAVITY,
             batarangs:0,score:0,lives:5,health:100,player_attacking:false,
             overlay_frame:OVERLAY_BLANK,overlay_playing:false,walk_checkpoint_started_tick:None,level1a_exit_reached:false,fadeout_tick:None,level1a_complete:false,
@@ -284,7 +296,7 @@ impl Game{
             level1c_exit_reached:false,level1c_complete:false,
             escape_card_tick:0,escape_card_fadeout_tick:None,escape_card_sound_stopped:false,escape_card_complete:false,
             bank_goons:None,bank_biker:None,penguin_boss:None,penguin_rng:PenguinRng::new(0x1C00_1250),
-            pickups:[false;7],shots:Vec::new(),labs_doors:Vec::new(),ticks:0,audio_events:Vec::new(),pit_done:false,respawn_after_fade:false,gameover_after_fade:false,
+            pickups:[false;7],shots:Vec::new(),labs_doors:Vec::new(),labs_elevators:Vec::new(),ticks:0,audio_events:Vec::new(),pit_done:false,respawn_after_fade:false,gameover_after_fade:false,
         }
     }
 
@@ -369,6 +381,16 @@ impl Game{
         }else{
             Vec::new()
         };
+        self.labs_elevators=if stage==StageId::Level2A{
+            crate::stage::labs2a::ELEVATORS
+                .iter()
+                .map(|e|LabsElevatorState{y:e.y,dy:0.0,moving:false,active:true})
+                .collect()
+        }else{
+            Vec::new()
+        };
+        self.current_platform_idx=None;
+        self.gravity=GLOBAL_GRAVITY;
         self.update_camera();
     }
 
@@ -650,6 +672,7 @@ impl Game{
         self.update_shots();
         self.update_pit_logic();
         self.update_tutorial_checkpoints();
+        self.update_labs_elevators();
         self.update_labs_camera_triggers();
         self.update_labs_doors();
         self.update_camera();
@@ -707,13 +730,13 @@ impl Game{
             ){
                 self.player.y+=self.player.dy;
             }
-        }else{
+        }else if !self.on_platform{
             self.player.y+=self.player.dy;
         }
 
         let grounded=ground.check_ground(
             self.player.x,&mut self.player.y,PLAYER_H,&mut self.player.dy,0
-        );
+        ) || self.on_platform;
         self.player.on_ground=grounded;
 
         if !grounded{
@@ -1333,6 +1356,80 @@ impl Game{
         match self.stage{
             StageId::Level2A=>&labs2a::CAMERAS,
             _=>&[],
+        }
+    }
+
+    fn update_labs_elevators(&mut self){
+        if self.stage!=StageId::Level2A||self.labs_elevators.is_empty(){return;}
+        let placements=&crate::stage::labs2a::ELEVATORS;
+        if self.labs_elevators.len()!=placements.len(){return;}
+
+        let origin_x=self.level_origin_x();
+        let origin_y=self.level_origin_y();
+        for (idx,(state,&elev)) in self.labs_elevators.iter_mut().zip(placements.iter()).enumerate(){
+            if !state.active{continue;}
+            let player_x=self.player.x+origin_x;
+            let player_y=self.player.y+origin_y;
+            let hits=elev.hits_player_at(state.y,player_x,player_y);
+            let limit=elev.limit_y as f32;
+
+            // Exact AVM1 _global.elevatorLogic (root frame 15): mount, lockstep carry,
+            // jump-off (-36 + dy/3), and limit reach with `delete this.onEnterFrame`.
+            if !self.on_platform{
+                if hits && self.player.dy>=0.0{
+                    if (state.y-limit).abs()>f32::EPSILON{
+                        state.moving=true;
+                    }
+                    if state.y<limit{
+                        state.dy=12.0;
+                        // Keep slow-gliding feet inside #1327 hitBox on mount tick before elevator descends.
+                        self.player.y+=state.dy;
+                    }else{
+                        self.player.y-=32.0;
+                        state.dy=-12.0;
+                    }
+                    self.current_platform_idx=Some(idx);
+                    self.current_platform_x=elev.x;
+                    self.on_platform=true;
+                }
+            }else if self.current_platform_idx==Some(idx){
+                if hits{
+                    self.on_platform=true;
+                    self.current_platform_x=elev.x;
+                    if !self.player.jumping{
+                        self.player.dy=state.dy;
+                        self.gravity=0.0;
+                        let snap=if state.dy>0.0{20.0}else{40.0};
+                        self.player.y=(state.y-PLAYER_H-snap)-origin_y;
+                    }else{
+                        self.on_platform=false;
+                        self.current_platform_idx=None;
+                        self.player.dy=-36.0+state.dy/3.0;
+                        self.gravity=GLOBAL_GRAVITY;
+                    }
+                }else if (player_y-state.y).abs()>160.0 || !self.player.jumping{
+                    self.on_platform=false;
+                    self.current_platform_idx=None;
+                    self.gravity=GLOBAL_GRAVITY;
+                }
+            }
+
+            if (state.dy>0.0 && state.y>=limit) || (state.dy<0.0 && state.y<=limit){
+                state.dy=0.0;
+                state.y=limit;
+                state.moving=false;
+                state.active=false;
+                if self.current_platform_idx==Some(idx){
+                    self.on_platform=false;
+                    self.current_platform_idx=None;
+                    self.player.dy=0.0;
+                    self.gravity=GLOBAL_GRAVITY;
+                }
+            }
+
+            if (state.dy<0.0 && state.y>limit) || (state.dy>0.0 && state.y<limit){
+                state.y+=state.dy;
+            }
         }
     }
 
@@ -2203,7 +2300,7 @@ mod b21_labs2a_camera_ground_tests {
             input.held[VK_SPACE] = true;
             input.held[VK_LEFT] = true;
             game.tick(&mut input, &ground);
-            if game.player.on_ground && !game.player.jumping {
+            if !game.on_platform && game.player.on_ground && !game.player.jumping {
                 break;
             }
         }
@@ -2374,5 +2471,103 @@ mod b22_labs2a_door_tests {
         assert_eq!((game.labs_doors[0].frame, game.labs_doors[0].playing), (0, false));
         assert_eq!((game.labs_doors[1].frame, game.labs_doors[1].playing), (0, false));
         assert_eq!(labs2a::DOOR_JAMBS.len(), 18);
+    }
+}
+
+#[cfg(test)]
+mod b23_labs2a_elevator_tests {
+    use super::{AppScreen, Game, GLOBAL_GRAVITY, InputState, VK_SPACE};
+    use crate::collision::CollisionMask;
+    use crate::stage::{labs2a, StageId};
+
+    #[test]
+    fn labs2a_initializes_3_elevators_and_drives_downward_ride_to_limit() {
+        let ground = CollisionMask::for_stage(StageId::Level2A);
+        let mut game = Game::new();
+        game.start_stage(StageId::Level2A);
+        game.screen = AppScreen::Playing;
+
+        assert_eq!(game.labs_elevators.len(), 3);
+        assert_eq!(labs2a::ELEVATORS[0].limit_y, 2685);
+        assert!(game.labs_elevators.iter().all(|e| e.active && !e.moving && e.dy == 0.0));
+
+        // Let Batman drop onto elevator_01_2685 (y=429.90, x=308.95) and verify lockstep ride.
+        let mut input = InputState::default();
+        let mut rode_down = false;
+        for _ in 0..25 {
+            game.tick(&mut input, &ground);
+            if game.on_platform && !game.player.jumping && (game.labs_elevators[0].dy - 12.0).abs() < 0.01 {
+                rode_down = true;
+                assert_eq!(game.gravity, 0.0, "gravity must zero out while lockstep riding elevator");
+                assert!((game.current_platform_x - 308.95).abs() < 0.01);
+                break;
+            }
+        }
+        assert!(rode_down, "Batman must board elevator_01_2685 at spawn shaft and descend at dy=12");
+
+        // Ride until limit=2685 stops the elevator (`delete onEnterFrame` -> active=false).
+        for _ in 0..220 {
+            game.tick(&mut input, &ground);
+            if !game.labs_elevators[0].active {
+                break;
+            }
+        }
+        let e0 = game.labs_elevators[0];
+        assert!(!e0.active && !e0.moving && e0.dy == 0.0);
+        assert!((e0.y - 2685.0).abs() < 0.01);
+        assert!(!game.on_platform);
+        assert_eq!(game.gravity, GLOBAL_GRAVITY);
+    }
+
+    #[test]
+    fn labs2a_elevator_jump_off_and_upward_branch_match_avm1_formulas() {
+        let ground = CollisionMask::for_stage(StageId::Level2A);
+        let mut game = Game::new();
+        game.start_stage(StageId::Level2A);
+        game.screen = AppScreen::Playing;
+
+        // Place Batman directly atop elevator_02_3480 (x=2863.1, y=2706.25, limit=3480).
+        let e1 = labs2a::ELEVATORS[1];
+        game.player.x = e1.x - game.level_origin_x();
+        game.player.y = (e1.y - 95.0) - game.level_origin_y();
+        game.player.jumping = false;
+        game.player.on_ground = true;
+
+        let mut input = InputState::default();
+        game.tick(&mut input, &ground);
+        assert!(game.on_platform && (game.labs_elevators[1].dy - 12.0).abs() < 0.01);
+
+        // Press Jump -> triggers `-36 + dy/3 == -32` launch velocity and restores globalGravity.
+        input.pressed[VK_SPACE] = true;
+        input.held[VK_SPACE] = true;
+        game.tick(&mut input, &ground);
+        assert!(!game.on_platform);
+        assert_eq!(game.gravity, GLOBAL_GRAVITY);
+        assert!((game.player.dy - (-36.0 + 12.0 / 3.0)).abs() < 0.01);
+
+        // Verify upward branch (`y >= limit` -> player._y -= 32, dy = -12, jump-off = -40):
+        // Simulate starting elevator_01 below limit=2685 in unobstructed air (Level 2A ground is
+        // solid beneath shaft 1's y=2685 floor, whereas Level 2B has upward shafts in open air).
+        let open_air = CollisionMask::level1b(); // max y = 527, so y~2700 is empty air
+        let mut up_game = Game::new();
+        up_game.start_stage(StageId::Level2A);
+        up_game.screen = AppScreen::Playing;
+        up_game.labs_elevators[0].y = 2750.0;
+        up_game.player.x = 308.95 - up_game.level_origin_x();
+        up_game.player.y = (2750.0 - 75.0) - up_game.level_origin_y();
+        up_game.player.dy = 0.0;
+        up_game.player.jumping = false;
+        let mut neutral = InputState::default();
+        up_game.tick(&mut neutral, &open_air);
+        assert!(up_game.on_platform && (up_game.labs_elevators[0].dy - (-12.0)).abs() < 0.01);
+        up_game.tick(&mut neutral, &open_air);
+        let expected_gy = (up_game.labs_elevators[0].y + 12.0) - 75.0 - 40.0;
+        assert!(((up_game.player.y + up_game.level_origin_y()) - expected_gy).abs() < 0.01);
+
+        let mut jump = InputState::default();
+        jump.pressed[VK_SPACE] = true;
+        up_game.tick(&mut jump, &open_air);
+        assert!(!up_game.on_platform);
+        assert!((up_game.player.dy - (-36.0 + (-12.0) / 3.0)).abs() < 0.01);
     }
 }
