@@ -144,9 +144,19 @@ jobs:
           python "$tools/inspect_intro_behavior.py" "$swf" "$work/sounds/manifest.json" "$work/intro-behavior-report.json"
           Copy-Item "$work/sounds/0130_sound_0130.mp3" "assets/intro_sound.mp3"
           Copy-Item "$work/sounds/0751_sound_0751.mp3" "assets/level1a_music.mp3"
+          Copy-Item "$work/sounds/1076_sound_1076.mp3" "assets/level1b_music.mp3"
+          Copy-Item "$work/sounds/1252_sound_1252.mp3" "assets/level1c_music.mp3"
+          Copy-Item "$work/sounds/1409_sound_1409.mp3" "assets/level2a_music.mp3"
+          Copy-Item "$work/sounds/1504_sound_1504.mp3" "assets/level2b_music.mp3"
           Copy-Item "$work/sounds/0248_sound_0248.mp3" "assets/jump.mp3"
           Copy-Item "$work/sounds/0004_item.mp3" "assets/item.mp3"
           Copy-Item "$work/sounds/1323_sound_1323.mp3" "assets/door_open.mp3"
+          Copy-Item "$work/sounds/0001_swish.mp3" "assets/swish.mp3"
+          Copy-Item "$work/sounds/0002_punch2.mp3" "assets/punch2.mp3"
+          Copy-Item "$work/sounds/0009_bam.mp3" "assets/bam.mp3"
+          Copy-Item "$work/sounds/0011_explode.mp3" "assets/explode.mp3"
+          Copy-Item "$work/sounds/0012_punch.mp3" "assets/punch.mp3"
+          Copy-Item "$work/sounds/0013_metal1.mp3" "assets/metal1.mp3"
           python "$tools/stage_ui_screens.py" "$work/bitmaps" "assets"
 
           # Preserve the original frame-18 story scene, including the phone
@@ -295,6 +305,11 @@ jobs:
           python "$tools/b24_bake_labs_enemies.py" "$swf" "$work/reports/symbols.json" "$work/reports/actions.json" "$work/labs-goon-frames" "$work/eagle-frames" --bitmaps "$work/bitmaps" --proof ".generated/b24-labs2a-proof/labs_enemies_proof.png" --report ".generated/b24-labs2a-proof/labs-enemies-report.json"
           python "$tools/pack_sprite_frames.py" "$work/labs-goon-frames" "assets/labs_goon_frames.bin" --format-version 2 --logical-pixel-scale 1.0
           python "$tools/pack_sprite_frames.py" "$work/eagle-frames" "assets/eagle_frames.bin" --format-version 2 --logical-pixel-scale 1.0
+
+          # Level 2A health01 (#1401), halo spotlight (#1399), LEVEL 2 banner (#1408), pickups & audio contract (B25).
+          python "$tools/b25_bake_labs_pickups.py" "$swf" "$work/reports/symbols.json" "$work/reports/actions.json" "$work/sounds/manifest.json" "$work/labs-pickups-frames" "$work/level2a-title-frames" --bitmaps "$work/bitmaps" --proof ".generated/b25-labs2a-proof/labs_pickups_proof.png" --report ".generated/b25-labs2a-proof/labs-pickups-report.json"
+          python "$tools/pack_sprite_frames.py" "$work/labs-pickups-frames" "assets/labs_pickups_frames.bin" --format-version 2 --logical-pixel-scale 1.0
+          python "$tools/pack_sprite_frames.py" "$work/level2a-title-frames" "assets/level2a_title_frames.bin" --format-version 2 --logical-pixel-scale 1.0
 
           # Round 10 selective scenery split.
           #
@@ -2443,6 +2458,13 @@ jobs:
         with:
           name: Batman-CobbleBot-B24-Labs2A-Enemies-Proof
           path: .generated/b24-labs2a-proof/
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Batman-CobbleBot-B25-Labs2A-Pickups-Proof
+          path: .generated/b25-labs2a-proof/
           if-no-files-found: error
 
       - uses: actions/upload-artifact@v4

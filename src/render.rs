@@ -553,6 +553,58 @@ fn draw_world_foreground_scaled(fb:&mut RenderSurface,game:&Game,assets:&Assets,
             );
         }
     }
+    // Flash depth 413 (`halo` #1399) follows Batman (`followPlayer`), sitting above front
+    // door jambs (377..411) and underneath glinting `health01` (415) & `item_br*` (425..617).
+    if assets.labs_pickups_frames.len() >= 2 {
+        let player_gx = game.player.x + game.level_origin_x();
+        let player_gy = game.player.y + game.level_origin_y();
+        draw_lazy_world_sprite(
+            fb,
+            &assets.labs_pickups_frames.frame(1),
+            player_gx,
+            player_gy,
+            game.camera_x,
+            game.camera_y,
+            false,
+            pixel_scale,
+        );
+        if !game.labs_health_collected {
+            let h = crate::stage::labs2a::HEALTH_PICKUPS[0];
+            draw_lazy_world_sprite(
+                fb,
+                &assets.labs_pickups_frames.frame(0),
+                h.x,
+                h.y,
+                game.camera_x,
+                game.camera_y,
+                false,
+                pixel_scale,
+            );
+        }
+    }
+    if pixel_scale == HQ_SCALE as i32 && !assets.pickup_frames_hq.is_empty() {
+        let pf = &assets.pickup_frames_hq[(game.ticks as usize) % assets.pickup_frames_hq.len()];
+        for (i, &p) in crate::stage::labs2a::BATARANG_PICKUPS.iter().enumerate() {
+            if i < game.pickups.len() && game.pickups[i] { continue; }
+            let logical_x = (p.x + game.camera_x).round() as i32;
+            let logical_y = (p.y + game.camera_y).round() as i32;
+            let px = logical_x * pixel_scale - pf.anchor_x.round() as i32;
+            let py = logical_y * pixel_scale - pf.anchor_y.round() as i32;
+            blit(fb, &pf.image, px, py, pf.image.w as i32, pf.image.h as i32, false);
+        }
+    } else if !assets.pickup_frames.is_empty() {
+        let pf = &assets.pickup_frames[(game.ticks as usize) % assets.pickup_frames.len()];
+        let dw = pf.image.w as i32 * pixel_scale;
+        let dh = pf.image.h as i32 * pixel_scale;
+        for (i, &p) in crate::stage::labs2a::BATARANG_PICKUPS.iter().enumerate() {
+            if i < game.pickups.len() && game.pickups[i] { continue; }
+            let sx = (p.x + game.camera_x).round() as i32 * pixel_scale;
+            let sy = (p.y + game.camera_y).round() as i32 * pixel_scale;
+            let px = sx - (pf.anchor_x * pixel_scale as f32).round() as i32;
+            let py = sy - (pf.anchor_y * pixel_scale as f32).round() as i32;
+            blit(fb, &pf.image, px, py, dw, dh, false);
+        }
+    }
 }
 
 fn draw_world_foreground_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
@@ -646,8 +698,14 @@ fn draw_foreground_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
         );
     }
 
-    if assets.stage.stage_id == crate::stage::StageId::Level1A {
-        draw_root_timeline_lazy_legacy(fb,&assets.level_title_frames,game.ticks,318.7,76.75);
+    match assets.stage.stage_id {
+        crate::stage::StageId::Level1A => {
+            draw_root_timeline_lazy_scaled(fb,&assets.level_title_frames,game.ticks,318.7,76.75,1);
+        }
+        crate::stage::StageId::Level2A => {
+            draw_root_timeline_lazy_scaled(fb,&assets.level2a_title_frames,game.ticks,318.7,76.75,1);
+        }
+        _ => {}
     }
     draw_root_timeline_lazy_legacy(fb,&assets.fadein_frames,game.ticks,301.0,205.0);
     if let Some(t)=game.fadeout_tick{
@@ -674,8 +732,14 @@ fn draw_foreground_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
         );
     }
 
-    if assets.stage.stage_id == crate::stage::StageId::Level1A {
-        draw_root_timeline_hq_lazy(fb,&assets.level_title_frames_hq,game.ticks,318.7,76.75);
+    match assets.stage.stage_id {
+        crate::stage::StageId::Level1A => {
+            draw_root_timeline_hq_lazy(fb,&assets.level_title_frames_hq,game.ticks,318.7,76.75);
+        }
+        crate::stage::StageId::Level2A => {
+            draw_root_timeline_lazy_scaled(fb,&assets.level2a_title_frames,game.ticks,318.7,76.75,HQ_SCALE as i32);
+        }
+        _ => {}
     }
     draw_root_timeline_hq_lazy(fb,&assets.fadein_frames_hq,game.ticks,301.0,205.0);
     if let Some(t)=game.fadeout_tick{
@@ -973,21 +1037,29 @@ fn blit_region(
     }
 }
 
-fn draw_root_timeline_lazy_legacy(
+fn draw_root_timeline_lazy_scaled(
     fb:&mut RenderSurface,
     frames:&crate::assets::LazySpriteSet,
-    tick:u64,x:f32,y:f32
+    tick:u64,x:f32,y:f32,pixel_scale:i32
 ){
     if frames.is_empty(){return;}
     debug_assert!((frames.logical_pixel_scale-1.0).abs()<0.001);
     let i=(tick as usize).min(frames.len()-1);
     let f=frames.frame(i);
+    let s=pixel_scale as f32;
     blit(
         fb,&f.image,
-        (x-f.anchor_x).round() as i32,
-        (y-f.anchor_y).round() as i32,
-        f.image.w as i32,f.image.h as i32,false
+        ((x-f.anchor_x)*s).round() as i32,
+        ((y-f.anchor_y)*s).round() as i32,
+        f.image.w as i32*pixel_scale,f.image.h as i32*pixel_scale,false
     );
+}
+fn draw_root_timeline_lazy_legacy(
+    fb:&mut RenderSurface,
+    frames:&crate::assets::LazySpriteSet,
+    tick:u64,x:f32,y:f32
+){
+    draw_root_timeline_lazy_scaled(fb,frames,tick,x,y,1);
 }
 fn draw_tiles(fb:&mut RenderSurface,game:&Game,tiles:&LevelTileSet){
     debug_assert!((tiles.logical_pixel_scale-1.0).abs()<0.001);
@@ -1120,7 +1192,27 @@ fn blit_alpha(dst:&mut RenderSurface,src:&Image,x:i32,y:i32,rw:i32,rh:i32,flip:b
     }
 }
 fn blend(dst:&mut u32,src:u32){let a=(src>>24)&255;if a==0{return}let sr=(src>>16)&255;let sg=(src>>8)&255;let sb=src&255;if a==255{*dst=(sr<<16)|(sg<<8)|sb;return}let inv=255-a;let dr=(*dst>>16)&255;let dg=(*dst>>8)&255;let db=*dst&255;*dst=(((sr*a+dr*inv+127)/255)<<16)|(((sg*a+dg*inv+127)/255)<<8)|((sb*a+db*inv+127)/255);}
-fn blit(dst:&mut RenderSurface,src:&Image,x:i32,y:i32,rw:i32,rh:i32,flip:bool){if rw<=0||rh<=0{return}for oy in 0..rh{let dy=y+oy;if dy<0||dy>=dst.h as i32{continue}let sy=(oy as usize*src.h/rh as usize).min(src.h-1);for ox in 0..rw{let dx=x+ox;if dx<0||dx>=dst.w as i32{continue}let raw=(ox as usize*src.w/rw as usize).min(src.w-1);let sx=if flip{src.w-1-raw}else{raw};let sp=src.pixels[sy*src.w+sx];blend(&mut dst.pixels[dy as usize*dst.w+dx as usize],sp);}}}
+fn blit(dst:&mut RenderSurface,src:&Image,x:i32,y:i32,rw:i32,rh:i32,flip:bool){
+    if rw<=0||rh<=0{return}
+    let oy_start=(-y).max(0);
+    let oy_end=(dst.h as i32-y).min(rh);
+    let ox_start=(-x).max(0);
+    let ox_end=(dst.w as i32-x).min(rw);
+    if oy_start>=oy_end||ox_start>=ox_end{return}
+    for oy in oy_start..oy_end{
+        let dy=(y+oy) as usize;
+        let sy=(oy as usize*src.h/rh as usize).min(src.h-1);
+        let src_row=sy*src.w;
+        let dst_row=dy*dst.w;
+        for ox in ox_start..ox_end{
+            let dx=(x+ox) as usize;
+            let raw=(ox as usize*src.w/rw as usize).min(src.w-1);
+            let sx=if flip{src.w-1-raw}else{raw};
+            let sp=src.pixels[src_row+sx];
+            blend(&mut dst.pixels[dst_row+dx],sp);
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests{
@@ -1291,6 +1383,8 @@ mod tests{
         for (cam_x,cam_y) in [(0.0f32,0.0f32),(-1800.0,-2400.0),(-4800.0,-3600.0),(-4200.0,-6800.0)]{
             game.camera_x=cam_x;
             game.camera_y=cam_y;
+            game.player.x = -cam_x + 300.0 - game.level_origin_x();
+            game.player.y = -cam_y + 200.0 - game.level_origin_y();
             super::render(&mut fb1x,&game,&assets);
             super::render_high_quality(&mut scratch,&mut fbhq,&game,&assets);
             let non_black_1x=fb1x.pixels.iter().filter(|&&p|(p&0x00ff_ffff)!=0).count();
@@ -1400,6 +1494,8 @@ mod tests{
         // Frame goon2 at (1574.85, 2656.35) near viewport center (Flash camera_x = -world_x + screen_x)
         game.camera_x = 300.0 - 1574.85;
         game.camera_y = 260.0 - 2656.35;
+        game.player.x = 1574.85 - game.level_origin_x();
+        game.player.y = 2656.35 - game.level_origin_y();
 
         let mut right_1x = RenderSurface::new(LOGICAL_W, LOGICAL_H);
         let mut left_1x = RenderSurface::new(LOGICAL_W, LOGICAL_H);
@@ -1414,5 +1510,38 @@ mod tests{
         assert!(right_1x.pixels != left_1x.pixels, "flipping Labs goon facing dir must alter rendered silhouette");
         let hq_non_black = hq_out.pixels.iter().filter(|&&p| (p & 0x00ff_ffff) != 0).count();
         assert!(hq_non_black > 25_000, "HQ Labs 2A goon scene must render cleanly");
+    }
+
+    #[test]
+    fn b25_labs2a_pickups_halo_and_level2_title_render_in_1x_and_hq3x() {
+        use super::{render, render_high_quality, HQ_H, LOGICAL_H};
+        use crate::assets::Assets;
+        use crate::game::{AppScreen, Game};
+
+        let mut assets = Assets::load();
+        assets.load_stage(crate::stage::StageId::Level2A);
+        let mut game = Game::new();
+        game.start_stage(crate::stage::StageId::Level2A);
+        game.screen = AppScreen::Playing;
+        game.ticks = 15; // LEVEL 2 banner visible
+        let h = crate::stage::labs2a::HEALTH_PICKUPS[0];
+        game.camera_x = 300.0 - h.x;
+        game.camera_y = 220.0 - h.y;
+        game.player.x = h.x - game.level_origin_x();
+        game.player.y = h.y - game.level_origin_y();
+
+        let mut uncollected = RenderSurface::new(LOGICAL_W, LOGICAL_H);
+        let mut collected = RenderSurface::new(LOGICAL_W, LOGICAL_H);
+        let mut hq_out = RenderSurface::new(HQ_W, HQ_H);
+        let mut hq_scratch = RenderSurface::new(LOGICAL_W, LOGICAL_H);
+
+        render(&mut uncollected, &game, &assets);
+        render_high_quality(&mut hq_scratch, &mut hq_out, &game, &assets);
+        game.labs_health_collected = true;
+        render(&mut collected, &game, &assets);
+
+        assert!(uncollected.pixels != collected.pixels, "collecting health01 must hide #1401 pickup");
+        let hq_non_black = hq_out.pixels.iter().filter(|&&p| (p & 0x00ff_ffff) != 0).count();
+        assert!(hq_non_black > 25_000, "HQ Labs 2A halo + pickups + LEVEL 2 scene must render cleanly");
     }
 }

@@ -111,6 +111,10 @@ pub struct CommonAssets {
     pub labs_goon_frames: LazySpriteSet,
     /// 41 Labs eagle (`#1393`) child frames across all 5 source labels, loaded lazily.
     pub eagle_frames: LazySpriteSet,
+    /// 2 Labs 2A overlay/pickup sprites (`health01` #1401 -> `0`, `halo` #1399 -> `1`), loaded lazily.
+    pub labs_pickups_frames: LazySpriteSet,
+    /// 100 Level 2A `LEVEL 2` title banner (`#1408`) frames, loaded lazily.
+    pub level2a_title_frames: LazySpriteSet,
 }
 
 impl CommonAssets {
@@ -152,6 +156,8 @@ impl CommonAssets {
             elevator_frames: decode_sprite_frames_lazy_expected(include_bytes!("../assets/elevator_frames.bin"),1.0,"elevator_frames"),
             labs_goon_frames: decode_sprite_frames_lazy_expected(include_bytes!("../assets/labs_goon_frames.bin"),1.0,"labs_goon_frames"),
             eagle_frames: decode_sprite_frames_lazy_expected(include_bytes!("../assets/eagle_frames.bin"),1.0,"eagle_frames"),
+            labs_pickups_frames: decode_sprite_frames_lazy_expected(include_bytes!("../assets/labs_pickups_frames.bin"),1.0,"labs_pickups_frames"),
+            level2a_title_frames: decode_sprite_frames_lazy_expected(include_bytes!("../assets/level2a_title_frames.bin"),1.0,"level2a_title_frames"),
         }
     }
 }
@@ -616,5 +622,7 @@ mod tests{
         assets.load_stage(crate::stage::StageId::Level2A);
         assert_eq!(assets.stage.stage_id,crate::stage::StageId::Level2A);
         assert_eq!(assets.stage.tiles.index.len(),177);
+        assert_eq!(assets.labs_pickups_frames.len(),2);
+        assert_eq!(assets.level2a_title_frames.len(),100);
     }
 }

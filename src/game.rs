@@ -1,10 +1,10 @@
-use crate::bank_biker::{BankBiker, BikerEvent};
-use crate::bank_goons::{BankGoonSquad, GoonCombatEvent, GoonRng, PlayerCombatContext};
+use crate::bank_biker::{BankBiker, BikerEvent, BikerSound};
+use crate::bank_goons::{BankGoonSquad, GoonCombatEvent, GoonCombatSound, GoonRng, PlayerCombatContext};
 use crate::collision::CollisionMask;
 use crate::labs_bird::{BirdEvent, LabsEagle};
 use crate::penguin::{
     PenguinBoss, PenguinCombatEvent, PenguinPlayerContext, PenguinPlayerHurtKind, PenguinRng,
-    PenguinState, LEVEL1C_PICKUP_POINTS,
+    PenguinSound, PenguinState, LEVEL1C_PICKUP_POINTS,
 };
 use crate::stage::{labs2a, LabsCameraMode, LabsTriggerPlacement, PendingStageEntry, RootProgress, StageId, StoryCard};
 
@@ -91,6 +91,7 @@ const OVERLAY_JUMP:usize=20;
 const OVERLAY_WRONGWAY:usize=30;
 const OVERLAY_GLIDE_DOWN:usize=39;
 const OVERLAY_WALK:usize=58;
+const OVERLAY_FIND_LAB:usize=66;
 const OVERLAY_TO_STREET:usize=140;
 const ESCAPE_CARD_TERMINAL_FRAME:u16=224;
 const ESCAPE_CARD_SOUND_ID:u16=130;
@@ -99,7 +100,23 @@ const ESCAPE_CARD_SOUND_ID:u16=130;
 pub enum AppScreen{Title,Instructions,Intro,Playing,EscapeCard}
 
 #[derive(Copy,Clone,Debug,PartialEq,Eq)]
-pub enum AudioEvent{IntroStart,IntroStop,MusicStart,MusicStop,Jump,Item,DoorOpen}
+pub enum AudioEvent{
+    IntroStart,
+    IntroStop,
+    StageTrack(StageId),
+    MusicStart,
+    MusicStop,
+    Jump,
+    Item,
+    DoorOpen,
+    Swish,
+    Punch,
+    Punch2,
+    Bam,
+    #[allow(dead_code)]
+    Explode,
+    Metal,
+}
 
 /// Runtime state of a single Labs sliding door (`#1325`/`#1324`), matching AVM1
 /// 0-based timeline frames `0..=19` (`Stop()` at `0` closed & `9` open; sound `#1323` on `1`).
@@ -255,7 +272,8 @@ pub struct Game{
     pub bank_biker:Option<BankBiker>,
     pub penguin_boss:Option<PenguinBoss>,
     penguin_rng:PenguinRng,
-    pub pickups:[bool;7],
+    pub pickups:Vec<bool>,
+    pub labs_health_collected:bool,
     pub shots:Vec<Shot>,
     pub labs_doors:Vec<LabsDoorState>,
     pub labs_elevators:Vec<LabsElevatorState>,
@@ -299,7 +317,7 @@ impl Game{
             level1c_exit_reached:false,level1c_complete:false,
             escape_card_tick:0,escape_card_fadeout_tick:None,escape_card_sound_stopped:false,escape_card_complete:false,
             bank_goons:None,labs_eagles:Vec::new(),labs_bird_rng:GoonRng::new(0x2A00_1393),bank_biker:None,penguin_boss:None,penguin_rng:PenguinRng::new(0x1C00_1250),
-            pickups:[false;7],shots:Vec::new(),labs_doors:Vec::new(),labs_elevators:Vec::new(),ticks:0,audio_events:Vec::new(),pit_done:false,respawn_after_fade:false,gameover_after_fade:false,
+            pickups:vec![false;PICKUPS.len()],labs_health_collected:false,shots:Vec::new(),labs_doors:Vec::new(),labs_elevators:Vec::new(),ticks:0,audio_events:Vec::new(),pit_done:false,respawn_after_fade:false,gameover_after_fade:false,
         }
     }
 
@@ -354,7 +372,15 @@ impl Game{
         self.level1c_exit_reached=false;
         self.level1c_complete=false;
         self.escape_card_complete=false;
-        self.pickups=[false;7];
+        let pickup_count = match stage {
+            StageId::Level1A => PICKUPS.len(),
+            StageId::Level1B => LEVEL1B_PICKUPS.len(),
+            StageId::Level1C => LEVEL1C_PICKUP_POINTS.len(),
+            StageId::Level2A => labs2a::BATARANG_PICKUPS.len(),
+            StageId::Level2B => 0,
+        };
+        self.pickups=vec![false;pickup_count];
+        self.labs_health_collected=false;
 
         match stage{
             StageId::Level1A=>{
@@ -443,6 +469,9 @@ impl Game{
         self.shots.clear();
         self.ticks=0;
         self.screen=AppScreen::Playing;
+        if entry.to != StageId::Level1A {
+            self.audio_events.push(AudioEvent::StageTrack(entry.to));
+        }
         self.audio_events.push(AudioEvent::MusicStart);
         Some(entry.to)
     }
@@ -902,6 +931,9 @@ impl Game{
     fn process_combat(&mut self,input:&InputState){
         let both=input.pressed(VK_D)&&input.pressed(VK_S);
         if both&&!self.player.jumping&&!self.player.state.blocks_new_attack(){
+            if self.player.state != PlayerState::CapeSpin {
+                self.audio_events.push(AudioEvent::Swish);
+            }
             self.enter(PlayerState::CapeSpin);
             self.player.walk_count=0;
             self.player.walk_slowdown=INITIAL_WALK_SLOWDOWN;
@@ -917,6 +949,7 @@ impl Game{
                 else{PlayerState::Kick};
                 self.enter(state);
                 self.player_attacking=true;
+                self.audio_events.push(AudioEvent::Swish);
             }
             self.player.walk_count=0;
         }
@@ -930,6 +963,7 @@ impl Game{
                 else{PlayerState::Punch};
                 self.enter(state);
                 self.player_attacking=true;
+                self.audio_events.push(AudioEvent::Swish);
             }
             self.player.walk_count=0;
         }
@@ -956,6 +990,7 @@ impl Game{
         self.shots.push(Shot{x:game_x,y:shot_y,dir:self.player.dir});
         self.batarangs-=1;
         self.enter(state);
+        self.audio_events.push(AudioEvent::Swish);
         if !self.player.jumping{self.player.dx=0.0;}
         self.player.walk_count=0;
     }
@@ -1134,6 +1169,13 @@ impl Game{
 
         for ev in goon_events {
             match ev {
+                GoonCombatEvent::Sound(snd) => match snd {
+                    GoonCombatSound::Punch => self.audio_events.push(AudioEvent::Punch),
+                    GoonCombatSound::Punch2 => self.audio_events.push(AudioEvent::Punch2),
+                    GoonCombatSound::Bam => self.audio_events.push(AudioEvent::Bam),
+                    GoonCombatSound::Metal(_) => self.audio_events.push(AudioEvent::Metal),
+                    GoonCombatSound::Kick => {}
+                },
                 GoonCombatEvent::PlayerHurt { damage } => {
                     self.apply_player_damage(damage);
                 }
@@ -1148,19 +1190,20 @@ impl Game{
                         self.player.dy = 0.0;
                     }
                 }
-                _ => {}
+                GoonCombatEvent::Wave2Spawned { .. } => {}
             }
         }
 
         for ev in biker_events {
             match ev {
+                BikerEvent::Sound(BikerSound::Bam) => self.audio_events.push(AudioEvent::Bam),
+                BikerEvent::Sound(_) => {}
                 BikerEvent::PlayerHurt { damage } => {
                     self.apply_player_damage(damage as i32);
                 }
                 BikerEvent::Score(pts) => {
                     self.score += pts as i32;
                 }
-                _ => {}
             }
         }
 
@@ -1226,7 +1269,13 @@ impl Game{
                         self.player.dy = 0.0;
                     }
                 }
-                PenguinCombatEvent::Sound(_) | PenguinCombatEvent::ComboHit { .. } => {}
+                PenguinCombatEvent::Sound(snd) => match snd {
+                    PenguinSound::Punch => self.audio_events.push(AudioEvent::Punch),
+                    PenguinSound::Punch2 => self.audio_events.push(AudioEvent::Punch2),
+                    PenguinSound::Bam => self.audio_events.push(AudioEvent::Bam),
+                    PenguinSound::Kick => {}
+                },
+                PenguinCombatEvent::ComboHit { .. } => {}
             }
         }
         if !hidden_indices.is_empty() {
@@ -1350,30 +1399,74 @@ impl Game{
                     self.overlay_goto_and_play(OVERLAY_GO_RIGHT);
                 }
             }
+            StageId::Level2A => {
+                let title_done = self.level_title_finished();
+                for &cp in &labs2a::CHECKPOINTS {
+                    if !cp.hits_player(x, y) { continue; }
+                    match cp.name {
+                        "checkpoint_2a_01" if title_done => {
+                            self.overlay_goto_and_play(OVERLAY_FIND_LAB);
+                        }
+                        "checkpoint_2a_02" => {
+                            self.overlay_goto_and_play(OVERLAY_GLIDE_DOWN);
+                        }
+                        _ => {}
+                    }
+                }
+            }
             _ => {}
+        }
+    }
+
+    fn try_collect_batarang(&mut self, i: usize, px: f32, py: f32, x: f32, y: f32) {
+        if i < self.pickups.len() && self.pickups[i] { return; }
+        // Native approximation of Flash movie-clip hitTest bounds. The
+        // art itself is original; exact alpha hit testing can replace this
+        // once the pickup registration box is extracted.
+        if (px - x).abs() < 45.0 && (py - y).abs() < 55.0 {
+            if i < self.pickups.len() {
+                self.pickups[i] = true;
+            }
+            self.batarangs += 5;
+            self.score += 5;
+            self.audio_events.push(AudioEvent::Item);
         }
     }
 
     fn collect_pickups(&mut self){
         let px=self.player.x+self.level_origin_x();
         let py=self.player.y+self.level_origin_y();
-        let pickups_slice: &[(f32,f32)] = match self.stage {
-            StageId::Level1A => &PICKUPS,
-            StageId::Level1B => &LEVEL1B_PICKUPS,
-            StageId::Level1C => &LEVEL1C_PICKUP_POINTS,
-            _ => &[],
-        };
-        for(i,&(x,y))in pickups_slice.iter().enumerate(){
-            if i < self.pickups.len() && self.pickups[i]{continue;}
-            // Native approximation of Flash movie-clip hitTest bounds. The
-            // art itself is original; exact alpha hit testing can replace this
-            // once the pickup registration box is extracted.
-            if(px-x).abs()<45.0&&(py-y).abs()<55.0{
-                self.pickups[i]=true;
-                self.batarangs+=5;
-                self.score+=5;
-                self.audio_events.push(AudioEvent::Item);
+        match self.stage {
+            StageId::Level1A => {
+                for (i, &(x, y)) in PICKUPS.iter().enumerate() {
+                    self.try_collect_batarang(i, px, py, x, y);
+                }
             }
+            StageId::Level1B => {
+                for (i, &(x, y)) in LEVEL1B_PICKUPS.iter().enumerate() {
+                    self.try_collect_batarang(i, px, py, x, y);
+                }
+            }
+            StageId::Level1C => {
+                for (i, &(x, y)) in LEVEL1C_PICKUP_POINTS.iter().enumerate() {
+                    self.try_collect_batarang(i, px, py, x, y);
+                }
+            }
+            StageId::Level2A => {
+                for (i, &p) in labs2a::BATARANG_PICKUPS.iter().enumerate() {
+                    self.try_collect_batarang(i, px, py, p.x, p.y);
+                }
+                if !self.labs_health_collected {
+                    let h = labs2a::HEALTH_PICKUPS[0];
+                    if (px - h.x).abs() < 55.0 && (py - h.y).abs() < 55.0 {
+                        self.labs_health_collected = true;
+                        self.health = 100;
+                        self.score += 50;
+                        self.audio_events.push(AudioEvent::Item);
+                    }
+                }
+            }
+            StageId::Level2B => {}
         }
     }
 
@@ -1958,6 +2051,7 @@ mod b18_penguin_escape_card_tests {
         game.tick(&mut input, &ground);
         assert!(game.level1c_exit_reached);
         assert_eq!(game.fadeout_tick, Some(0));
+        assert_eq!(game.take_audio_events(), vec![AudioEvent::Punch, AudioEvent::Bam]);
 
         // 41-frame fadeout runs before entering card:escape; MusicStop fires on frame 39.
         for i in 1..=38 {
@@ -2659,5 +2753,74 @@ mod b24_labs2a_enemies_tests {
         assert!(game.score >= 100);
         assert!(!game.bank_goons.as_ref().unwrap().is_wave2_active());
         assert!(game.fadeout_tick.is_none());
+    }
+
+    #[test]
+    fn b25_labs2a_pickups_health_and_checkpoints_match_avm1() {
+        let mut game = Game::new();
+        let ground = CollisionMask::for_stage(StageId::Level2A);
+        let desc = StageId::Level2A.descriptor();
+        game.start_stage(StageId::Level2A);
+        game.screen = AppScreen::Playing;
+        assert_eq!(game.pickups.len(), 9);
+        assert!(!game.labs_health_collected);
+
+        // 1. Collect all 9 item_br* batarang pickups (+5 batarangs, +5 score, AudioEvent::Item each).
+        for (i, &p) in crate::stage::labs2a::BATARANG_PICKUPS.iter().enumerate() {
+            game.player.x = p.x - desc.level_origin_game_local.x;
+            game.player.y = p.y - desc.level_origin_game_local.y;
+            game.collect_pickups();
+            assert!(game.pickups[i], "item_br {} must collect on overlap", p.name);
+        }
+        assert_eq!(game.batarangs, 45);
+        assert_eq!(game.score, 45);
+        let item_count = game
+            .take_audio_events()
+            .into_iter()
+            .filter(|e| *e == AudioEvent::Item)
+            .count();
+        assert_eq!(item_count, 9);
+
+        // 2. Collect health01 (`lifeLogic`): sets health = 100, score += 50, plays AudioEvent::Item once.
+        let h = crate::stage::labs2a::HEALTH_PICKUPS[0];
+        game.health = 40;
+        game.player.x = h.x - desc.level_origin_game_local.x;
+        game.player.y = h.y - desc.level_origin_game_local.y;
+        game.collect_pickups();
+        assert!(game.labs_health_collected);
+        assert_eq!(game.health, 100);
+        assert_eq!(game.score, 95);
+        assert_eq!(game.take_audio_events(), vec![AudioEvent::Item]);
+        game.health = 70;
+        game.collect_pickups();
+        assert_eq!(game.health, 70);
+        assert_eq!(game.score, 95);
+
+        // 3. checkpoint_2a_01 ("findLab", frame 66) is gated on levelTitle finishing (ticks >= 99).
+        let cp01 = crate::stage::labs2a::CHECKPOINTS[0];
+        let (cx, cy, _, _) = cp01.game_bounds();
+        game.player.x = (cx + 40.0) - desc.level_origin_game_local.x;
+        game.player.y = (cy + 40.0) - desc.level_origin_game_local.y;
+        game.ticks = 50;
+        game.update_tutorial_checkpoints();
+        assert_eq!(game.overlay_frame, super::OVERLAY_BLANK);
+        game.ticks = 99;
+        game.update_tutorial_checkpoints();
+        assert_eq!(game.overlay_frame, super::OVERLAY_FIND_LAB);
+
+        // 4. checkpoint_2a_02 ("glidedown", frame 39) triggers unconditionally on overlap.
+        let cp02 = crate::stage::labs2a::CHECKPOINTS[2];
+        let (x2, y2, _, _) = cp02.game_bounds();
+        game.player.x = (x2 + 40.0) - desc.level_origin_game_local.x;
+        game.player.y = (y2 + 40.0) - desc.level_origin_game_local.y;
+        game.update_tutorial_checkpoints();
+        assert_eq!(game.overlay_frame, super::OVERLAY_GLIDE_DOWN);
+
+        // 5. Swish SFX fires when throwing a batarang on Level 2A.
+        let _ = game.take_audio_events();
+        let mut throw = InputState::default();
+        throw.set(super::VK_A, true);
+        game.tick(&mut throw, &ground);
+        assert!(game.take_audio_events().contains(&AudioEvent::Swish));
     }
 }
