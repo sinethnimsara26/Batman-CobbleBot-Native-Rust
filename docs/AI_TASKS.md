@@ -1,6 +1,29 @@
 # Persistent development tasks — Batman Rust port
 
 
+## B12 — COMPLETED / bikerAI & bank biker state machine (2026-11-13)
+
+**VERIFIED NATIVE WINDOWS REGRESSION, NOT PLAYABLE LEVEL1B.** [Draft, OPEN, UNMERGED PR #44](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/44) on `revive/level2-b12-biker-ai-2026-11-12`, based on B11 docs commit `4c5c189`. **Exact Windows-tested code SHA `657ec06`**. Final documentation SHA is the separate later `[skip ci]` commit; this file cannot prestate its own commit ID. Full native Windows [#43340912013](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43340912013) **SUCCESS 82/82 steps** on exact code SHA.
+
+**ENGINEERING & ARCHITECTURE FACTS:**
+1. Reverse-engineered original Flash AVM1 bytecode for `bikerAI` (frame 15, body offset 113959, 238 ops) and DefineSprite `#1005` in `#1075` (depth 1129, initial `x = -570.25, y = 375.85`, matrix scale `1.1585846`) from `cobblebot-source.swf`.
+2. Implemented `BikerState` (`Drive`, `Fall`), `BikerSound` (`Bike`, `Kick`, `Bam`), `BikerEvent` (`Sound`, `ScoreAward`, `PlayerHurt`), and `BankBiker` in `src/bank_biker.rs`.
+3. Implemented full movement, looping, sound cues, and damage routing:
+   - **Horizontal speed**: in `Drive`, advances `x += 24.0 * dir` (`dir = 1.0`).
+   - **Loop-around**: when `x > player.x + 1200.0`, wraps to `player.x - 1200.0`, resetting `visible = true`, `flash = 0`, and `bike_sfx_played = false`.
+   - **Engine audio cue**: emits `BikerEvent::Sound(BikerSound::Bike)` when `player.x - 750.0 < x < player.x - 700.0` (plays once per pass).
+   - **Batman unarmed collision**: deals 10 damage to player (`PlayerHurt { damage: 10 }`) and plays `Sound(Kick)` when overlapping Batman while not attacking.
+   - **Batman melee attack or Batarang hit**: deals knockdown to biker, transitions to `Fall`, awards +100 score (`ScoreAward(100)`), and plays `Sound(Bam)`.
+   - **Child clip animation**: `Drive` cycles 2 child frames (`#981`). `Fall` advances 7 child frames (`#1004`) clamped to frame 6. Flashes when `flash > 50` and despawns when `flash > 100`.
+4. Seven new unit tests added: `biker_initialization_and_metadata`, `biker_drive_movement_and_animation_wrap`, `biker_loop_around_when_exceeding_screen_boundary`, `biker_engine_audio_cue_trigger`, `biker_unarmed_player_collision_deals_ten_damage`, `biker_batarang_collision_causes_fall_and_score`, and `biker_player_attack_causes_fall_and_flashing_despawn`, increasing total Rust tests from 65 to 72.
+
+**NATIVE VERIFIED on exact CODE SHA:** locked MSVC release `cargo test --release --locked` **72/72 passed in 0.83s**, locked build PASS, native legacy 1× image SHA **15/15 identical**, HQ3× smoke **20/20 at 1800×1200**, relocated standalone EXE **20/20 exact HQ hashes**, child exit 0 and no SWF staged. Real Win32 OS capture/start/held Enter/fresh Enter/SKIP, F7/F8 three HUD cases, fullscreen F/Esc, focus visuals, PE and Windows Shell icon PASS. Render p95 **24.1619ms**, scenery scroll p95 **30.4693ms**, both well below unchanged **40ms** gate. Integration QA artifact confirmed child exit 0, 20/20 identical HQ hashes. Hosted WinMM audio device 0 / MCI error 277 remains **BLOCKED** (no hosted speaker endpoint). Live Flash parity and physical audio UNVERIFIED.
+
+**RUST PURITY/AUDIT:** Zero unsafe code, zero new external crates, runtime remains 100% native Rust with documented Win32/GDI/WinMM FFI. [Research RE-20261112-018](REVERSE_ENGINEERING_RESEARCH_LEDGER.md) and [independent AUD-20261112-018](RUST_PURITY_AND_ENGINEERING_AUDIT.md) finalized. Reviewed `AGENTS.md` and both mandatory protocols unchanged. Main and accepted Level1A release preserved.
+
+**STOP. ONE NEXT SEPARATELY AUTHORIZED TASK: B13 Level 1B Stage Activation & Transitions (75-tile Bank Street packs, checkpoints, ammo pickups, pit collision/respawn, 1A→1B transition, 1B→1C exit trigger)**, preserving existing baseline.
+
+
 ## B11 — COMPLETED / goonAI combat AI, player damage routing & wave 2 spawning (2026-11-12)
 
 **VERIFIED NATIVE WINDOWS REGRESSION, NOT PLAYABLE LEVEL1B.** [Draft, OPEN, UNMERGED PR #43](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/43) on `revive/level2-b11-goon-combat-2026-11-12`, based on B10 docs commit `27def5e`. **Exact Windows-tested code SHA `3802366`**. Final documentation SHA is the separate later `[skip ci]` commit; this file cannot prestate its own commit ID. Full native Windows [#43336433191](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43336433191) **SUCCESS 82/82 steps** on exact code SHA.

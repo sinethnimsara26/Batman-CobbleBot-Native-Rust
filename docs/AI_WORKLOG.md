@@ -797,3 +797,28 @@ Do not erase two historical CI failures: documentation-only #42834460076 and ini
   - Fidelity: 15/15 historical 1× screenshots identical, 20/20 relocated standalone EXE HQ3× screenshot hashes identical, child exit 0.
   - Hosted audio: BLOCKED (no hosted audio endpoint, WinMM MCI error 277).
 - **Records & Governance:** RE-20261112-017 and AUD-20261112-017 appended. All six records synchronized. No unsafe code, no external dependencies. PR #43 remains DRAFT/OPEN. STOP.
+
+
+## 2026-11-13 — B12 biker AI & bank biker state machine (VERIFIED)
+
+- **Scope & Context:** B12 enemy biker AI; branch `revive/level2-b12-biker-ai-2026-11-12`, draft PR #44 based on B11 docs commit `4c5c189`.
+- **Implementation:**
+  1. Reverse-engineered original Flash AVM1 bytecode for `bikerAI` (frame 15, body offset 113959, 238 ops) and DefineSprite `#1005` in `#1075` (depth 1129, initial `x = -570.25, y = 375.85`, matrix scale `1.1585846`) from `cobblebot-source.swf`.
+  2. `src/bank_biker.rs`: Defined `BikerState` (`Drive`, `Fall`), `BikerSound` (`Bike`, `Kick`, `Bam`), `BikerEvent` (`Sound`, `ScoreAward`, `PlayerHurt`), and `BankBiker`.
+  3. Implemented full movement, looping, sound cues, and damage routing:
+     - Horizontal movement: in `Drive`, advances `x += 24.0 * dir` (`dir = 1.0`).
+     - Loop-around: when `x > player.x + 1200.0`, wraps to `player.x - 1200.0`, resetting `visible = true`, `flash = 0`, and `bike_sfx_played = false`.
+     - Engine audio cue: emits `Sound(Bike)` when `player.x - 750.0 < x < player.x - 700.0` (plays once per pass).
+     - Batman unarmed collision: deals 10 damage to player (`PlayerHurt { damage: 10 }`) and plays `Sound(Kick)` when overlapping Batman while not attacking.
+     - Batman melee attack or Batarang hit: deals knockdown to biker, transitions to `Fall`, awards +100 score (`ScoreAward(100)`), and plays `Sound(Bam)`.
+     - Child clip animation: `Drive` cycles 2 child frames (`#981`). `Fall` advances 7 child frames (`#1004`) clamped to frame 6. Flashes when `flash > 50` and despawns when `flash > 100`.
+  4. Added 7 new unit tests (`biker_initialization_and_metadata`, `biker_drive_movement_and_animation_wrap`, `biker_loop_around_when_exceeding_screen_boundary`, `biker_engine_audio_cue_trigger`, `biker_unarmed_player_collision_deals_ten_damage`, `biker_batarang_collision_causes_fall_and_score`, and `biker_player_attack_causes_fall_and_flashing_despawn`), bringing total Rust tests from 65 to 72.
+  5. Added branch to `.github/workflows/build-level1a-fidelity.yml`.
+- **Native Windows CI Execution:**
+  - Initial attempt hit transient hosted PowerShell timeout in `windows_intro_audio_focus_probe.py`.
+  - Re-run job 131613894430 on run [#43340912013](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43340912013) completed **SUCCESS 82/82 steps** on exact code SHA `657ec06`.
+  - Cargo test: **72/72 passed in 0.83s**.
+  - Performance: Render p95 **24.1619ms**, scenery scroll p95 **30.4693ms** (well below 40.0ms gate).
+  - Fidelity: 15/15 historical 1× screenshots identical, 20/20 relocated standalone EXE HQ3× screenshot hashes identical, child exit 0.
+  - Hosted audio: BLOCKED (no hosted audio endpoint, WinMM MCI error 277).
+- **Records & Governance:** RE-20261112-018 and AUD-20261112-018 appended. All six records synchronized. No unsafe code, no external dependencies. PR #44 remains DRAFT/OPEN. STOP.

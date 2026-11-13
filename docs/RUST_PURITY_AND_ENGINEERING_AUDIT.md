@@ -1074,3 +1074,29 @@ Do not erase two historical CI failures: documentation-only #42834460076 and ini
   - **ENGINEERING QUALITY:** PASS (exact AVM1 damage values and timing, zero allocation event routing, deterministic wave respawn).
   - **ORIGINAL-GAME FIDELITY:** VERIFIED FOR TESTED SCOPE (Level 1A gameplay intact; Level 1B combat mechanics and `respawn2` wave 2 logic accurately mirror Flash AVM1 bytecode).
   - **HARDWARE SPEAKER AUDIO:** BLOCKED (hosted runner limitation, unchanged).
+
+
+## AUD-20261112-018 — Independent post-code Rust purity/engineering audit of Batch B12 (Biker AI & State Machine)
+
+- **Audit Date:** 2026-11-13
+- **Scope:** `src/bank_biker.rs`, `src/main.rs`, `.github/workflows/build-level1a-fidelity.yml`
+- **Code SHA:** `657ec06` on branch `revive/level2-b12-biker-ai-2026-11-12` (PR #44).
+- **Actual Changed Code and Engineering Review:**
+  1. Implemented complete biker AI and state machine in pure Rust inside `src/bank_biker.rs`:
+     - `BikerState`: `Drive`, `Fall`.
+     - `BikerSound`: `Bike`, `Kick`, `Bam`.
+     - `BikerEvent`: `Sound`, `ScoreAward`, `PlayerHurt`.
+     - `BankBiker`: properties `x`, `y`, `dir`, `speed` (24.0), `state`, `child_frame`, `flash`, `visible`, `bike_sfx_played`.
+     - Movement: horizontal progression `x += 24.0 * dir` (`dir = 1.0`).
+     - Looping: when `x > player.x + 1200.0`, wraps to `player.x - 1200.0`, resetting `visible = true`, `flash = 0`, and `bike_sfx_played = false`.
+     - Audio cue: emits `Sound(Bike)` when passing `player.x - 750.0 < x < player.x - 700.0`.
+     - Combat collision: unarmed player collision deals 10 damage and plays `Kick`; Batman melee attack or Batarang hit triggers `Fall`, awards +100 score, and plays `Bam`.
+     - Child animation: `Drive` cycles frames 0..1; `Fall` advances frames 0..6 clamped to frame 6, flashes when `flash > 50`, despawns when `flash > 100`.
+  2. Registered `mod bank_biker;` inertly in `src/main.rs`.
+  3. Added 7 unit tests (`biker_initialization_and_metadata`, `biker_drive_movement_and_animation_wrap`, `biker_loop_around_when_exceeding_screen_boundary`, `biker_engine_audio_cue_trigger`, `biker_unarmed_player_collision_deals_ten_damage`, `biker_batarang_collision_causes_fall_and_score`, and `biker_player_attack_causes_fall_and_flashing_despawn`). Total unit tests increased from 65 to 72.
+  4. CI execution confirmed on GitHub Actions run [#43340912013](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43340912013): 82/82 steps passed, 72/72 tests passed in 0.83s, render p95 `24.1619ms`, scenery scroll p95 `30.4693ms` (< 40ms gate), 15/15 1× hashes identical, 20/20 relocated standalone EXE HQ hashes identical, child exit 0.
+- **Verdicts:**
+  - **PURE-RUST RUNTIME COMPLIANCE:** PASS (with existing direct Win32/GDI/WinMM OS FFI qualifications). Zero new crates, zero unsafe blocks, zero heap allocations in biker tick.
+  - **ENGINEERING QUALITY:** PASS (exact AVM1 speed, audio cue interval, loop-around boundary, damage routing, child clip frame cycling).
+  - **ORIGINAL-GAME FIDELITY:** VERIFIED FOR TESTED SCOPE (Level 1A gameplay intact; Level 1B biker AI accurately mirrors Flash AVM1 bytecode).
+  - **HARDWARE SPEAKER AUDIO:** BLOCKED (hosted runner limitation, unchanged).
