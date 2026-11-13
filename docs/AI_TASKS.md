@@ -1,6 +1,33 @@
 # Persistent development tasks — Batman Rust port
 
 
+## B11 — COMPLETED / goonAI combat AI, player damage routing & wave 2 spawning (2026-11-12)
+
+**VERIFIED NATIVE WINDOWS REGRESSION, NOT PLAYABLE LEVEL1B.** [Draft, OPEN, UNMERGED PR #43](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/43) on `revive/level2-b11-goon-combat-2026-11-12`, based on B10 docs commit `27def5e`. **Exact Windows-tested code SHA `3802366`**. Final documentation SHA is the separate later `[skip ci]` commit; this file cannot prestate its own commit ID. Full native Windows [#43336433191](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43336433191) **SUCCESS 82/82 steps** on exact code SHA.
+
+**ENGINEERING & ARCHITECTURE FACTS:**
+1. Reverse-engineered original Flash AVM1 bytecode for combat in `goonAI` (offset 115398) and `respawn2` (offset 145892, 756 bytes, 199 ops) from `cobblebot-source.swf` frame 15.
+2. Implemented `GoonCombatSound` enum (`Punch`, `Punch2`, `Kick`, `Bam`, `Metal1`), `PlayerCombatContext` (player state, pos, direction, combo, active attack), and `GoonCombatEvent` (`Sound`, `ScoreAward`, `PlayerHurt`, `WaveSpawned`, `StageComplete`) in `src/bank_goons.rs`.
+3. Implemented full attack and damage resolution:
+   - **Batarang hit**: bounding box `|dx| <= 25.0 && dy in [-75.0, 10.0]`, deals 5 damage, `Sound::Kick`, enters `Hurt`.
+   - **Batman Low Kick / High Punch / High Kick**: deals 15 damage, plays `Sound::Kick` / `Sound::Punch2`, enters knockdown `Fall`.
+   - **Batman Normal Punch**: deals 10 damage, plays `Sound::Punch`, enters `Hurt`, increments combo.
+   - **Batman Knockdown Sweep**: when `dx <= 45.0` (offset -120), deals 20 damage, plays `Sound::Punch2`, enters `Fall`.
+   - **Knockback Physics**: `Hurt` slides backward `-6 * dir`; `Fall` slides backward `-10 * dir` for 6 ticks.
+   - **Goon Melee Strike**: when in `Attack`, deals 5 damage to player during strike window frames 4..6.
+   - **Death & Despawn**: when health <= 0, enters `Die`, awards +100 score, plays `Sound::Bam`. Flashes `flash > 50` (visible 2 out of 4 frames) and despawns at `flash > 100`, incrementing `e_kills`.
+4. Implemented `respawn2` (Wave 2 Spawning & Stage Completion):
+   - When initial 10 goons are defeated (`e_kills == 10`), wave 2 triggers: 8 goons reactivated with 50 health in `Walk` state, spawned at `player_x ± [500..1100]`.
+   - When wave 2 (8 enemies) is defeated (`respawned > 0 && e_kills == 8`), `StageComplete` event is emitted (`is_stage_clear() == true`).
+5. Six new unit tests added: `goon_takes_damage_from_batarang`, `goon_takes_damage_from_player_attacks_and_knocks_down`, `goon_attack_damages_player`, `goon_death_awards_score_and_despawns`, `respawn2_triggers_wave_2_at_ten_kills`, and `defeating_wave_2_triggers_stage_clear`, increasing total Rust tests from 59 to 65.
+
+**NATIVE VERIFIED on exact CODE SHA:** locked MSVC release `cargo test --release --locked` **65/65 passed in 0.73s**, locked build PASS, native legacy 1× image SHA **15/15 identical**, HQ3× smoke **20/20 at 1800×1200**, relocated standalone EXE **20/20 exact HQ hashes**, child exit 0 and no SWF staged. Real Win32 OS capture/start/held Enter/fresh Enter/SKIP, F7/F8 three HUD cases, fullscreen F/Esc, focus visuals, PE and Windows Shell icon PASS. Render p95 **20.9646ms**, scenery scroll p95 **25.4850ms**, both well below unchanged **40ms** gate. Integration QA artifact confirmed child exit 0, 20/20 identical HQ hashes. Hosted WinMM audio device 0 / MCI error 277 remains **BLOCKED** (no hosted speaker endpoint). Live Flash parity and physical audio UNVERIFIED.
+
+**RUST PURITY/AUDIT:** Zero unsafe code, zero new external crates, runtime remains 100% native Rust with documented Win32/GDI/WinMM FFI. [Research RE-20261112-017](REVERSE_ENGINEERING_RESEARCH_LEDGER.md) and [independent AUD-20261112-017](RUST_PURITY_AND_ENGINEERING_AUDIT.md) finalized. Reviewed `AGENTS.md` and both mandatory protocols unchanged. Main and accepted Level1A release preserved.
+
+**STOP. ONE NEXT SEPARATELY AUTHORIZED TASK: B12 Biker `#1005` & `bikerAI` (`src/bank_biker.rs`)**, preserving existing baseline.
+
+
 ## B10 — COMPLETED / goonAI noncombat AI state machine & bank goon squad (2026-11-12)
 
 **VERIFIED NATIVE WINDOWS REGRESSION, NOT PLAYABLE LEVEL1B.** [Draft, OPEN, UNMERGED PR #42](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/42) on `revive/level2-b10-goon-ai-2026-11-12`, based on AF12 docs commit `9982421`. **Exact Windows-tested code SHA `2cffd9d`**. Final documentation SHA is the separate later `[skip ci]` commit; this file cannot prestate its own commit ID. Full native Windows [#43331247611](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43331247611) **SUCCESS 82/82 steps** on exact code SHA.

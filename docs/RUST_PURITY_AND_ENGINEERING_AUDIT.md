@@ -1048,3 +1048,29 @@ Do not erase two historical CI failures: documentation-only #42834460076 and ini
   - **ENGINEERING QUALITY:** PASS (deterministic PRNG, clean state machine, bit-packed collision integration).
   - **ORIGINAL-GAME FIDELITY:** VERIFIED FOR TESTED SCOPE (Level 1A gameplay intact; Level 1B goon noncombat state machine accurately mirrors Flash AVM1 bytecode).
   - **HARDWARE SPEAKER AUDIO:** BLOCKED (hosted runner limitation, unchanged).
+
+
+## AUD-20261112-017 — Independent post-code Rust purity/engineering audit of Batch B11 (Goon Combat & Wave 2 Spawning)
+
+- **Audit Date:** 2026-11-12
+- **Scope:** `src/bank_goons.rs`, `.github/workflows/build-level1a-fidelity.yml`
+- **Code SHA:** `3802366` on branch `revive/level2-b11-goon-combat-2026-11-12` (PR #43).
+- **Actual Changed Code and Engineering Review:**
+  1. Implemented complete combat and damage routing in pure Rust inside `src/bank_goons.rs`:
+     - `GoonCombatSound`: `Punch`, `Punch2`, `Kick`, `Bam`, `Metal1`.
+     - `PlayerCombatContext`: player state, position, direction, combo counter, active attack.
+     - `GoonCombatEvent`: sound cues, score awards, player hurt, wave spawns, stage completion.
+     - Batarang collision: `|dx| <= 25.0 && dy in [-75.0, 10.0]`, deals 5 damage, `Kick` sound, `Hurt` reaction.
+     - Melee damage: punch 10 damage + combo increment; kick / high punch 15 damage knockdown; sweep 20 damage knockdown.
+     - Knockback physics: `Hurt` slides backward `-6 * dir`; `Fall` slides backward `-10 * dir` for 6 ticks.
+     - Goon strike: in `Attack`, deals 5 damage to player during frames 4..6.
+     - Death and despawn: health <= 0 enters `Die`, awards +100 score, `Bam` sound, flashes `flash > 50`, despawns at `flash > 100`, incrementing `e_kills`.
+     - `respawn2` wave 2 spawning: at 10 kills, reactivates 8 goons with 50 health in `Walk` state around player.
+     - Stage completion: defeating all 8 wave 2 goons triggers stage clear (`is_stage_clear() == true`).
+  2. Added 6 unit tests (`goon_takes_damage_from_batarang`, `goon_takes_damage_from_player_attacks_and_knocks_down`, `goon_attack_damages_player`, `goon_death_awards_score_and_despawns`, `respawn2_triggers_wave_2_at_ten_kills`, and `defeating_wave_2_triggers_stage_clear`). Total unit tests increased from 59 to 65.
+  3. CI execution confirmed on GitHub Actions run [#43336433191](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43336433191): 82/82 steps passed, 65/65 tests passed in 0.73s, render p95 `20.9646ms`, scenery scroll p95 `25.4850ms` (< 40ms gate), 15/15 1× hashes identical, 20/20 relocated standalone EXE HQ hashes identical, child exit 0.
+- **Verdicts:**
+  - **PURE-RUST RUNTIME COMPLIANCE:** PASS (with existing direct Win32/GDI/WinMM OS FFI qualifications). Zero new crates, zero unsafe blocks, zero heap allocations in combat tick.
+  - **ENGINEERING QUALITY:** PASS (exact AVM1 damage values and timing, zero allocation event routing, deterministic wave respawn).
+  - **ORIGINAL-GAME FIDELITY:** VERIFIED FOR TESTED SCOPE (Level 1A gameplay intact; Level 1B combat mechanics and `respawn2` wave 2 logic accurately mirror Flash AVM1 bytecode).
+  - **HARDWARE SPEAKER AUDIO:** BLOCKED (hosted runner limitation, unchanged).
