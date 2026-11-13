@@ -1,4 +1,5 @@
 use crate::game::AudioEvent;
+use crate::stage::StageId;
 use std::ffi::c_void;
 use std::fs;
 use std::path::PathBuf;
@@ -69,10 +70,18 @@ enum MusicTransport {
     PausedForFocus,
 }
 impl MusicTransport {
+    #[cfg(test)]
     fn focus_command(self,active:bool)->Option<&'static str>{
         match (self,active) {
             (Self::Playing,false)=>Some("pause bcb_music"),
             (Self::PausedForFocus,true)=>Some("resume bcb_music"),
+            _=>None,
+        }
+    }
+    fn focus_command_for(self,active:bool,alias:&str)->Option<String>{
+        match (self,active) {
+            (Self::Playing,false)=>Some(format!("pause {alias}")),
+            (Self::PausedForFocus,true)=>Some(format!("resume {alias}")),
             _=>None,
         }
     }
@@ -90,6 +99,113 @@ impl MusicTransport {
     fn stop(&mut self){*self=Self::Stopped;}
 }
 
+#[derive(Clone,Copy,Eq,PartialEq)]
+enum MusicTrack { Level1A, Level1B, Level1C, Level2A, Level2B }
+
+impl MusicTrack {
+    const COUNT: usize = 5;
+    const ALL: [Self; Self::COUNT] = [
+        Self::Level1A, Self::Level1B, Self::Level1C, Self::Level2A, Self::Level2B,
+    ];
+    fn from_stage(stage: StageId) -> Self {
+        match stage {
+            StageId::Level1A => Self::Level1A,
+            StageId::Level1B => Self::Level1B,
+            StageId::Level1C => Self::Level1C,
+            StageId::Level2A => Self::Level2A,
+            StageId::Level2B => Self::Level2B,
+        }
+    }
+    const fn index(self) -> usize { self as usize }
+    const fn alias(self) -> &'static str {
+        match self {
+            Self::Level1A => "bcb_music",
+            Self::Level1B => "bcb_music_1b",
+            Self::Level1C => "bcb_music_1c",
+            Self::Level2A => "bcb_music_2a",
+            Self::Level2B => "bcb_music_2b",
+        }
+    }
+    const fn filename(self) -> &'static str {
+        match self {
+            Self::Level1A => "level1a.mp3",
+            Self::Level1B => "level1b.mp3",
+            Self::Level1C => "level1c.mp3",
+            Self::Level2A => "level2a.mp3",
+            Self::Level2B => "level2b.mp3",
+        }
+    }
+    fn bytes(self) -> &'static [u8] {
+        match self {
+            Self::Level1A => include_bytes!("../assets/level1a_music.mp3"),
+            Self::Level1B => include_bytes!("../assets/level1b_music.mp3"),
+            Self::Level1C => include_bytes!("../assets/level1c_music.mp3"),
+            Self::Level2A => include_bytes!("../assets/level2a_music.mp3"),
+            Self::Level2B => include_bytes!("../assets/level2b_music.mp3"),
+        }
+    }
+}
+
+#[derive(Clone,Copy)]
+enum SfxSlot {
+    Jump = 0,
+    Item = 1,
+    Door = 2,
+    Swish = 3,
+    Punch = 4,
+    Punch2 = 5,
+    Bam = 6,
+    Explode = 7,
+    Metal = 8,
+}
+
+impl SfxSlot {
+    const COUNT: usize = 9;
+    const ALL: [Self; Self::COUNT] = [
+        Self::Jump, Self::Item, Self::Door, Self::Swish, Self::Punch, Self::Punch2, Self::Bam, Self::Explode, Self::Metal,
+    ];
+    const fn index(self) -> usize { self as usize }
+    const fn alias(self) -> &'static str {
+        match self {
+            Self::Jump => "bcb_jump",
+            Self::Item => "bcb_item",
+            Self::Door => "bcb_door",
+            Self::Swish => "bcb_swish",
+            Self::Punch => "bcb_punch",
+            Self::Punch2 => "bcb_punch2",
+            Self::Bam => "bcb_bam",
+            Self::Explode => "bcb_explode",
+            Self::Metal => "bcb_metal",
+        }
+    }
+    const fn filename(self) -> &'static str {
+        match self {
+            Self::Jump => "jump.mp3",
+            Self::Item => "item.mp3",
+            Self::Door => "door_open.mp3",
+            Self::Swish => "swish.mp3",
+            Self::Punch => "punch.mp3",
+            Self::Punch2 => "punch2.mp3",
+            Self::Bam => "bam.mp3",
+            Self::Explode => "explode.mp3",
+            Self::Metal => "metal1.mp3",
+        }
+    }
+    fn bytes(self) -> &'static [u8] {
+        match self {
+            Self::Jump => include_bytes!("../assets/jump.mp3"),
+            Self::Item => include_bytes!("../assets/item.mp3"),
+            Self::Door => include_bytes!("../assets/door_open.mp3"),
+            Self::Swish => include_bytes!("../assets/swish.mp3"),
+            Self::Punch => include_bytes!("../assets/punch.mp3"),
+            Self::Punch2 => include_bytes!("../assets/punch2.mp3"),
+            Self::Bam => include_bytes!("../assets/bam.mp3"),
+            Self::Explode => include_bytes!("../assets/explode.mp3"),
+            Self::Metal => include_bytes!("../assets/metal1.mp3"),
+        }
+    }
+}
+
 pub struct Audio {
     dir:PathBuf,
     intro:bool,
@@ -97,10 +213,9 @@ pub struct Audio {
     intro_file_written:bool,
     intro_transport:IntroTransport,
     music_transport:MusicTransport,
-    music:bool,
-    jump:bool,
-    item:bool,
-    door:bool,
+    active_track:MusicTrack,
+    music_tracks:[bool;MusicTrack::COUNT],
+    sfx:[bool;SfxSlot::COUNT],
 }
 
 fn open_sfx_mp3(dir:&std::path::Path,filename:&str,alias:&str,bytes:&[u8])->bool{
@@ -121,20 +236,50 @@ impl Audio {
         let _=fs::create_dir_all(&dir);
 
         let intro_path=dir.join("intro.mp3");
-        let music_path=dir.join("level1a.mp3");
         let intro_file_written=fs::write(&intro_path,include_bytes!("../assets/intro_sound.mp3")).is_ok();
         let intro_open_error=if intro_file_written {
             let line=format!("open \"{}\" type mpegvideo alias bcb_intro",intro_path.display());
             unsafe{mciSendStringW(wide(&line).as_ptr(),std::ptr::null_mut(),0,std::ptr::null_mut())}
         }else{u32::MAX};
         let intro=intro_file_written && intro_open_error==0;
-        let music=fs::write(&music_path,include_bytes!("../assets/level1a_music.mp3")).is_ok()
-            && command(&format!("open \"{}\" type mpegvideo alias bcb_music",music_path.display()));
-        let jump=open_sfx_mp3(&dir,"jump.mp3","bcb_jump",include_bytes!("../assets/jump.mp3"));
-        let item=open_sfx_mp3(&dir,"item.mp3","bcb_item",include_bytes!("../assets/item.mp3"));
-        let door=open_sfx_mp3(&dir,"door_open.mp3","bcb_door",include_bytes!("../assets/door_open.mp3"));
 
-        Self{dir,intro,intro_open_error,intro_file_written,intro_transport:IntroTransport::Stopped,music_transport:MusicTransport::Stopped,music,jump,item,door}
+        let mut music_tracks=[false;MusicTrack::COUNT];
+        for track in MusicTrack::ALL {
+            music_tracks[track.index()]=open_sfx_mp3(&dir,track.filename(),track.alias(),track.bytes());
+        }
+        let mut sfx=[false;SfxSlot::COUNT];
+        for slot in SfxSlot::ALL {
+            sfx[slot.index()]=open_sfx_mp3(&dir,slot.filename(),slot.alias(),slot.bytes());
+        }
+
+        Self{
+            dir,
+            intro,
+            intro_open_error,
+            intro_file_written,
+            intro_transport:IntroTransport::Stopped,
+            music_transport:MusicTransport::Stopped,
+            active_track:MusicTrack::Level1A,
+            music_tracks,
+            sfx,
+        }
+    }
+
+    fn stop_active_music(&mut self){
+        self.music_transport.stop();
+        for track in MusicTrack::ALL {
+            if self.music_tracks[track.index()] {
+                let alias=track.alias();
+                let _=command(&format!("stop {alias}"));
+                let _=command(&format!("seek {alias} to start"));
+            }
+        }
+    }
+
+    fn play_sfx(&self,slot:SfxSlot){
+        if self.sfx[slot.index()] {
+            replay_sfx(slot.alias());
+        }
     }
 
     /// Win32 stops the 25Hz simulation off-focus; both continuing MCI
@@ -147,9 +292,9 @@ impl Audio {
                 self.intro_transport.accept_focus_result(active,success);
             }
         }
-        if self.music {
-            if let Some(mci)=self.music_transport.focus_command(active){
-                let success=command(mci);
+        if self.music_tracks[self.active_track.index()] {
+            if let Some(mci)=self.music_transport.focus_command_for(active,self.active_track.alias()){
+                let success=command(&mci);
                 self.music_transport.accept_focus_result(active,success);
             }
         }
@@ -202,27 +347,33 @@ impl Audio {
                 let _=command("stop bcb_intro");
                 let _=command("seek bcb_intro to start");
             }
-            AudioEvent::MusicStart if self.music=>{
-                let _=command("stop bcb_music");
-                let _=command("seek bcb_music to start");
-                self.music_transport.accept_start_result(command("play bcb_music repeat"));
+            AudioEvent::StageTrack(stage)=>{
+                self.stop_active_music();
+                self.active_track=MusicTrack::from_stage(stage);
             }
-            AudioEvent::MusicStop if self.music=>{
+            AudioEvent::MusicStart=>{
+                let track=self.active_track;
+                if self.music_tracks[track.index()] {
+                    let alias=track.alias();
+                    let _=command(&format!("stop {alias}"));
+                    let _=command(&format!("seek {alias} to start"));
+                    self.music_transport.accept_start_result(command(&format!("play {alias} repeat")));
+                }
+            }
+            AudioEvent::MusicStop=>{
                 // Prevent any later focus gain from reviving a stopped song,
                 // even if the MCI stop/seek itself fails.
-                self.music_transport.stop();
-                let _=command("stop bcb_music");
-                let _=command("seek bcb_music to start");
+                self.stop_active_music();
             }
-            AudioEvent::Jump if self.jump=>{
-                replay_sfx("bcb_jump");
-            }
-            AudioEvent::Item if self.item=>{
-                replay_sfx("bcb_item");
-            }
-            AudioEvent::DoorOpen if self.door=>{
-                replay_sfx("bcb_door");
-            }
+            AudioEvent::Jump=>self.play_sfx(SfxSlot::Jump),
+            AudioEvent::Item=>self.play_sfx(SfxSlot::Item),
+            AudioEvent::DoorOpen=>self.play_sfx(SfxSlot::Door),
+            AudioEvent::Swish=>self.play_sfx(SfxSlot::Swish),
+            AudioEvent::Punch=>self.play_sfx(SfxSlot::Punch),
+            AudioEvent::Punch2=>self.play_sfx(SfxSlot::Punch2),
+            AudioEvent::Bam=>self.play_sfx(SfxSlot::Bam),
+            AudioEvent::Explode=>self.play_sfx(SfxSlot::Explode),
+            AudioEvent::Metal=>self.play_sfx(SfxSlot::Metal),
             _=>{}
         }
     }
@@ -305,10 +456,16 @@ mod tests {
 impl Drop for Audio{
     fn drop(&mut self){
         if self.intro{let _=command("close bcb_intro");}
-        if self.music{let _=command("close bcb_music");}
-        if self.jump{let _=command("close bcb_jump");}
-        if self.item{let _=command("close bcb_item");}
-        if self.door{let _=command("close bcb_door");}
+        for track in MusicTrack::ALL {
+            if self.music_tracks[track.index()] {
+                let _=command(&format!("close {}",track.alias()));
+            }
+        }
+        for slot in SfxSlot::ALL {
+            if self.sfx[slot.index()] {
+                let _=command(&format!("close {}",slot.alias()));
+            }
+        }
         let _=fs::remove_dir_all(&self.dir);
     }
 }

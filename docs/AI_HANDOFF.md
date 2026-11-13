@@ -1,6 +1,16 @@
 # AI handoff — current recovery checkpoint
 
 
+## FINAL VERIFIED — B25 `Labs 2A` Pickups (`item_br*`/`health01`), `halo`, `checkpoint_2a_01`/`02` & Audio; STOP (2026-11-13)
+- **Status:** **B25 COMPLETED & CLOSED OUT ON WINDOWS CI.** Code SHA `655bcb5` PASSED Windows CI ([Run #43432309195](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43432309195), `12m4s`).
+- **Branch / Draft PR:** `revive/level2-b25-labs2a-pickups-audio-2026-11-13` -> Draft PR [#57](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/57) (targeting `revive/level2-b24-labs2a-enemies-2026-11-13`).
+- **Verified CI Metrics (`655bcb5`):**
+  - `cargo test --release --locked`: `121 passed; 0 failed` (`2.39s` CI / `3.27s` local)
+  - `hq_smoke_hashes_identical`: `20`
+  - Installed-copy EXE QA: SHA-256 `64a78e09a1fb1a4494ad9d855edebc0005c220ea1aa870527ca02a8e66183d4c`, `child_exit: 0`, `render_p95_ms: 18.2801`, `scenery_p95_ms: 22.102`, `intro_audio_focus: BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT` (`audio_hardware_verified: false`).
+  - Baked artifact proof (`Batman-CobbleBot-B25-Labs2A-Pickups-Proof`, `proof_sha256: 12c241cbe8f11118b39a8df70877a30b4ea626f0b857bcc5d8f62272dcc93c5c`): `assets/labs_pickups_frames.bin` (`57,902` bytes, `2` `BCBFRM02` `1.0x` frames: `#1401` `health01` `65×37`, `#1399` `halo` `2729×2729`) & `assets/level2a_title_frames.bin` (`112,814` bytes, `100` `BCBFRM02` `1.0x` frames of `#1408` `303×49`).
+- **Next Authorized Batch:** **B26** (`revive/level2-b26-card-tv-2026-11-13`) — `checkpoint_2a_tv`, `card:tv` (`#1479` `185f` frame `151` -> `"level2b"`, `#1480` Skip button), live `EscapeCard -> Level2A` handoff & E2E verification.
+
 ## FINAL VERIFIED — B24 `Labs 2A` Enemies (`9` Goons `#1365` & Inert `eagle1` `#1393`); STOP (2026-11-13)
 - **Status:** **B24 COMPLETED & CLOSED OUT ON WINDOWS CI.** Code SHA `b8726f2` PASSED Windows CI ([Run #43426236375](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43426236375), `11m50s`).
 - **Branch / Draft PR:** `revive/level2-b24-labs2a-enemies-2026-11-13` -> Draft PR [#56](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/56) (targeting `revive/level2-b23-labs2a-elevators-2026-11-13`).
