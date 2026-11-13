@@ -1244,3 +1244,10 @@ Do not erase two historical CI failures: documentation-only #42834460076 and ini
   - `StageAssets::load_level2a()` and `CollisionMask::level2a()` load lazily per stage with zero impact on Level 1A startup memory, `20/20` HQ smoke hashes, or `15/15` Legacy baseline renders.
   - Typed `LabsDoorPlacement`, `LabsElevatorPlacement`, `LabsTriggerPlacement`, `LabsEnemyPlacement`, and `LabsPickupPlacement` tables generated offline into `assets/labs2a_objects.rs` (`b20_bake_labs2a_scenery.py`) cleanly decouple dynamic actors/triggers from static `#1317` scenery with zero runtime parsing overhead.
   - Gated `#14` opaque black backdrop (`0xff000000`) uniformly across Legacy and HQ backdrop/city helpers for `StageId::Level2A | StageId::Level2B`, and expanded CI proof + unit suite to `108 passed; 0 failed`.
+
+### AUD-20261113-027 — B21 `Labs 2A` Ground Traversal & Dual Camera Controller Audit
+- **Batch / Branch:** `B21` on `revive/level2-b21-labs2a-camera-ground-2026-11-13` (Draft PR #53, code SHA `ad22717`, CI [#43410324958](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43410324958))
+- **Audit Checks (PASS):**
+  - Zero `unsafe` code added; zero new external crates; `Cargo.lock` untouched.
+  - Shared `apply_camera_horizontal_ease` eliminates horizontal camera pan duplication across `cameraLogic`, `cameraLogic2`, and `cameraLogic3`.
+  - Pure-Rust fixed-step simulation (`110 passed; 0 failed`) verifies exact `camera_01..10` trigger bounds (`#153`/`#28`), airborne non-triggering invariant, `#1316` entry shaft glide/landing/wall-clamping (`camMin = 200`), and `cameraLogic2 <-> cameraLogic3` convergence with zero impact on `Level1A` / `Level1B` / `Level1C`.

@@ -1,6 +1,13 @@
 # AI handoff — current recovery checkpoint
 
 
+## FINAL VERIFIED — B21 `Labs 2A` `#1316` Runtime Ground, `cameraLogic2` / `cameraLogic3` & 10 Camera Triggers; STOP (2026-11-13)
+
+- **Branch / Draft PR:** `revive/level2-b21-labs2a-camera-ground-2026-11-13` -> Draft PR [#53](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/53) (targeting `revive/level2-b20-labs2a-scenery-mask-2026-11-13`).
+- **Tested Code SHA:** [`ad22717`](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/commit/ad22717)
+- **Windows CI Status:** [Run #43410324958](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43410324958) — **SUCCESS** (`14m38s`), `110 passed; 0 failed` (`1.80s`), `20/20` HQ hashes identical (`1ac9fa1d04a86fd27e79dce98dd9846bf180719c10b499634c74a3ccc35cc056`), `child_exit: 0`, `render_p95_ms: 22.3942`, `scenery_p95_ms: 27.8796`. Audio: `BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT` (WinMM MCI 277 on headless CI).
+- **Next Authorized Batch:** **B22** (`revive/level2-b22-labs2a-doors-2026-11-13`) — `doorOpen` + `18` Lab doors (`#1325`/`#1324`) + `18` jambs (`#1394..1396`) + `assets/door_frames.bin` + sound `#1323`.
+
 ## FINAL VERIFIED — B20 `Labs 2A` (`#1317`) 1× Tile Pack, `#1316` Collision Mask & `Level2A` Object Separation; STOP (2026-11-13)
 
 - **Branch / Draft PR:** `revive/level2-b20-labs2a-scenery-mask-2026-11-13` -> Draft PR [#52](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/52) (targeting `revive/level2-b19-bank-milestone-qa-2026-11-13`).
