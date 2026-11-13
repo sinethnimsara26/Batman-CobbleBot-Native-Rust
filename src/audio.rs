@@ -100,6 +100,19 @@ pub struct Audio {
     music:bool,
     jump:bool,
     item:bool,
+    door:bool,
+}
+
+fn open_sfx_mp3(dir:&std::path::Path,filename:&str,alias:&str,bytes:&[u8])->bool{
+    let path=dir.join(filename);
+    fs::write(&path,bytes).is_ok()
+        && command(&format!("open \"{}\" type mpegvideo alias {alias}",path.display()))
+}
+
+fn replay_sfx(alias:&str){
+    let _=command(&format!("stop {alias}"));
+    let _=command(&format!("seek {alias} to start"));
+    let _=command(&format!("play {alias}"));
 }
 
 impl Audio {
@@ -109,8 +122,6 @@ impl Audio {
 
         let intro_path=dir.join("intro.mp3");
         let music_path=dir.join("level1a.mp3");
-        let jump_path=dir.join("jump.mp3");
-        let item_path=dir.join("item.mp3");
         let intro_file_written=fs::write(&intro_path,include_bytes!("../assets/intro_sound.mp3")).is_ok();
         let intro_open_error=if intro_file_written {
             let line=format!("open \"{}\" type mpegvideo alias bcb_intro",intro_path.display());
@@ -119,12 +130,11 @@ impl Audio {
         let intro=intro_file_written && intro_open_error==0;
         let music=fs::write(&music_path,include_bytes!("../assets/level1a_music.mp3")).is_ok()
             && command(&format!("open \"{}\" type mpegvideo alias bcb_music",music_path.display()));
-        let jump=fs::write(&jump_path,include_bytes!("../assets/jump.mp3")).is_ok()
-            && command(&format!("open \"{}\" type mpegvideo alias bcb_jump",jump_path.display()));
-        let item=fs::write(&item_path,include_bytes!("../assets/item.mp3")).is_ok()
-            && command(&format!("open \"{}\" type mpegvideo alias bcb_item",item_path.display()));
+        let jump=open_sfx_mp3(&dir,"jump.mp3","bcb_jump",include_bytes!("../assets/jump.mp3"));
+        let item=open_sfx_mp3(&dir,"item.mp3","bcb_item",include_bytes!("../assets/item.mp3"));
+        let door=open_sfx_mp3(&dir,"door_open.mp3","bcb_door",include_bytes!("../assets/door_open.mp3"));
 
-        Self{dir,intro,intro_open_error,intro_file_written,intro_transport:IntroTransport::Stopped,music_transport:MusicTransport::Stopped,music,jump,item}
+        Self{dir,intro,intro_open_error,intro_file_written,intro_transport:IntroTransport::Stopped,music_transport:MusicTransport::Stopped,music,jump,item,door}
     }
 
     /// Win32 stops the 25Hz simulation off-focus; both continuing MCI
@@ -205,14 +215,13 @@ impl Audio {
                 let _=command("seek bcb_music to start");
             }
             AudioEvent::Jump if self.jump=>{
-                let _=command("stop bcb_jump");
-                let _=command("seek bcb_jump to start");
-                let _=command("play bcb_jump");
+                replay_sfx("bcb_jump");
             }
             AudioEvent::Item if self.item=>{
-                let _=command("stop bcb_item");
-                let _=command("seek bcb_item to start");
-                let _=command("play bcb_item");
+                replay_sfx("bcb_item");
+            }
+            AudioEvent::DoorOpen if self.door=>{
+                replay_sfx("bcb_door");
             }
             _=>{}
         }
@@ -299,6 +308,7 @@ impl Drop for Audio{
         if self.music{let _=command("close bcb_music");}
         if self.jump{let _=command("close bcb_jump");}
         if self.item{let _=command("close bcb_item");}
+        if self.door{let _=command("close bcb_door");}
         let _=fs::remove_dir_all(&self.dir);
     }
 }

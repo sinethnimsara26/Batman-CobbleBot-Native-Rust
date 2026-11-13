@@ -158,6 +158,7 @@ pub fn render_with_config(
                 draw_world_objects_hq(target,game,assets);
                 draw_stage_enemies_hq(target,game,assets);
                 draw_batman_hq(target,game,assets);
+                draw_world_foreground_hq(target,game,assets);
                 draw_foreground_hq(target,game,assets);
             }
         }
@@ -293,6 +294,7 @@ fn render_legacy_intro_overlay(fb:&mut RenderSurface,game:&Game,assets:&Assets,s
     }
     render_world_legacy(fb,game,assets);
     draw_batman_legacy(fb,game,assets);
+    draw_world_foreground_legacy(fb,game,assets);
     draw_foreground_legacy(fb,game,assets);
 }
 
@@ -391,6 +393,7 @@ fn draw_city_background_alpha(fb:&mut RenderSurface,game:&Game,assets:&Assets){
 }
 
 fn draw_world_objects_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
+    draw_labs_doors_scaled(fb,game,assets,1);
     let pickup_coords: &[(f32,f32)] = match game.active_stage() {
         crate::stage::StageId::Level1A => &crate::game::PICKUPS,
         crate::stage::StageId::Level1B => &crate::game::LEVEL1B_PICKUPS,
@@ -418,6 +421,7 @@ fn draw_world_objects_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
 }
 
 fn draw_world_objects_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
+    draw_labs_doors_scaled(fb,game,assets,HQ_SCALE as i32);
     let scale=HQ_SCALE as f32;
     debug_assert!((assets.pickup_frames_hq.logical_pixel_scale-scale).abs()<0.001);
     debug_assert!((assets.batarang_frames_hq.logical_pixel_scale-scale).abs()<0.001);
@@ -486,7 +490,7 @@ fn draw_batman_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
 }
 
 #[inline]
-fn draw_enemy_sprite(
+fn draw_lazy_world_sprite(
     fb:&mut RenderSurface,
     frame:&crate::assets::LazySpriteFrame,
     world_x:f32,world_y:f32,
@@ -501,7 +505,46 @@ fn draw_enemy_sprite(
     let dh=frame.image.h as i32*pixel_scale;
     let px=sx-(ax*pixel_scale as f32).round() as i32;
     let py=sy-(frame.anchor_y*pixel_scale as f32).round() as i32;
+    if px+dw<=0 || px>=fb.w as i32 || py+dh<=0 || py>=fb.h as i32 {
+        return;
+    }
     blit(fb,&frame.image,px,py,dw,dh,flip);
+}
+
+fn draw_labs_doors_scaled(fb:&mut RenderSurface,game:&Game,assets:&Assets,pixel_scale:i32){
+    if game.active_stage()!=crate::stage::StageId::Level2A || assets.door_frames.len()<20 {
+        return;
+    }
+    let placements=&crate::stage::labs2a::DOORS;
+    for (i,&door) in placements.iter().enumerate(){
+        let frame_idx=game.labs_doors.get(i).map_or(0,|s|(s.frame as usize).min(19));
+        draw_lazy_world_sprite(
+            fb,&assets.door_frames.frame(frame_idx),
+            door.x,door.y,game.camera_x,game.camera_y,door.sx<0.0,pixel_scale,
+        );
+    }
+}
+
+fn draw_world_foreground_scaled(fb:&mut RenderSurface,game:&Game,assets:&Assets,pixel_scale:i32){
+    if game.active_stage()!=crate::stage::StageId::Level2A || assets.door_frames.len()<23 {
+        return;
+    }
+    for &jamb in &crate::stage::labs2a::DOOR_JAMBS{
+        if let Some(frame_idx)=jamb.jamb_pack_frame(){
+            draw_lazy_world_sprite(
+                fb,&assets.door_frames.frame(frame_idx),
+                jamb.x,jamb.y,game.camera_x,game.camera_y,jamb.sx<0.0,pixel_scale,
+            );
+        }
+    }
+}
+
+fn draw_world_foreground_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
+    draw_world_foreground_scaled(fb,game,assets,1);
+}
+
+fn draw_world_foreground_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
+    draw_world_foreground_scaled(fb,game,assets,HQ_SCALE as i32);
 }
 
 fn draw_stage_enemies_scaled(fb:&mut RenderSurface,game:&Game,assets:&Assets,pixel_scale:i32){
@@ -518,7 +561,7 @@ fn draw_stage_enemies_scaled(fb:&mut RenderSurface,game:&Game,assets:&Assets,pix
                     let clip = goon.family.child_clip(goon.state);
                     let rel = (goon.frame as usize).min(clip.frame_count().saturating_sub(1) as usize);
                     let idx = (clip.first_frame_inclusive as usize + rel).min(frames.len().saturating_sub(1));
-                    draw_enemy_sprite(
+                    draw_lazy_world_sprite(
                         fb,&frames.frame(idx),goon.x,goon.y,game.camera_x,game.camera_y,
                         goon.dir < 0,pixel_scale
                     );
@@ -530,7 +573,7 @@ fn draw_stage_enemies_scaled(fb:&mut RenderSurface,game:&Game,assets:&Assets,pix
                         crate::bank_biker::BikerState::Drive => (biker.frame as usize) % 2,
                         crate::bank_biker::BikerState::Fall => (2 + biker.frame as usize).min(assets.biker_frames.len().saturating_sub(1)),
                     };
-                    draw_enemy_sprite(
+                    draw_lazy_world_sprite(
                         fb,&assets.biker_frames.frame(idx),biker.x,biker.y,game.camera_x,game.camera_y,
                         biker.dir < 0.0,pixel_scale
                     );
@@ -544,7 +587,7 @@ fn draw_stage_enemies_scaled(fb:&mut RenderSurface,game:&Game,assets:&Assets,pix
                     let rel = (boss.child_frame as usize).min(clip.child_frames.saturating_sub(1) as usize);
                     let idx = (clip.baked_start_frame as usize + rel).min(assets.penguin_frames.len().saturating_sub(1));
                     // Unflipped #1250 artwork faces left (-x), so flip horizontally when dir >= 0.
-                    draw_enemy_sprite(
+                    draw_lazy_world_sprite(
                         fb,&assets.penguin_frames.frame(idx),boss.x,boss.y,game.camera_x,game.camera_y,
                         boss.dir >= 0,pixel_scale
                     );
@@ -1234,5 +1277,54 @@ mod tests{
                 assert_eq!(fbhq.pixels[900*HQ_W]&0x00ff_ffff,0,"HQ mid-lab void margin must use #14 black backdrop");
             }
         }
+    }
+
+    #[test]
+    fn b22_labs2a_doors_animate_and_jambs_occlude_batman_in_1x_and_hq3x() {
+        use super::{
+            draw_batman_legacy, draw_world_foreground_legacy, render, render_high_quality,
+            HQ_H, LOGICAL_H,
+        };
+        use crate::assets::Assets;
+        use crate::game::{AppScreen, Game};
+
+        let mut assets = Assets::load();
+        assets.load_stage(crate::stage::StageId::Level2A);
+        let mut game = Game::new();
+        game.start_stage(crate::stage::StageId::Level2A);
+        game.screen = AppScreen::Playing;
+        game.ticks = 45;
+        // Center view on doorway 1 (`door_01`/`door_02` around gx=614, gy=2544) with Batman at doorway edge
+        // so both the door leaf opening (0 -> 9) and front jamb overlap Batman's horizontal span.
+        game.camera_x = -314.0;
+        game.camera_y = -2344.0;
+        game.player.x = 696.0 - game.level_origin_x();
+        game.player.y = 2573.0 - game.level_origin_y();
+        game.labs_doors[0].frame = 0;
+        game.labs_doors[1].frame = 0;
+
+        let mut closed_1x = RenderSurface::new(LOGICAL_W, LOGICAL_H);
+        let mut open_1x = RenderSurface::new(LOGICAL_W, LOGICAL_H);
+        let mut open_hq = RenderSurface::new(HQ_W, HQ_H);
+        let mut hq_scratch = RenderSurface::new(LOGICAL_W, LOGICAL_H);
+
+        render(&mut closed_1x, &game, &assets);
+        game.labs_doors[0].frame = 9;
+        game.labs_doors[1].frame = 9;
+        render(&mut open_1x, &game, &assets);
+        render_high_quality(&mut hq_scratch, &mut open_hq, &game, &assets);
+
+        assert!(closed_1x.pixels != open_1x.pixels, "opening door frame 0 -> 9 must visibly change doorway pixels");
+        let hq_non_black = open_hq.pixels.iter().filter(|&&p| (p & 0x00ff_ffff) != 0).count();
+        assert!(hq_non_black > 20_000, "HQ Labs 2A doorway scene must render cleanly");
+
+        // Verify jambs (#1394/#1395/#1396) draw AFTER Batman (`depth 377 > player 374`), occluding Batman
+        // inside the jamb overlap strip at `jamb[1]` (`gx=702.15, gy=2565.3`).
+        let mut without_jamb = RenderSurface::new(LOGICAL_W, LOGICAL_H);
+        let mut with_jamb = RenderSurface::new(LOGICAL_W, LOGICAL_H);
+        draw_batman_legacy(&mut without_jamb, &game, &assets);
+        draw_batman_legacy(&mut with_jamb, &game, &assets);
+        draw_world_foreground_legacy(&mut with_jamb, &game, &assets);
+        assert!(without_jamb.pixels != with_jamb.pixels, "front door jamb must overdraw Batman in foreground pass");
     }
 }

@@ -1,6 +1,18 @@
 # Persistent development tasks — Batman Rust port
 
 
+## B22 — COMPLETED / `Labs 2A` `doorOpen`, 18 Doors (`#1325`/`#1324`), 18 Front Jambs (`#1394..1396`) & Sound `#1323` (2026-11-13)
+
+**VERIFIED NATIVE WINDOWS REGRESSION.** Code SHA [`32bed64`](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/commit/32bed64) on Draft PR [#54](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/54) passed [CI Run #43415499947](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43415499947) (`SUCCESS` in `14m22s`):
+- `cargo test --release --locked`: `113 passed; 0 failed` in `1.92s` (CI) / `1.95s` (local).
+- Relocated installation & HQ smoke: `20/20` HQ hashes identical (`sha256: cdfaa21fbb7afd97077700600060fdf8436b03ab66b2957b4eb77f0dbba5abbc`), `child_exit: 0`, `render_p95_ms: 21.3299`, `scenery_p95_ms: 26.3881`.
+- Labs 2A Doors Proof (`Batman-CobbleBot-B22-Labs2A-Doors-Proof`): `assets/door_frames.bin` (`35,041` bytes, `23` `BCBFRM02` frames at `1.0x`: `#1325`/`#1324` `0..=19` + `#1394..=#1396` `20..=22`), `assets/door_open.mp3` (`2,912` bytes from `#1323`), `LabsDoorPlacement::sensor_bounds` / `hits_player` / `jamb_pack_frame` (`src/stage.rs`), `AudioEvent::DoorOpen` + `bcb_door` (`src/audio.rs`), `LabsDoorState` + AVM1 `_global.doorOpen` timeline (`src/game.rs`), `draw_labs_doors_scaled` + `draw_world_foreground_scaled` in Legacy `1x` & HQ `3x` (`src/render.rs`), and 3 tests (`110 -> 113`).
+- Audio note: `intro_audio_focus: BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT` (WinMM MCI 277 on hosted runner without audio hardware).
+
+### Next Authorized Batch: **B23 — `elevatorLogic` + `3` Lab Elevators (`2685, 3480, 5420`, `#1328`/`#1330`) & `onPlatform` Physics**
+- Branch `revive/level2-b23-labs2a-elevators-2026-11-13` off the B22 `[skip ci]` docs closeout commit.
+- Bake/pack elevator sprites `#1328` & `#1330`, implement AVM1 `_global.elevatorLogic` (`hitBox`, `dy = 12/-12`, `limit` snap + `delete onEnterFrame`, `onPlatform`/`currentPlatform` sync & jump-off velocity), render in `Level2A` depth band `285..291`, and verify on Windows CI.
+
 ## B21 — COMPLETED / `Labs 2A` Ground `#1316`, Vertical `cameraLogic2` / `cameraLogic3` & 10 Camera Triggers (2026-11-13)
 
 **VERIFIED NATIVE WINDOWS REGRESSION.** Code SHA [`ad22717`](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/commit/ad22717) on Draft PR [#53](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/53) passed [CI Run #43410324958](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43410324958) (`SUCCESS` in `14m38s`):

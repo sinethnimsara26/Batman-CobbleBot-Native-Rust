@@ -568,6 +568,32 @@ impl StoryCard {
     }
 }
 
+/// Maps a symbol-local axis-aligned rectangle into `#1402`/`#1496` GAME-local bounds.
+#[inline]
+fn scaled_game_bounds(
+    x: f32,
+    y: f32,
+    sx: f32,
+    sy: f32,
+    local: (f32, f32, f32, f32),
+) -> (f32, f32, f32, f32) {
+    let (ax0, ax1) = if sx >= 0.0 { (local.0, local.2) } else { (local.2, local.0) };
+    let (ay0, ay1) = if sy >= 0.0 { (local.1, local.3) } else { (local.3, local.1) };
+    (x + sx * ax0, y + sy * ay0, x + sx * ax1, y + sy * ay1)
+}
+
+/// Evaluates Flash `this.hitTest(_root.game.player)` in GAME-local coordinates
+/// against Batman's centered `50×75` hitbox.
+#[inline]
+fn aabb_hits_player(bounds: (f32, f32, f32, f32), player_game_x: f32, player_game_y: f32) -> bool {
+    let (min_x, min_y, max_x, max_y) = bounds;
+    let p_min_x = player_game_x - 25.0;
+    let p_max_x = player_game_x + 25.0;
+    let p_min_y = player_game_y;
+    let p_max_y = player_game_y + 75.0;
+    p_max_x >= min_x && p_min_x <= max_x && p_max_y >= min_y && p_min_y <= max_y
+}
+
 /// Source-separated door or front door-jamb placement in GAME-local space.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct LabsDoorPlacement {
@@ -578,6 +604,37 @@ pub struct LabsDoorPlacement {
     pub y: f32,
     pub sx: f32,
     pub sy: f32,
+}
+
+impl LabsDoorPlacement {
+    /// Exact local bounding rectangle of symbol `#1325` dominated by its invisible
+    /// `#1318` proximity sensor shape (`[-346.4736, 176.7736] × [-235.8649, 230.8149]`).
+    const SENSOR_LOCAL_BOUNDS: (f32, f32, f32, f32) =
+        (-346.473_6, -235.864_9, 176.773_6, 230.814_9);
+
+    /// Returns `(min_x, min_y, max_x, max_y)` of this door wrapper's `#1325` hit-test box
+    /// in `#1402`/`#1496` GAME-local coordinates.
+    #[inline]
+    pub fn sensor_bounds(self) -> (f32, f32, f32, f32) {
+        scaled_game_bounds(self.x, self.y, self.sx, self.sy, Self::SENSOR_LOCAL_BOUNDS)
+    }
+
+    /// Evaluates `_global.doorOpen` `this.hitTest(_root.game.player)` in GAME-local space.
+    #[inline]
+    pub fn hits_player(self, player_game_x: f32, player_game_y: f32) -> bool {
+        aabb_hits_player(self.sensor_bounds(), player_game_x, player_game_y)
+    }
+
+    /// Maps foreground door jamb symbol IDs `#1394..=#1396` into `door_frames.bin` (`20..=22`).
+    #[inline]
+    pub const fn jamb_pack_frame(self) -> Option<usize> {
+        match self.symbol_id {
+            1394 => Some(20),
+            1395 => Some(21),
+            1396 => Some(22),
+            _ => None,
+        }
+    }
 }
 
 /// Source-separated elevator platform placement with AVM1 vertical `limit` target.
@@ -615,42 +672,20 @@ pub struct LabsTriggerPlacement {
 impl LabsTriggerPlacement {
     /// Exact local bounding rectangle of symbol `#153` (shape `#28` placed with
     /// `(sx=0.19798279, sy=0.37077332, tx=27.5, ty=27.55)`).
-    const LOCAL_MIN_X: f32 = -1.049_118;
-    const LOCAL_MAX_X: f32 = 56.049_118;
-    const LOCAL_MIN_Y: f32 = -0.999_545;
-    const LOCAL_MAX_Y: f32 = 56.099_545;
+    const LOCAL_BOUNDS: (f32, f32, f32, f32) =
+        (-1.049_118, -0.999_545, 56.049_118, 56.099_545);
 
     /// Returns `(min_x, min_y, max_x, max_y)` in `#1402`/`#1496` GAME-local coordinates.
     #[inline]
     pub fn game_bounds(self) -> (f32, f32, f32, f32) {
-        let (ax0, ax1) = if self.sx >= 0.0 {
-            (Self::LOCAL_MIN_X, Self::LOCAL_MAX_X)
-        } else {
-            (Self::LOCAL_MAX_X, Self::LOCAL_MIN_X)
-        };
-        let (ay0, ay1) = if self.sy >= 0.0 {
-            (Self::LOCAL_MIN_Y, Self::LOCAL_MAX_Y)
-        } else {
-            (Self::LOCAL_MAX_Y, Self::LOCAL_MIN_Y)
-        };
-        (
-            self.x + self.sx * ax0,
-            self.y + self.sy * ay0,
-            self.x + self.sx * ax1,
-            self.y + self.sy * ay1,
-        )
+        scaled_game_bounds(self.x, self.y, self.sx, self.sy, Self::LOCAL_BOUNDS)
     }
 
     /// Evaluates Flash `this.hitTest(_root.game.player)` in GAME-local coordinates
     /// against Batman's centered `50×75` hitbox.
     #[inline]
     pub fn hits_player(self, player_game_x: f32, player_game_y: f32) -> bool {
-        let (min_x, min_y, max_x, max_y) = self.game_bounds();
-        let p_min_x = player_game_x - 25.0;
-        let p_max_x = player_game_x + 25.0;
-        let p_min_y = player_game_y;
-        let p_max_y = player_game_y + 75.0;
-        p_max_x >= min_x && p_min_x <= max_x && p_max_y >= min_y && p_min_y <= max_y
+        aabb_hits_player(self.game_bounds(), player_game_x, player_game_y)
     }
 
     /// Maps `camera_01..10` trigger zones to `_global.cameraLogic2` vs `_global.cameraLogic3`
