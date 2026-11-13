@@ -5,7 +5,7 @@ use crate::penguin::{
     PenguinBoss, PenguinCombatEvent, PenguinPlayerContext, PenguinPlayerHurtKind, PenguinRng,
     PenguinState, LEVEL1C_PICKUP_POINTS,
 };
-use crate::stage::{PendingStageEntry, RootProgress, StageId, StoryCard};
+use crate::stage::{labs2a, LabsCameraMode, LabsTriggerPlacement, PendingStageEntry, RootProgress, StageId, StoryCard};
 
 pub const LOGICAL_W:usize=600;
 pub const LOGICAL_H:usize=400;
@@ -204,6 +204,10 @@ pub struct Game{
     pub player:Player,
     pub camera_x:f32,pub camera_y:f32,
     pub background_x:f32,pub background_y:f32,
+    labs_camera_mode:LabsCameraMode,
+    cam_height:f32,
+    on_platform:bool,
+    current_platform_x:f32,
     gravity:f32,
     pub batarangs:i32,
     pub score:i32,
@@ -260,6 +264,10 @@ impl Game{
             },
             camera_x:GAME_ROOT_X,camera_y:GAME_ROOT_Y,
             background_x:0.0,background_y:BG_INITIAL_Y,
+            labs_camera_mode:LabsCameraMode::CameraLogic2,
+            cam_height:CAM_HEIGHT,
+            on_platform:false,
+            current_platform_x:0.0,
             gravity:GLOBAL_GRAVITY,
             batarangs:0,score:0,lives:5,health:100,player_attacking:false,
             overlay_frame:OVERLAY_BLANK,overlay_playing:false,walk_checkpoint_started_tick:None,level1a_exit_reached:false,fadeout_tick:None,level1a_complete:false,
@@ -290,7 +298,7 @@ impl Game{
         self.player.y=spawn_y;
         self.player.dir=desc.source_player_direction as i32;
         self.player.dx=0.0;
-        self.player.dy=0.0;
+        self.player.dy=if matches!(stage,StageId::Level2A|StageId::Level2B){3.0}else{0.0};
         self.player.state=PlayerState::Fall;
         self.player.state_tick=0;
         self.player.jumping=true;
@@ -305,6 +313,10 @@ impl Game{
         self.camera_y=GAME_ROOT_Y;
         self.background_x=0.0;
         self.background_y=BG_INITIAL_Y;
+        self.labs_camera_mode=LabsCameraMode::CameraLogic2;
+        self.cam_height=desc.camera.height;
+        self.on_platform=false;
+        self.current_platform_x=0.0;
         self.overlay_frame=OVERLAY_BLANK;
         self.overlay_playing=false;
         self.walk_checkpoint_started_tick=None;
@@ -337,9 +349,28 @@ impl Game{
                 self.penguin_boss=Some(PenguinBoss::new());
                 self.penguin_rng=PenguinRng::new(0x1C00_1250);
             },
-            _=>{}
+            _=>{
+                self.bank_goons=None;
+                self.bank_biker=None;
+                self.penguin_boss=None;
+            }
         }
         self.update_camera();
+    }
+
+    #[cfg_attr(not(test), allow(dead_code))]
+    #[inline]
+    pub fn labs_camera_mode(&self)->LabsCameraMode{self.labs_camera_mode}
+
+    #[cfg_attr(not(test), allow(dead_code))]
+    #[inline]
+    pub fn cam_height(&self)->f32{self.cam_height}
+
+    #[cfg_attr(not(test), allow(dead_code))]
+    #[inline]
+    pub fn set_platform_state(&mut self,on_platform:bool,current_platform_x:f32){
+        self.on_platform=on_platform;
+        self.current_platform_x=current_platform_x;
     }
 
     /// The only loaded stage is 1A until its full successor pack is ready.
@@ -605,6 +636,7 @@ impl Game{
         self.update_shots();
         self.update_pit_logic();
         self.update_tutorial_checkpoints();
+        self.update_labs_camera_triggers();
         self.update_camera();
 
         if self.player.state==state_at_tick_start{
@@ -1282,11 +1314,55 @@ impl Game{
         self.shots.retain(|shot|(shot.x-px).abs()<500.0);
     }
 
+    fn labs_camera_triggers(&self)->&'static [LabsTriggerPlacement]{
+        match self.stage{
+            StageId::Level2A=>&labs2a::CAMERAS,
+            _=>&[],
+        }
+    }
+
+    fn update_labs_camera_triggers(&mut self){
+        // Original frame 23/25 camera_01..10 triggers switch game.onEnterFrame only
+        // when grounded (!playerJumping) and overlapping the #153 trigger box.
+        if self.player.jumping{return;}
+        let triggers=self.labs_camera_triggers();
+        if triggers.is_empty(){return;}
+
+        let player_x=self.player.x+self.level_origin_x();
+        let player_y=self.player.y+self.level_origin_y();
+        let cam3_offset=if self.stage==StageId::Level2B{550.0}else{500.0};
+
+        for &trigger in triggers{
+            if trigger.hits_player(player_x,player_y){
+                match trigger.camera_mode(){
+                    LabsCameraMode::CameraLogic2=>{
+                        self.labs_camera_mode=LabsCameraMode::CameraLogic2;
+                        self.cam_height=self.stage.descriptor().camera.height;
+                    },
+                    LabsCameraMode::CameraLogic3=>{
+                        self.labs_camera_mode=LabsCameraMode::CameraLogic3;
+                        self.cam_height=self.camera_y-player_y+cam3_offset;
+                    },
+                }
+            }
+        }
+    }
+
+    fn apply_camera_horizontal_ease(&mut self,cam:crate::stage::SourceCamera,player_x:f32,target_x:f32){
+        let player_position_x=player_x+self.camera_x;
+        if player_x>cam.min_x&&player_x<cam.max_x{
+            let delta=player_position_x-target_x;
+            if delta.abs()>4.0{
+                let ease=(delta/10.0).trunc();
+                self.camera_x-=ease;
+                self.background_x+=ease/2.0;
+            }
+        }
+    }
+
     fn update_camera(&mut self){
-        // Exact translation of the original cameraLogic() recovered from the
-        // decompiled ActionScript, using game-local player coordinates.
         let cam=self.stage.descriptor().camera;
-        let bg_width=2472.0_f32; // temporary measured/baked width; wrap rule is exact.
+        let bg_width=2472.0_f32;
         let bg_diff=self.background_x+self.camera_x;
         if bg_diff>0.0{
             self.background_x-=bg_width/2.0;
@@ -1296,17 +1372,38 @@ impl Game{
 
         let player_x=self.player.x+self.level_origin_x();
         let player_y=self.player.y+self.level_origin_y();
-        let target_x=if self.player.dir>0{125.0}else{475.0};
-        let player_position_x=player_x+self.camera_x;
 
-        if player_x>cam.min_x&&player_x<cam.max_x{
-            let delta=player_position_x-target_x;
-            if delta.abs()>4.0{
-                let ease=(delta/10.0).trunc();
-                self.camera_x-=ease;
-                self.background_x+=ease/2.0;
+        if matches!(self.stage,StageId::Level2A|StageId::Level2B){
+            match self.labs_camera_mode{
+                LabsCameraMode::CameraLogic2=>{
+                    let target_x=if self.on_platform{
+                        300.0+(player_x-self.current_platform_x)
+                    }else if self.player.dir>0{
+                        125.0
+                    }else{
+                        475.0
+                    };
+                    self.apply_camera_horizontal_ease(cam,player_x,target_x);
+                    self.camera_y=self.cam_height-player_y;
+                },
+                LabsCameraMode::CameraLogic3=>{
+                    let target_x=if self.player.dir>0{150.0}else{450.0};
+                    self.apply_camera_horizontal_ease(cam,player_x,target_x);
+                    let target=(self.cam_height-player_y)/cam.jump;
+                    if !self.player.jumping{
+                        self.camera_y=target;
+                    }else if (self.camera_y+player_y-150.0).abs()>1.0{
+                        self.camera_y+=((target-self.camera_y)/4.0).trunc();
+                    }
+                },
             }
+            return;
         }
+
+        // Exact translation of the original cameraLogic() recovered from the
+        // decompiled ActionScript for Bank stages (1A/1B/1C).
+        let target_x=if self.player.dir>0{125.0}else{475.0};
+        self.apply_camera_horizontal_ease(cam,player_x,target_x);
 
         if self.player.jumping{
             self.camera_y=(cam.height-player_y)/cam.jump;
@@ -2026,5 +2123,137 @@ mod b19_bank_milestone_tests {
         assert_ne!(legacy.pixels, esc0, "Escape card must animate between frame 0 and 112");
         render::render_high_quality(&mut base, &mut hq, &game_esc, &assets);
         assert!(hq.pixels.iter().any(|&p| (p & 0x00ff_ffff) != 0));
+    }
+}
+
+#[cfg(test)]
+mod b21_labs2a_camera_ground_tests {
+    use super::{AppScreen, Game, InputState, VK_LEFT, VK_RIGHT, VK_SPACE};
+    use crate::collision::CollisionMask;
+    use crate::stage::{labs2a, LabsCameraMode, StageId};
+
+    #[test]
+    fn labs2a_spawn_camera_logic2_tracks_shaft_descent_and_clamps_left_wall() {
+        let ground = CollisionMask::for_stage(StageId::Level2A);
+        let mut game = Game::new();
+        game.screen = AppScreen::Playing;
+        game.start_stage(StageId::Level2A);
+
+        assert_eq!(game.labs_camera_mode(), LabsCameraMode::CameraLogic2);
+        assert_eq!(game.cam_height(), 275.0);
+        assert_eq!(game.player.dir, -1);
+        assert_eq!(game.player.dy, 3.0);
+
+        let desc = StageId::Level2A.descriptor();
+        let gx0 = game.player.x + desc.level_origin_game_local.x;
+        let gy0 = game.player.y + desc.level_origin_game_local.y;
+        assert!((gx0 - 227.2).abs() < 0.01);
+        assert!((gy0 - 115.4).abs() < 0.01);
+        assert!((game.camera_y - (275.0 - gy0)).abs() < 0.01);
+
+        // Glide straight down inside the entry elevator shaft while steering left against wall/camMin=200.
+        let mut input = InputState::default();
+        for _ in 0..800 {
+            input.held[VK_SPACE] = true;
+            input.held[VK_LEFT] = true;
+            game.tick(&mut input, &ground);
+            if game.player.on_ground && !game.player.jumping {
+                break;
+            }
+        }
+        assert!(game.player.on_ground && !game.player.jumping, "Batman should land cleanly at bottom of entry shaft");
+
+        let landed_gx = game.player.x + desc.level_origin_game_local.x;
+        let landed_gy = game.player.y + desc.level_origin_game_local.y;
+        assert!(landed_gx >= 162.0 && landed_gx <= 240.0, "left shaft wall should hold Batman around 162..240, got {landed_gx}");
+        assert!((landed_gy - (2648.2 - 75.0)).abs() <= 5.0, "expected landing atop 2648.2 shaft floor, got {landed_gy}");
+        assert!((game.camera_y - (275.0 - landed_gy)).abs() < 0.01, "cameraLogic2 must follow vertical floor depth across 2500px shaft");
+
+        // At landed_gx <= cam_min (200), further horizontal camera ease must freeze.
+        let cam_before = game.camera_x;
+        input.held[VK_SPACE] = false;
+        for _ in 0..5 {
+            input.held[VK_LEFT] = true;
+            game.tick(&mut input, &ground);
+        }
+        assert_eq!(game.camera_x, cam_before, "camera_x must clamp when player_x <= camMin(200)");
+    }
+
+    #[test]
+    fn labs2a_camera_triggers_switch_camera_logic2_and_3_and_respect_airborne_gate() {
+        let ground = CollisionMask::for_stage(StageId::Level2A);
+        let desc = StageId::Level2A.descriptor();
+        let mut game = Game::new();
+        game.screen = AppScreen::Playing;
+        game.start_stage(StageId::Level2A);
+
+        // Place Batman grounded inside camera_01 (gx=400, gy=2573.2).
+        game.player.x = 400.0 - desc.level_origin_game_local.x;
+        game.player.y = 2573.2 - desc.level_origin_game_local.y;
+        game.player.dy = 0.0;
+        game.player.jumping = false;
+        game.player.on_ground = true;
+
+        let mut input = InputState::default();
+        game.tick(&mut input, &ground);
+        assert_eq!(game.labs_camera_mode(), LabsCameraMode::CameraLogic2);
+        assert_eq!(game.cam_height(), 275.0);
+
+        // Jump right across camera_02 boundary while truly airborne inside its Y box -> trigger must NOT fire while jumping!
+        game.player.x = 620.0 - desc.level_origin_game_local.x;
+        game.player.y = 2450.0 - desc.level_origin_game_local.y;
+        game.player.dy = -10.0;
+        game.player.jumping = true;
+        game.player.on_ground = false;
+        game.tick(&mut input, &ground);
+        assert_eq!(game.labs_camera_mode(), LabsCameraMode::CameraLogic2, "camera_02 must ignore overlapping airborne player");
+
+        // Land and walk right grounded inside camera_02 -> switches to cameraLogic3 with targetX=150 and converges camera_y+player_y -> 250.
+        game.player.y = 2573.2 - desc.level_origin_game_local.y;
+        game.player.dy = 0.0;
+        game.player.jumping = false;
+        game.player.on_ground = true;
+        for _ in 0..10 {
+            input.held[VK_RIGHT] = true;
+            game.tick(&mut input, &ground);
+        }
+        assert_eq!(game.labs_camera_mode(), LabsCameraMode::CameraLogic3);
+        let gy = game.player.y + desc.level_origin_game_local.y;
+        assert!((game.camera_y + gy - 250.0).abs() < 0.25, "cameraLogic3 settled screen Y should converge to ~250, got {}", game.camera_y + gy);
+
+        // Airborne inside cameraLogic3 eases camera_y by 1/4 only when |(camera_y + player_y) - 150| > 1.
+        let cam_y_before = game.camera_y;
+        game.player.y -= 120.0;
+        game.player.jumping = true;
+        input.held[VK_RIGHT] = false;
+        game.tick(&mut input, &ground);
+        assert_ne!(game.camera_y, cam_y_before);
+
+        // Walking grounded into camera_04 (gx ~ 2650) switches back to cameraLogic2 (camHeight = 275).
+        game.player.x = 2650.0 - desc.level_origin_game_local.x;
+        game.player.y = 2573.2 - desc.level_origin_game_local.y;
+        game.player.dy = 0.0;
+        game.player.jumping = false;
+        game.tick(&mut input, &ground);
+        assert_eq!(game.labs_camera_mode(), LabsCameraMode::CameraLogic2);
+        assert_eq!(game.cam_height(), 275.0);
+
+        // Platform mode in cameraLogic2 centers on 300 + (player_x - currentPlatform_x).
+        game.set_platform_state(true, 2600.0);
+        game.camera_x = -2300.0;
+        game.tick(&mut input, &ground);
+        // With player_x=2650 and platform_x=2600, targetX=350; screen x = 350 -> delta=0.
+        assert!((game.camera_x - (-2300.0)).abs() < 1.0);
+
+        // Verify all 10 camera zones match alternating source assignment.
+        let mut l2 = 0usize;
+        let mut l3 = 0usize;
+        for c in labs2a::CAMERAS {
+            match c.camera_mode() {
+                LabsCameraMode::CameraLogic2 => l2 += 1,
+                LabsCameraMode::CameraLogic3 => l3 += 1,
+            }
+        }
+        assert_eq!((l2, l3), (5, 5));
     }
 }

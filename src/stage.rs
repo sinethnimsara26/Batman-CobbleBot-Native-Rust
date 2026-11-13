@@ -592,6 +592,14 @@ pub struct LabsElevatorPlacement {
     pub limit_y: i32,
 }
 
+/// Active camera controller function assigned to `_root.game.onEnterFrame`
+/// on Labs stages (`Level2A` / `Level2B`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LabsCameraMode {
+    CameraLogic2,
+    CameraLogic3,
+}
+
 /// Source-separated checkpoint or camera-zone trigger box (`#153`) in GAME-local space.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct LabsTriggerPlacement {
@@ -602,6 +610,64 @@ pub struct LabsTriggerPlacement {
     pub y: f32,
     pub sx: f32,
     pub sy: f32,
+}
+
+impl LabsTriggerPlacement {
+    /// Exact local bounding rectangle of symbol `#153` (shape `#28` placed with
+    /// `(sx=0.19798279, sy=0.37077332, tx=27.5, ty=27.55)`).
+    const LOCAL_MIN_X: f32 = -1.049_118;
+    const LOCAL_MAX_X: f32 = 56.049_118;
+    const LOCAL_MIN_Y: f32 = -0.999_545;
+    const LOCAL_MAX_Y: f32 = 56.099_545;
+
+    /// Returns `(min_x, min_y, max_x, max_y)` in `#1402`/`#1496` GAME-local coordinates.
+    #[inline]
+    pub fn game_bounds(self) -> (f32, f32, f32, f32) {
+        let (ax0, ax1) = if self.sx >= 0.0 {
+            (Self::LOCAL_MIN_X, Self::LOCAL_MAX_X)
+        } else {
+            (Self::LOCAL_MAX_X, Self::LOCAL_MIN_X)
+        };
+        let (ay0, ay1) = if self.sy >= 0.0 {
+            (Self::LOCAL_MIN_Y, Self::LOCAL_MAX_Y)
+        } else {
+            (Self::LOCAL_MAX_Y, Self::LOCAL_MIN_Y)
+        };
+        (
+            self.x + self.sx * ax0,
+            self.y + self.sy * ay0,
+            self.x + self.sx * ax1,
+            self.y + self.sy * ay1,
+        )
+    }
+
+    /// Evaluates Flash `this.hitTest(_root.game.player)` in GAME-local coordinates
+    /// against Batman's centered `50×75` hitbox.
+    #[inline]
+    pub fn hits_player(self, player_game_x: f32, player_game_y: f32) -> bool {
+        let (min_x, min_y, max_x, max_y) = self.game_bounds();
+        let p_min_x = player_game_x - 25.0;
+        let p_max_x = player_game_x + 25.0;
+        let p_min_y = player_game_y;
+        let p_max_y = player_game_y + 75.0;
+        p_max_x >= min_x && p_min_x <= max_x && p_max_y >= min_y && p_min_y <= max_y
+    }
+
+    /// Maps `camera_01..10` trigger zones to `_global.cameraLogic2` vs `_global.cameraLogic3`
+    /// as wired in canonical SWF frames `23` and `25`.
+    #[inline]
+    pub fn camera_mode(self) -> LabsCameraMode {
+        if self.name.ends_with("_01")
+            || self.name.ends_with("_04")
+            || self.name.ends_with("_05")
+            || self.name.ends_with("_08")
+            || self.name.ends_with("_10")
+        {
+            LabsCameraMode::CameraLogic2
+        } else {
+            LabsCameraMode::CameraLogic3
+        }
+    }
 }
 
 /// Source-separated enemy placement in GAME-local space.
