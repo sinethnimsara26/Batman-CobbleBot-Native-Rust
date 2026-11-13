@@ -95,6 +95,8 @@ pub struct CommonAssets {
     pub intro_frames: LazySpriteSet,
     /// 225 original root-frame-22 (`card:escape`, #1267) story samples, loaded lazily.
     pub escape_card_frames: LazySpriteSet,
+    /// 185 original root-frame-24 (`card:tv`, #1479) story samples, loaded lazily.
+    pub tv_card_frames: LazySpriteSet,
     /// 55 Level 1B Family A (`#880`) goon child frames, loaded lazily.
     pub goon_a_frames: LazySpriteSet,
     /// 66 Level 1B Family B (`#964`) goon child frames, loaded lazily.
@@ -148,6 +150,7 @@ impl CommonAssets {
             instructions_screen: decode_png(include_bytes!("../assets/instructions_screen.png")),
             intro_frames: decode_sprite_frames_lazy_expected(include_bytes!("../assets/intro_frames.bin"),1.0,"intro_frames"),
             escape_card_frames: decode_sprite_frames_lazy_expected(include_bytes!("../assets/escape_card_frames.bin"),1.0,"escape_card_frames"),
+            tv_card_frames: decode_sprite_frames_lazy_expected(include_bytes!("../assets/tv_card_frames.bin"),1.0,"tv_card_frames"),
             goon_a_frames: decode_sprite_frames_lazy_expected(include_bytes!("../assets/goon_a_frames.bin"),1.0,"goon_a_frames"),
             goon_b_frames: decode_sprite_frames_lazy_expected(include_bytes!("../assets/goon_b_frames.bin"),1.0,"goon_b_frames"),
             biker_frames: decode_sprite_frames_lazy_expected(include_bytes!("../assets/biker_frames.bin"),1.0,"biker_frames"),

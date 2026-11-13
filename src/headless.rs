@@ -421,6 +421,18 @@ fn write_png(path:&Path,fb:&RenderSurface){
     writer.write_image_data(&bytes).expect("PNG pixels");
 }
 
+fn measure_hq_p95_ms(base:&mut RenderSurface,hq:&mut RenderSurface,game:&Game,assets:&Assets)->f64{
+    render::render_high_quality(base,hq,game,assets);
+    let mut times=Vec::with_capacity(20);
+    for _ in 0..20 {
+        let start=Instant::now();
+        render::render_high_quality(base,hq,game,assets);
+        times.push(start.elapsed().as_secs_f64()*1000.0);
+    }
+    times.sort_by(|a,b|a.partial_cmp(b).unwrap());
+    times[((times.len()-1) as f64*0.95).round() as usize]
+}
+
 pub fn qa_bank_route(out_dir:&str){
     let out=Path::new(out_dir);
     fs::create_dir_all(out).expect("create B19 bank QA dir");
@@ -466,15 +478,7 @@ pub fn qa_bank_route(out_dir:&str){
     // Measure HQ frame time on Level 1B
     let mut base=RenderSurface::new(LOGICAL_W,LOGICAL_H);
     let mut hq=RenderSurface::new(render::HQ_W,render::HQ_H);
-    render::render_high_quality(&mut base,&mut hq,&game,&assets);
-    let mut t1b=Vec::with_capacity(20);
-    for _ in 0..20 {
-        let start=Instant::now();
-        render::render_high_quality(&mut base,&mut hq,&game,&assets);
-        t1b.push(start.elapsed().as_secs_f64()*1000.0);
-    }
-    t1b.sort_by(|a,b|a.partial_cmp(b).unwrap());
-    let p95_1b=t1b[((t1b.len()-1) as f64*0.95).round() as usize];
+    let p95_1b=measure_hq_p95_ms(&mut base,&mut hq,&game,&assets);
 
     // Clear Level 1B waves -> Level 1C
     if let Some(squad)=&mut game.bank_goons {
@@ -505,14 +509,7 @@ pub fn qa_bank_route(out_dir:&str){
     assert_ne!(fp_1c,fp_1b);
     assert!(dark_1c<0.95,"Level 1C frame unexpectedly blank");
 
-    let mut t1c=Vec::with_capacity(20);
-    for _ in 0..20 {
-        let start=Instant::now();
-        render::render_high_quality(&mut base,&mut hq,&game,&assets);
-        t1c.push(start.elapsed().as_secs_f64()*1000.0);
-    }
-    t1c.sort_by(|a,b|a.partial_cmp(b).unwrap());
-    let p95_1c=t1c[((t1c.len()-1) as f64*0.95).round() as usize];
+    let p95_1c=measure_hq_p95_ms(&mut base,&mut hq,&game,&assets);
 
     // Defeat Penguin -> EscapeCard -> Level2A pending handoff
     game.player.jumping=false;
@@ -557,4 +554,94 @@ pub fn qa_bank_route(out_dir:&str){
         pending.progress.score,pending.progress.lives,pending.progress.batarangs
     );
     fs::write(out.join("bank_route_qa_report.json"),report).expect("write B19 QA report");
+}
+
+pub fn qa_labs2a_route(out_dir:&str){
+    use crate::stage::{labs2a,StageId};
+    let out=Path::new(out_dir);
+    fs::create_dir_all(out).expect("create B26 Labs2A QA dir");
+    let mut assets=Assets::load();
+    let mut ground=CollisionMask::for_stage(StageId::Level1C);
+    let mut game=Game::new();
+    let mut input=InputState::default();
+
+    // Enter Level2A via live EscapeCard -> consume_pending_stage_entry handoff
+    game.screen=AppScreen::EscapeCard;
+    game.escape_card_tick=224;
+    game.score=650;
+    game.lives=4;
+    game.batarangs=15;
+    assert!(game.skip_escape_card());
+    for _ in 0..41 { game.tick(&mut input,&ground); }
+    let next_2a=game.consume_pending_stage_entry().expect("Level2A live handoff");
+    assert_eq!(next_2a,StageId::Level2A);
+    assert_eq!(game.active_stage(),StageId::Level2A);
+    ground=CollisionMask::for_stage(next_2a);
+    assets.load_stage(next_2a);
+
+    // 1. Level 2A spawn + LEVEL 2 banner
+    for _ in 0..25 { game.tick(&mut input,&ground); }
+    snapshot(false,out,"labs2a_spawn.png",&mut game,&assets);
+    snapshot(true,out,"labs2a_spawn_hq.png",&mut game,&assets);
+    let (dark_2a_spawn,fp_2a_spawn)=intro_frame_metrics(true,&mut game,&assets);
+    assert!(dark_2a_spawn<0.95,"Level 2A spawn frame unexpectedly blank");
+
+    // 2. Finish LEVEL 2 banner, trigger checkpoint_2a_01 (findLab) & pickups/combat
+    for _ in 0..80 { game.tick(&mut input,&ground); }
+    let d2a=StageId::Level2A.descriptor();
+    let cp01=labs2a::CHECKPOINTS[0];
+    let (cx01,cy01,_,_)=cp01.game_bounds();
+    game.player.x=(cx01+30.0)-d2a.level_origin_game_local.x;
+    game.player.y=(cy01+30.0)-d2a.level_origin_game_local.y;
+    game.tick(&mut input,&ground);
+    assert_eq!(game.overlay_frame,66);
+    snapshot(true,out,"labs2a_findlab_hq.png",&mut game,&assets);
+
+    // Move near health01 + nearby batarang/halo/goon and let eased camera settle on Batman
+    let h=labs2a::HEALTH_PICKUPS[0];
+    game.player.x=(h.x-60.0)-d2a.level_origin_game_local.x;
+    game.player.y=(h.y-20.0)-d2a.level_origin_game_local.y;
+    for _ in 0..65 { game.tick(&mut input,&ground); }
+    snapshot(false,out,"labs2a_pickups_combat.png",&mut game,&assets);
+    snapshot(true,out,"labs2a_pickups_combat_hq.png",&mut game,&assets);
+    let (dark_2a_mid,fp_2a_mid)=intro_frame_metrics(true,&mut game,&assets);
+    assert_ne!(fp_2a_mid,fp_2a_spawn,"Labs2A camera pan must change rendered pixels");
+    assert!(dark_2a_mid<0.85,"Labs2A mid-level frame too dark ({dark_2a_mid:.4})");
+
+    let mut base=RenderSurface::new(LOGICAL_W,LOGICAL_H);
+    let mut hq=RenderSurface::new(render::HQ_W,render::HQ_H);
+    let p95_2a=measure_hq_p95_ms(&mut base,&mut hq,&game,&assets);
+
+    // 3. Trigger checkpoint_2a_tv -> 41-frame fadeout -> TvCard
+    let tv_cp=labs2a::CHECKPOINTS.iter().find(|c|c.name=="checkpoint_2a_tv").expect("checkpoint_2a_tv");
+    let (tx,ty,_,_)=tv_cp.game_bounds();
+    game.player.x=(tx+20.0)-d2a.level_origin_game_local.x;
+    game.player.y=(ty+20.0)-d2a.level_origin_game_local.y;
+    for _ in 0..42 {
+        game.tick(&mut input,&ground);
+        if game.screen==AppScreen::TvCard { break; }
+    }
+    assert_eq!(game.screen,AppScreen::TvCard);
+    snapshot(false,out,"tv_card_000.png",&mut game,&assets);
+    let (_,fp_tv0)=intro_frame_metrics(false,&mut game,&assets);
+    for _ in 0..86 { game.tick(&mut input,&ground); }
+    snapshot(true,out,"tv_card_086_hq.png",&mut game,&assets);
+    for _ in 0..24 { game.tick(&mut input,&ground); }
+    snapshot(false,out,"tv_card_110.png",&mut game,&assets);
+    let (_,fp_tv110)=intro_frame_metrics(false,&mut game,&assets);
+    assert_ne!(fp_tv0,fp_tv110,"TvCard must animate");
+    assert!(game.skip_tv_card());
+    for _ in 0..41 { game.tick(&mut input,&ground); }
+    assert!(game.tv_card_complete);
+    let pending=game.pending_stage_entry().expect("Level2B handoff latched");
+    assert_eq!(pending.from,StageId::Level2A);
+    assert_eq!(pending.to,StageId::Level2B);
+    assert_eq!(pending.outgoing_root_sound_id,130);
+    assert_eq!(game.consume_pending_stage_entry(),None);
+
+    let report=format!(
+        "{{\n  \"milestone\": \"B26\",\n  \"route\": [\"EscapeCard\", \"Level2A\", \"TvCard\", \"Pending(Level2B)\"],\n  \"final_score\": {},\n  \"final_lives\": {},\n  \"final_batarangs\": {},\n  \"fingerprints\": {{\n    \"labs2a_spawn_hq\": \"0x{fp_2a_spawn:016x}\",\n    \"labs2a_mid_hq\": \"0x{fp_2a_mid:016x}\",\n    \"tv_card_000\": \"0x{fp_tv0:016x}\",\n    \"tv_card_110\": \"0x{fp_tv110:016x}\"\n  }},\n  \"dark_fraction\": {{\n    \"labs2a_spawn_hq\": {dark_2a_spawn:.4},\n    \"labs2a_mid_hq\": {dark_2a_mid:.4}\n  }},\n  \"hq_frame_p95_ms\": {{\n    \"level2a\": {p95_2a:.4}\n  }},\n  \"keyframes\": [\n    \"labs2a_spawn.png\", \"labs2a_spawn_hq.png\", \"labs2a_findlab_hq.png\",\n    \"labs2a_pickups_combat.png\", \"labs2a_pickups_combat_hq.png\",\n    \"tv_card_000.png\", \"tv_card_086_hq.png\", \"tv_card_110.png\"\n  ]\n}}\n",
+        pending.progress.score,pending.progress.lives,pending.progress.batarangs
+    );
+    fs::write(out.join("labs2a_route_qa_report.json"),report).expect("write B26 QA report");
 }

@@ -150,10 +150,12 @@ def parse_define_text(payload: bytes):
             font = struct.unpack_from("<H", payload, p)[0]; p += 2
         if has_color:
             color = tuple(payload[p:p+3]) + (255,); p += 3
+        rec_x = struct.unpack_from("<h", payload, p)[0] if has_x else None
         if has_x:
-            xoff = struct.unpack_from("<h", payload, p)[0]; p += 2
+            p += 2
+        rec_y = struct.unpack_from("<h", payload, p)[0] if has_y else None
         if has_y:
-            yoff = struct.unpack_from("<h", payload, p)[0]; p += 2
+            p += 2
         if has_font:
             height = struct.unpack_from("<H", payload, p)[0]; p += 2
         count = payload[p]; p += 1
@@ -161,7 +163,7 @@ def parse_define_text(payload: bytes):
         glyphs = [(br.u(glyph_bits), br.s(advance_bits)) for _ in range(count)]
         br.align(); p = br.pos
         records.append({
-            "font": font, "color": color, "x": xoff, "y": yoff,
+            "font": font, "color": color, "x": rec_x, "y": rec_y,
             "height": height, "glyphs": glyphs,
         })
     return character_id, bounds, matrix, records
@@ -209,11 +211,15 @@ def main():
         matrix["sx"], matrix["r1"], matrix["r0"], matrix["sy"],
         matrix["tx"], matrix["ty"],
     )
+    cursor_x = 0.0
+    baseline_y = 0.0
     for record in records:
         font = fonts[record["font"]]
         strings.append("".join(chr(font["codes"][i]) for i, _ in record["glyphs"]))
-        cursor_x = record["x"] / 20.0
-        baseline_y = record["y"] / 20.0
+        if record["x"] is not None:
+            cursor_x = record["x"] / 20.0
+        if record["y"] is not None:
+            baseline_y = record["y"] / 20.0
         glyph_scale = record["height"] / (1024.0 * 20.0)
         for glyph_index, advance in record["glyphs"]:
             contours = []

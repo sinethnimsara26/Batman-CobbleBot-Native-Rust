@@ -48,6 +48,11 @@ fn main() {
         headless::qa_bank_route(out);
         return;
     }
+    if let Some(pos) = args.iter().position(|arg| arg == "--qa-labs2a-route") {
+        let out = args.get(pos + 1).map(String::as_str).unwrap_or("labs2a-route-qa");
+        headless::qa_labs2a_route(out);
+        return;
+    }
     // Opt-in test/developer navigation, disabled for ordinary players.
     let qa_navigation = args.iter().any(|arg| arg == "--qa-navigation");
     win32::run(qa_navigation);

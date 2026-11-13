@@ -452,13 +452,17 @@ def load_text_defs(swf_path: Path):
 def render_text(character_id, transform, canvas, missing):
     item = TEXT_DEFS[character_id]
     text_transform = compose(transform, affine(item["matrix"]))
+    cursor_x = 0.0
+    baseline_y = 0.0
     for record in item["records"]:
         font = FONT_DEFS.get(record["font"])
         if font is None:
             missing.add(record["font"] or -1)
             continue
-        cursor_x = record["x"] / 20.0
-        baseline_y = record["y"] / 20.0
+        if record["x"] is not None:
+            cursor_x = record["x"] / 20.0
+        if record["y"] is not None:
+            baseline_y = record["y"] / 20.0
         glyph_scale = record["height"] / (1024.0 * 20.0)
         for glyph_index, advance in record["glyphs"]:
             contours = []
