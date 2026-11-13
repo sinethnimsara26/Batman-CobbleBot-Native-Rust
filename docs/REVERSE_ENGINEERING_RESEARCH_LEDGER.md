@@ -1499,3 +1499,11 @@ Tested original source fixed CODE SHA `26dad6e07ef3dc1ca860aa98b4a8ccfb12912f72`
   - Goons `#880` (`55` frames) and `#964` (`66` frames) at `scale 1.0`, plus Biker `#1005` (`9` frames: `drive 0..2`, `fall 2..9`) at `scale 1.1585846`, face right (`+x`) unflipped and mirror when `dir < 0`.
   - Root `#154` (`level_title`) is scoped exclusively to `StageId::Level1A`, while root backdrop `#131` + city `#148` render behind `1A`, `1B`, and `1C`.
   - Integrated Bank route verified end-to-end on Windows CI [#43402438555](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43402438555): `Level1A -> Level1B -> Level1C -> EscapeCard -> Pending(Level2A)` with distinct keyframes and `hq_frame_p95_ms` `26.5505` (`1B`) / `25.1904` (`1C`).
+
+### RE-20261113-026 — B20 `Labs 2A` (`#1317` / `#1316` / `#1402`) Scenery, Black Backdrop & Object Separation
+- **Date / Context:** 2026-11-13 (`revive/level2-b20-labs2a-scenery-mask-2026-11-13`, Draft PR #52, code SHA `3f463c4`, CI [#43407646037](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43407646037))
+- **Source Facts Verified:**
+  - Root frame `23` (`Level2A`) places `#14` opaque solid black (`(0,0,0,255)` across `600×400`) at depth `1` with NO moon `#134` and NO parallax cityscape `#148`.
+  - `#1402` (`game`) places `#1317` excl. `#1316` at `(1210.1, 238.25)` (`177` 1× tiles in `assets/level2a_tiles.bin`, `1,475,298` bytes, `sha256: 0cae1fe401e06fb2941a7d2312a6bd03cd95136473cc11e29fbad91f0facbade`) including `#1292` static text labels (`--include-source-static-text`).
+  - `#1316` collision mask rasterizes to `8781×10060` (`origin_level_px (-1542, -2307)`, `19,922,753` occupied pixels, `sha256: 32df6f3ffcf1da08af8daebe498a9d2a0868996ddb7d40ab3d0b5ac7f42e969a`), leaving Batman's spawn shaft (`gx 160..510`) open above `elevator_01_2685`.
+  - Separated dynamic child instances in `#1402`: `18` doors (`#1325`), `18` door jambs (`#1394..1396`), `3` elevators (`elevator_01_2685` `#1328`, `elevator_02_3480` `#1330`, `elevator_03_5420` `#1328`), `4` checkpoints (`checkpoint_2a_01/02/end/tv` `#153`), `10` camera triggers (`camera_01..10` `#153`), `9` goons (`#1365`), `1` eagle (`#1393`), `1` health pickup (`#1401`), and `9` batarang pickups (`#695`).

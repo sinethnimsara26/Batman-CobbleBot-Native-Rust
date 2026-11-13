@@ -1236,3 +1236,11 @@ Do not erase two historical CI failures: documentation-only #42834460076 and ini
   - Zero upfront RGBA heap growth on Level 1A (`goon_a_frames`, `goon_b_frames`, `biker_frames`, `penguin_frames` stored as `LazySpriteSet`); all `20/20` HQ and `15/15` Legacy Level 1A baseline hashes preserved unchanged.
   - Eliminated latent stage-transition freeze in `Game::start_stage()` by clearing all stage completion flags unconditionally before `match stage` so `1A -> 1B -> 1C` runs live without stale completion locks.
   - Shared `draw_enemy_sprite` / `draw_stage_enemies_scaled` helper serves both Legacy (`1x`) and HQ (`3x`) paths with zero duplicated enemy-clip lookup logic and zero per-frame allocations.
+
+### AUD-20261113-026 — B20 `Labs 2A` Scenery, Collision Mask & Object Separation Audit
+- **Batch / Branch:** `B20` on `revive/level2-b20-labs2a-scenery-mask-2026-11-13` (Draft PR #52, code SHA `3f463c4`, CI [#43407646037](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43407646037))
+- **Audit Checks (PASS):**
+  - Zero `unsafe` code added; zero new external crates; `Cargo.lock` untouched.
+  - `StageAssets::load_level2a()` and `CollisionMask::level2a()` load lazily per stage with zero impact on Level 1A startup memory, `20/20` HQ smoke hashes, or `15/15` Legacy baseline renders.
+  - Typed `LabsDoorPlacement`, `LabsElevatorPlacement`, `LabsTriggerPlacement`, `LabsEnemyPlacement`, and `LabsPickupPlacement` tables generated offline into `assets/labs2a_objects.rs` (`b20_bake_labs2a_scenery.py`) cleanly decouple dynamic actors/triggers from static `#1317` scenery with zero runtime parsing overhead.
+  - Gated `#14` opaque black backdrop (`0xff000000`) uniformly across Legacy and HQ backdrop/city helpers for `StageId::Level2A | StageId::Level2B`, and expanded CI proof + unit suite to `108 passed; 0 failed`.

@@ -1,6 +1,18 @@
 # Persistent development tasks — Batman Rust port
 
 
+## B20 — COMPLETED / `Labs 2A` (`#1317`) 1× Tile Pack, `#1316` Collision Mask & `Level2A` Object Separation (2026-11-13)
+
+**VERIFIED NATIVE WINDOWS REGRESSION.** Code SHA [`3f463c4`](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/commit/3f463c4) on Draft PR [#52](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/52) passed [CI Run #43407646037](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43407646037) (`SUCCESS` in `9m34s`):
+- `cargo test --release --locked`: `108 passed; 0 failed` in `1.22s` (CI) / `1.60s` (local).
+- Relocated installation & HQ smoke: `20/20` HQ hashes identical (`sha256: b4c69f245265bff65f4caa9eb5a5c32502d6133897418b8a5b442f8490f5e193`), `child_exit: 0`, `render_p95_ms: 13.2068`, `scenery_p95_ms: 17.6241`.
+- Labs 2A Scenery & Mask Proof (`Batman-CobbleBot-B20-Labs2A-Scenery-Proof`): `#14` backdrop (`600×400` solid opaque black `(0,0,0,255)`), `#1316` ground (`8781×10060`, origin `(-1542, -2307)`, `19,922,753` occupied pixels, `sha256: 32df6f3ffcf1da08af8daebe498a9d2a0868996ddb7d40ab3d0b5ac7f42e969a`), `assets/level2a_tiles.bin` (`177` 1× tiles, `1,475,298` bytes, `sha256: 0cae1fe401e06fb2941a7d2312a6bd03cd95136473cc11e29fbad91f0facbade`), separated `assets/labs2a_objects.rs` (`18` doors, `18` jambs, `3` elevators `2685/3480/5420`, `4` checkpoints, `10` camera triggers, `9` goons, `1` eagle, `1` health, `9` batarang pickups), and visually inspected `labs2a_multifloor_1x_vs_hq3x.png` across 4 multi-floor locations.
+- Audio note: `intro_audio_focus: BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT` (WinMM MCI 277 on hosted runner without audio hardware).
+
+### Next Authorized Batch: **B21 — `Labs 2A` Ground `#1316`, Vertical `cameraLogic2` / `cameraLogic3`, 10 Camera Triggers & Left Spawn Traversal**
+- Branch `revive/level2-b21-labs2a-camera-ground-2026-11-13` off the B20 `[skip ci]` docs closeout commit.
+- Implement `cameraLogic2` (`camHeight = 275`, `onPlatform` centering) and `cameraLogic3` (`camHeight = game._y - player._y + 500`, `!playerJumping` trigger latching on `camera_01..10`), wire `StageId::Level2A` runtime physics/ground traversal on `#1316`, add deterministic tests, and verify on Windows CI.
+
 ## B19 — COMPLETED / Integrated Bank Chapter Milestone (`1A -> 1B -> 1C -> card:escape -> Pending(Level2A)`) (2026-11-13)
 
 **VERIFIED NATIVE WINDOWS REGRESSION.** Code SHA [`5b0f42a13f34c57afd1e47977d7b0293fe9dfaa3`](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/commit/5b0f42a13f34c57afd1e47977d7b0293fe9dfaa3) on Draft PR [#51](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/51) passed [CI Run #43402438555](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43402438555) (`SUCCESS` in `10m32s`):
