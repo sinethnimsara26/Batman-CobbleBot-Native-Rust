@@ -649,6 +649,36 @@ pub struct LabsElevatorPlacement {
     pub limit_y: i32,
 }
 
+impl LabsElevatorPlacement {
+    /// Exact local bounds of hidden `#1327` `hitBox` child inside `#1328` and `#1330`.
+    const HITBOX_1328: (f32, f32, f32, f32) = (-222.198_56, -35.323_08, 224.007_74, 23.120_37);
+    const HITBOX_1330: (f32, f32, f32, f32) = (-224.477_56, -36.714_19, 226.028_36, 6.940_44);
+
+    /// Returns `(min_x, min_y, max_x, max_y)` of `this.hitBox` in GAME-local coordinates
+    /// when the elevator sits at vertical position `current_y`.
+    #[inline]
+    pub fn hitbox_bounds_at(self, current_y: f32) -> (f32, f32, f32, f32) {
+        let local = if self.symbol_id == 1330 {
+            Self::HITBOX_1330
+        } else {
+            Self::HITBOX_1328
+        };
+        scaled_game_bounds(self.x, current_y, self.sx, 1.0, local)
+    }
+
+    /// Evaluates `_global.elevatorLogic` `this.hitBox.hitTest(_root.game.player)`.
+    #[inline]
+    pub fn hits_player_at(self, current_y: f32, player_game_x: f32, player_game_y: f32) -> bool {
+        aabb_hits_player(self.hitbox_bounds_at(current_y), player_game_x, player_game_y)
+    }
+
+    /// Maps `#1328` -> `0`, `#1330` -> `1` inside `assets/elevator_frames.bin`.
+    #[inline]
+    pub const fn pack_frame(self) -> usize {
+        if self.symbol_id == 1330 { 1 } else { 0 }
+    }
+}
+
 /// Active camera controller function assigned to `_root.game.onEnterFrame`
 /// on Labs stages (`Level2A` / `Level2B`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

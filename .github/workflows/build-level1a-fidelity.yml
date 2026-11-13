@@ -2,7 +2,7 @@ name: build-level1a-fidelity
 
 on:
   push:
-    branches: [main, level1a-cxform-fidelity, hq-rendering-phase1-halftone, hq-rendering-phase2-surfaces, hq-rendering-phase3-3x-surface, hq-rendering-phase4-pack-v2, hq-rendering-phase5-batman-3x, hq-rendering-phase6-hud-3x, hq-rendering-phase7-overlays-3x, hq-rendering-phase8-world-objects-3x, hq-rendering-phase9-dpi-awareness, hq-rendering-phase10-scenery-eval, hq-rendering-phase11-backdrop-3x, revive/round11-ci-baseline-2026-11-09, revive/level1a-intro-hud-fidelity-2026-11-09, revive/level2-b02-stage-descriptors-2026-11-11, revive/level2-b03-source-asset-proofs-2026-11-11, revive/level2-b04-pending-transition-2026-11-11, revive/level2-b05-bank-street-source-1x-2026-11-11, revive/level2-b06-bank-street-hq3x-2026-11-11, revive/level2-b07-bank-ground-probes-2026-11-11, revive/level2-b08-bank-props-source-2026-11-12, revive/level2-b09-bank-goon-sprites-2026-11-12, revive/level2-audit-fix-goon-true-clips-2026-11-12, revive/level2-audit-fix-win32-reentry-2026-11-12, revive/level2-audit-fix-music-focus-2026-11-12, revive/level2-audit-fix-stroke-alpha-2026-11-12, revive/level2-audit-fix-bank-full-1x-2026-11-12, revive/level2-audit-fix-bank-full-hq3x-2026-11-12, revive/level2-audit-fix-camera-source-2026-11-12, revive/level2-audit-fix-bank-prop-logic-2026-11-12, revive/level2-audit-fix-collision-bitpack-2026-11-12, revive/level2-audit-fix-coordinate-types-2026-11-12, revive/level2-audit-fix-render-zero-alloc-2026-11-12, revive/level2-audit-fix-split-assets-2026-11-12, revive/level2-b10-goon-ai-2026-11-12, revive/level2-b11-goon-combat-2026-11-12, revive/level2-b12-biker-ai-2026-11-12, revive/level2-b13-stage-activation-2026-11-12, revive/level2-b14-penguin-arena-2026-11-12, revive/level2-b15-penguin-sprites-2026-11-12, revive/level2-b16-penguin-ai-2026-11-12, revive/level2-b17-penguin-combat-2026-11-13, revive/level2-b18-penguin-escape-card-2026-11-13, revive/level2-b19-bank-milestone-qa-2026-11-13, revive/level2-b20-labs2a-scenery-mask-2026-11-13, revive/level2-b21-labs2a-camera-ground-2026-11-13, revive/level2-b22-labs2a-doors-2026-11-13]
+    branches: [main, level1a-cxform-fidelity, hq-rendering-phase1-halftone, hq-rendering-phase2-surfaces, hq-rendering-phase3-3x-surface, hq-rendering-phase4-pack-v2, hq-rendering-phase5-batman-3x, hq-rendering-phase6-hud-3x, hq-rendering-phase7-overlays-3x, hq-rendering-phase8-world-objects-3x, hq-rendering-phase9-dpi-awareness, hq-rendering-phase10-scenery-eval, hq-rendering-phase11-backdrop-3x, revive/round11-ci-baseline-2026-11-09, revive/level1a-intro-hud-fidelity-2026-11-09, revive/level2-b02-stage-descriptors-2026-11-11, revive/level2-b03-source-asset-proofs-2026-11-11, revive/level2-b04-pending-transition-2026-11-11, revive/level2-b05-bank-street-source-1x-2026-11-11, revive/level2-b06-bank-street-hq3x-2026-11-11, revive/level2-b07-bank-ground-probes-2026-11-11, revive/level2-b08-bank-props-source-2026-11-12, revive/level2-b09-bank-goon-sprites-2026-11-12, revive/level2-audit-fix-goon-true-clips-2026-11-12, revive/level2-audit-fix-win32-reentry-2026-11-12, revive/level2-audit-fix-music-focus-2026-11-12, revive/level2-audit-fix-stroke-alpha-2026-11-12, revive/level2-audit-fix-bank-full-1x-2026-11-12, revive/level2-audit-fix-bank-full-hq3x-2026-11-12, revive/level2-audit-fix-camera-source-2026-11-12, revive/level2-audit-fix-bank-prop-logic-2026-11-12, revive/level2-audit-fix-collision-bitpack-2026-11-12, revive/level2-audit-fix-coordinate-types-2026-11-12, revive/level2-audit-fix-render-zero-alloc-2026-11-12, revive/level2-audit-fix-split-assets-2026-11-12, revive/level2-b10-goon-ai-2026-11-12, revive/level2-b11-goon-combat-2026-11-12, revive/level2-b12-biker-ai-2026-11-12, revive/level2-b13-stage-activation-2026-11-12, revive/level2-b14-penguin-arena-2026-11-12, revive/level2-b15-penguin-sprites-2026-11-12, revive/level2-b16-penguin-ai-2026-11-12, revive/level2-b17-penguin-combat-2026-11-13, revive/level2-b18-penguin-escape-card-2026-11-13, revive/level2-b19-bank-milestone-qa-2026-11-13, revive/level2-b20-labs2a-scenery-mask-2026-11-13, revive/level2-b21-labs2a-camera-ground-2026-11-13, revive/level2-b22-labs2a-doors-2026-11-13, revive/level2-b23-labs2a-elevators-2026-11-13]
   workflow_dispatch:
 
 concurrency:
@@ -286,6 +286,10 @@ jobs:
           # Level 2A/2B animated doors (#1325/#1324, 20 frames) and front jambs (#1394..1396, 3 frames) (B22).
           python "$tools/b22_bake_labs_doors.py" "$swf" "$work/reports/symbols.json" "$work/bitmaps" "$work/door-frames" ".generated/b22-labs2a-proof"
           python "$tools/pack_sprite_frames.py" "$work/door-frames" "assets/door_frames.bin" --format-version 2 --logical-pixel-scale 1.0
+
+          # Level 2A/2B elevator platforms (#1328 & #1330, 2 frames) (B23).
+          python "$tools/b23_bake_labs_elevators.py" "$swf" "$work/reports/symbols.json" "$work/bitmaps" "$work/elevator-frames" ".generated/b23-labs2a-proof"
+          python "$tools/pack_sprite_frames.py" "$work/elevator-frames" "assets/elevator_frames.bin" --format-version 2 --logical-pixel-scale 1.0
 
           # Round 10 selective scenery split.
           #
@@ -2420,6 +2424,13 @@ jobs:
         with:
           name: Batman-CobbleBot-B22-Labs2A-Doors-Proof
           path: .generated/b22-labs2a-proof/
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Batman-CobbleBot-B23-Labs2A-Elevators-Proof
+          path: .generated/b23-labs2a-proof/
           if-no-files-found: error
 
       - uses: actions/upload-artifact@v4

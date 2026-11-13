@@ -394,6 +394,7 @@ fn draw_city_background_alpha(fb:&mut RenderSurface,game:&Game,assets:&Assets){
 
 fn draw_world_objects_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     draw_labs_doors_scaled(fb,game,assets,1);
+    draw_labs_elevators_scaled(fb,game,assets,1);
     let pickup_coords: &[(f32,f32)] = match game.active_stage() {
         crate::stage::StageId::Level1A => &crate::game::PICKUPS,
         crate::stage::StageId::Level1B => &crate::game::LEVEL1B_PICKUPS,
@@ -422,6 +423,7 @@ fn draw_world_objects_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
 
 fn draw_world_objects_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     draw_labs_doors_scaled(fb,game,assets,HQ_SCALE as i32);
+    draw_labs_elevators_scaled(fb,game,assets,HQ_SCALE as i32);
     let scale=HQ_SCALE as f32;
     debug_assert!((assets.pickup_frames_hq.logical_pixel_scale-scale).abs()<0.001);
     debug_assert!((assets.batarang_frames_hq.logical_pixel_scale-scale).abs()<0.001);
@@ -521,6 +523,20 @@ fn draw_labs_doors_scaled(fb:&mut RenderSurface,game:&Game,assets:&Assets,pixel_
         draw_lazy_world_sprite(
             fb,&assets.door_frames.frame(frame_idx),
             door.x,door.y,game.camera_x,game.camera_y,door.sx<0.0,pixel_scale,
+        );
+    }
+}
+
+fn draw_labs_elevators_scaled(fb:&mut RenderSurface,game:&Game,assets:&Assets,pixel_scale:i32){
+    if game.active_stage()!=crate::stage::StageId::Level2A || assets.elevator_frames.len()<2 {
+        return;
+    }
+    let placements=&crate::stage::labs2a::ELEVATORS;
+    for (i,&elev) in placements.iter().enumerate(){
+        let y=game.labs_elevators.get(i).map_or(elev.y,|s|s.y);
+        draw_lazy_world_sprite(
+            fb,&assets.elevator_frames.frame(elev.pack_frame()),
+            elev.x,y,game.camera_x,game.camera_y,elev.sx<0.0,pixel_scale,
         );
     }
 }
@@ -1326,5 +1342,36 @@ mod tests{
         draw_batman_legacy(&mut with_jamb, &game, &assets);
         draw_world_foreground_legacy(&mut with_jamb, &game, &assets);
         assert!(without_jamb.pixels != with_jamb.pixels, "front door jamb must overdraw Batman in foreground pass");
+    }
+
+    #[test]
+    fn b23_labs2a_elevators_render_and_move_in_1x_and_hq3x() {
+        use super::{render, render_high_quality, HQ_H, LOGICAL_H};
+        use crate::assets::Assets;
+        use crate::game::{AppScreen, Game};
+
+        let mut assets = Assets::load();
+        assets.load_stage(crate::stage::StageId::Level2A);
+        let mut game = Game::new();
+        game.start_stage(crate::stage::StageId::Level2A);
+        game.screen = AppScreen::Playing;
+        game.ticks = 45;
+        // Frame entry elevator_01_2685 (x=308.95, y=429.9) in viewport.
+        game.camera_x = 0.0;
+        game.camera_y = -200.0;
+
+        let mut at_top = RenderSurface::new(LOGICAL_W, LOGICAL_H);
+        let mut moved = RenderSurface::new(LOGICAL_W, LOGICAL_H);
+        let mut hq_out = RenderSurface::new(HQ_W, HQ_H);
+        let mut hq_scratch = RenderSurface::new(LOGICAL_W, LOGICAL_H);
+
+        render(&mut at_top, &game, &assets);
+        render_high_quality(&mut hq_scratch, &mut hq_out, &game, &assets);
+        game.labs_elevators[0].y = 510.0;
+        render(&mut moved, &game, &assets);
+
+        assert!(at_top.pixels != moved.pixels, "moving elevator state.y must shift rendered platform in viewport");
+        let hq_non_black = hq_out.pixels.iter().filter(|&&p| (p & 0x00ff_ffff) != 0).count();
+        assert!(hq_non_black > 30_000, "HQ Labs 2A elevator view must render cleanly");
     }
 }
