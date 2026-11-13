@@ -144,9 +144,9 @@ pub fn render_with_config(
                 base.fill(0x00000000);
                 if assets.stage.stage_id == crate::stage::StageId::Level1A {
                     draw_city_background_alpha(base,game,assets);
-                    draw_tiles_alpha(base,game,&assets.stage.tiles_hq_base);
+                    draw_tiles_alpha(base,game,&assets.level1a_tiles_hq_base);
                     upscale_alpha_layer(base,target);
-                    draw_tiles_hq(target,game,&assets.stage.detail_tiles_hq);
+                    draw_tiles_hq(target,game,&assets.level1a_detail_tiles_hq);
                 } else {
                     draw_tiles_alpha(base,game,&assets.stage.tiles);
                     upscale_alpha_layer(base,target);
