@@ -1194,7 +1194,7 @@ mod tests {
         let mut rng = GoonRng::new(600);
         let mut goon = BankGoon::from_spawn(BANK_GOON_SPAWNS[0]);
         goon.state = GoonState::Attack;
-        goon.frame = 3; // next tick will be frame 4 (strike frame!)
+        goon.frame = 4; // strike frame!
         let mut events = Vec::new();
 
         let player = PlayerCombatContext {
@@ -1207,7 +1207,7 @@ mod tests {
         };
 
         goon.tick_combat(&player, &ground, &mut rng, &mut events);
-        assert_eq!(goon.frame, 4);
+        assert_eq!(goon.frame, 5);
         assert_eq!(
             events,
             vec![
