@@ -1,6 +1,26 @@
 # Persistent development tasks — Batman Rust port
 
 
+## B15 — COMPLETED / Level 1C Penguin #1250 99-Frame Outer Timeline, 162 True Child Frames & Attack FX (2026-11-13)
+
+**VERIFIED NATIVE WINDOWS REGRESSION & LEVEL 1C PENGUIN SPRITE PROOF.** [Draft, OPEN, UNMERGED PR #47](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/47) on `revive/level2-b15-penguin-sprites-2026-11-12`, based on B14 docs commit `c50de8c`. **Exact Windows-tested code SHA `0f12090`**. Final documentation SHA is the separate later `[skip ci]` commit; this file cannot prestate its own commit ID. Full native Windows [#43370831028](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43370831028) **SUCCESS** and original source proof [#43370830995](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43370830995) **SUCCESS** on exact code SHA.
+
+**ENGINEERING & ARCHITECTURE FACTS:**
+1. **`src/penguin.rs` (Dormant `#1250` Child Timelines, AVM1 Actions & FX Geometry):**
+   - Added common 1×/HQ3× canvas & registration origin constants (`PENGUIN_SPRITE_CANVAS_1X = (938, 410)`, `PENGUIN_ANCHOR_IN_BITMAP_1X = (535.05466, 168.02714)`, `PENGUIN_SPRITE_CANVAS_HQ3X = (2814, 1230)`, `PENGUIN_ANCHOR_IN_BITMAP_HQ3X = (1605.164, 504.08142)`).
+   - Added `PenguinChildAction` encoding exact child-clip terminal scripts (`Loop` for `stand`/`walk`, `Stop` for `jump`/`dodge`/`die`, `SetParentStand` for `block`/`attack2`, `TransitionToDodge { dy: -18.0 }` for `attack`, `RandomStandOrAttack { rand_modulus: 10, stand_if_greater_than: 3 }` for `hurt`, `RecoverToDodge { dy: -20.0 }` for `fall`) and extended `PenguinLabelSpan` with `baked_start_frame..baked_end_frame` (`0..162`) and exact depth-1 `child_sx/sy/tx/ty` matrices.
+   - Added `PENGUIN_LASER_ELECTRO_HOLD_LOCAL_FRAME = 10` (`attack2` `"laser"` `#1205`), `PenguinLaserHitBoxSpec` / `PENGUIN_LASER_HITBOX` (`#1192` alpha-0 `cxform`, depth `10`, active local frames `9..=10` -> baked `81..=82`, `#1205`-local and `#1250`-local AABBs), and `PENGUIN_NESTED_FX_PLACEMENTS` (`14` verified grandchild FX placements across `#1156`, `#1205`, `#1224`, `#1249`).
+   - Added 3 unit tests (`penguin_child_terminal_actions_and_transforms_match_swf`, `penguin_laser_hitbox_bounds_and_active_window_match_source`, `penguin_nested_fx_inventory_matches_swf_placements`), increasing total Rust tests from 85 to 88.
+2. **Offline Source Proof & CI Integration (`reverse-engineering/tools/b15_bake_penguin_sprites.py`, `.github/workflows/b15-original-penguin-sprites-source.yml`, `.github/workflows/build-level1a-fidelity.yml`):**
+   - Verified canonical SWF (`3d9e1992...`) `#1250` (`DefineSprite` tag 39, `action_blocks == 0`, driven externally via `penguinAI`), 10 exact child clip `DoAction` frame signatures, `99/99` 1× outer frames (`[659, 303]`), `10/10` true 6×->HQ3× label-start views (`[1977, 909]`), and `162` true nested child frames (`160/162` non-empty; final 2 `die` frames fade to alpha 0) via `bake_player_states.py` (`manifest_sha256: 1f67e475...`), zero missing/unsupported fills, contact sheet (`1bce0b9a...`), and JSON audit report (`8db8aa30...`).
+
+**NATIVE VERIFIED on exact CODE SHA:** `cargo test --release --locked` **88/88 passed in 1.00s**, locked build PASS, relocated standalone EXE **20/20 exact HQ hashes**, child exit 0 and no SWF staged. Render p95 **19.0911ms**, scenery scroll p95 **24.1687ms**, both well below unchanged **40ms** gate. Source proof artifact [#14012027592](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43370830995/artifacts/14012027592) (`2020659` bytes). Hosted WinMM audio device 0 / MCI error 277 remains **BLOCKED** (`BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT`).
+
+**RUST PURITY/AUDIT:** Zero unsafe code, zero new external crates, runtime remains 100% native Rust with documented Win32/GDI/WinMM FFI. [Research RE-20261113-021](REVERSE_ENGINEERING_RESEARCH_LEDGER.md) and [independent AUD-20261113-021](RUST_PURITY_AND_ENGINEERING_AUDIT.md) finalized. Reviewed `AGENTS.md` and both mandatory protocols unchanged. Main and accepted Level1A release preserved.
+
+**STOP. ONE NEXT SEPARATELY AUTHORIZED TASK: B16 `penguinAI` movement, facing, dodge, block, jump & approach state machine (`src/penguin.rs`)**, preserving existing baseline.
+
+
 ## B14 — COMPLETED / Level 1C Penguin Arena #1095, Ground #1094 Mask, root21 HUD Scale & #1250 Metadata (2026-11-13)
 
 **VERIFIED NATIVE WINDOWS REGRESSION & LEVEL 1C SOURCE PROOF.** [Draft, OPEN, UNMERGED PR #46](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/46) on `revive/level2-b14-penguin-arena-2026-11-12`, based on B13 docs commit `09c8f51`. **Exact Windows-tested code SHA `94c4035`**. Final documentation SHA is the separate later `[skip ci]` commit; this file cannot prestate its own commit ID. Full native Windows [#43366474557](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43366474557) **SUCCESS** and original source proof [#43366474784](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43366474784) **SUCCESS** on exact code SHA.
