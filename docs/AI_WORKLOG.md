@@ -897,4 +897,19 @@ Do not erase two historical CI failures: documentation-only #42834460076 and ini
 - **Records & Governance:** RE-20261113-022 and AUD-20261113-022 appended. All six records synchronized. No unsafe code, no external dependencies. PR #48 remains DRAFT/OPEN. STOP.
 
 
+## 2026-11-13 — B17 Penguin Combat, Laser Hitbox #1192, Batman Electro & Scoring (VERIFIED)
+
+- **Scope & Context:** B17 dormant `penguinAI` combat branches (`attack`, `attack2` `#1192` laser hitbox, `checkPlayer`, batarang `-5` HP vs block, Batman `electro`/`hurt` response, and `+500`/`+100` scoring branches); branch `revive/level2-b17-penguin-combat-2026-11-13`, draft PR #49 based on B16 docs commit `5ac786d`.
+- **Implementation:**
+  1. `src/penguin.rs`: Disassembled `checkPlayer(character, dir, offset)`, `#691` Batman `"electro"` clip (`#669`, 20 frames), and `penguinAI` lines `495..1076`. Refactored shared `step_motion_and_range`, `maybe_enter_walk`, and `evaluate_batarang_indexed`, and added `PenguinSound`, `PenguinPlayerHurtKind`, `PenguinPlayerContext`, `PenguinCombatEvent`, `laser_game_aabb`, `laser_hits_player`, `check_player_point`, and `tick_combat` + 5 behavioral unit tests (93→98).
+  2. `.github/workflows/build-level1a-fidelity.yml`: Added branch `revive/level2-b17-penguin-combat-2026-11-13` to push triggers.
+- **Native Windows CI Execution:**
+  - Full native Windows run [#43389653417](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43389653417) (`build-level1a-fidelity`) completed **SUCCESS** on exact code SHA `2204d88`.
+  - Cargo test: **98/98 passed in 0.71s** (`20/20` relocated standalone EXE HQ3× screenshot hashes identical, `child_exit: 0`).
+  - Performance: Render p95 **17.9633ms**, scenery scroll p95 **22.2513ms** (well below 40.0ms gate).
+  - Hosted audio: `BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT`.
+- **Records & Governance:** RE-20261113-023 and AUD-20261113-023 appended. All six records synchronized. No unsafe code, no external dependencies. PR #49 remains DRAFT/OPEN. STOP.
+
+
+
 
