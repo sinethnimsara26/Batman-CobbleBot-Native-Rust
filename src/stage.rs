@@ -256,6 +256,17 @@ pub struct SourceCamera {
     pub max_x: f32,
 }
 
+/// Root-timeline display-list transform for HUD symbol `#716`.
+/// Root frames 19–20 (Level 1A/1B) place the HUD at ~1.0x scale, while root
+/// frames 21+ (Level 1C Penguin onward) place the HUD at ~0.8637x scale.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct RootHudTransform {
+    pub sx: f32,
+    pub sy: f32,
+    pub tx: f32,
+    pub ty: f32,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct StageDescriptor {
     pub id: StageId,
@@ -467,6 +478,30 @@ impl StageId {
 
     pub const fn descriptor(self) -> &'static StageDescriptor {
         &STAGES[self as usize]
+    }
+
+    /// Exact SWF root placement transform for HUD `#716` in this stage's root frame.
+    pub const fn root_hud_transform(self) -> RootHudTransform {
+        match self {
+            Self::Level1A => RootHudTransform {
+                sx: 0.99981689453125,
+                sy: 1.001190185546875,
+                tx: 159.0,
+                ty: -11.0,
+            },
+            Self::Level1B => RootHudTransform {
+                sx: 0.99981689453125,
+                sy: 1.0,
+                tx: 159.0,
+                ty: -11.0,
+            },
+            Self::Level1C | Self::Level2A | Self::Level2B => RootHudTransform {
+                sx: 0.8636322021484375,
+                sy: 0.863800048828125,
+                tx: 159.0,
+                ty: -11.0,
+            },
+        }
     }
 
     /// Declarative ORIGINAL Flash progression, deliberately never invoked
@@ -716,5 +751,30 @@ mod tests {
         let l_ground = LevelDepth(1);
         assert_eq!(l_ground, 1u16);
         assert_eq!(u16::from(l_ground), 1);
+    }
+
+    #[test]
+    fn level1c_penguin_arena_hud_transform_and_camera_invariants() {
+        let hud_1a = StageId::Level1A.root_hud_transform();
+        let hud_1b = StageId::Level1B.root_hud_transform();
+        let hud_1c = StageId::Level1C.root_hud_transform();
+        assert!((hud_1a.sx - 1.0).abs() < 0.001);
+        assert!((hud_1b.sx - 1.0).abs() < 0.001);
+        assert!((hud_1c.sx - 0.8636322).abs() < 1e-6);
+        assert!((hud_1c.sy - 0.8638000).abs() < 1e-6);
+        assert_eq!((hud_1c.tx, hud_1c.ty), (159.0, -11.0));
+
+        let d = StageId::Level1C.descriptor();
+        assert_eq!(d.root_frame_zero_based, 21);
+        assert_eq!((d.game_symbol, d.level_symbol, d.ground_symbol), (1251, 1095, 1094));
+        assert_eq!(d.source_player_direction, 1);
+        assert_eq!(d.camera.height, 270.0);
+        assert_eq!(d.camera.jump, 4.0);
+        assert_eq!((d.camera.min_x, d.camera.max_x), (250.0, 2150.0));
+
+        // Player spawn (122.05, 281.25) is below camera.min_x (250.0), so camera_x holds steady
+        assert_eq!(d.camera.horizontal_step(d.player_spawn_game_local.x, 0.0, 1), 0.0);
+        // Inside arena (e.g. x=600.0, right-facing target=125): delta = 475 -> camera shifts left
+        assert_eq!(d.camera.horizontal_step(600.0, 0.0, 1), -47.0);
     }
 }
