@@ -757,6 +757,18 @@ pub struct LabsPickupPlacement {
     pub sx: f32,
 }
 
+/// Source-separated `lava1` (`#1486`) hazard placement in `#1496` GAME-local space.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct LabsLavaPlacement {
+    pub name: &'static str,
+    pub symbol_id: u16,
+    pub depth: u16,
+    pub x: f32,
+    pub y: f32,
+    pub sx: f32,
+    pub sy: f32,
+}
+
 /// B20: Level 2A (`#1402`) separated dynamic & foreground objects generated from canonical SWF.
 pub mod labs2a {
     use super::{
@@ -764,6 +776,15 @@ pub mod labs2a {
         LabsPickupPlacement, LabsTriggerPlacement,
     };
     include!("../assets/labs2a_objects.rs");
+}
+
+/// B27: Level 2B (`#1496`) separated dynamic & foreground objects generated from canonical SWF.
+pub mod labs2b {
+    use super::{
+        LabsDoorPlacement, LabsElevatorPlacement, LabsEnemyPlacement,
+        LabsLavaPlacement, LabsPickupPlacement, LabsTriggerPlacement,
+    };
+    include!("../assets/labs2b_objects.rs");
 }
 
 #[cfg(test)]
@@ -1015,5 +1036,29 @@ mod tests {
         assert_eq!(labs2a::HEALTH_PICKUPS[0].symbol_id, 1401);
         assert!(labs2a::DOORS.iter().all(|d| d.symbol_id == 1325));
         assert!(labs2a::DOOR_JAMBS.iter().all(|j| j.depth > 374));
+    }
+
+    #[test]
+    fn labs2b_object_separation_matches_source_counts_and_elevator_limits() {
+        use super::labs2b;
+        assert_eq!(labs2b::DOORS.len(), 16);
+        assert_eq!(labs2b::DOOR_JAMBS.len(), 16);
+        assert_eq!(labs2b::ELEVATORS.len(), 3);
+        assert_eq!(labs2b::CHECKPOINTS.len(), 4);
+        assert_eq!(labs2b::CAMERAS.len(), 10);
+        assert_eq!(labs2b::GOONS.len(), 0);
+        assert_eq!(labs2b::EAGLES.len(), 0);
+        assert_eq!(labs2b::HEALTH_PICKUPS.len(), 0);
+        assert_eq!(labs2b::BATARANG_PICKUPS.len(), 10);
+        assert_eq!(labs2b::LAVAS.len(), 1);
+
+        assert_eq!(labs2b::ELEVATORS[0].name, "elevator_01_0000");
+        assert_eq!(labs2b::ELEVATORS[0].limit_y, 0);
+        assert_eq!(labs2b::ELEVATORS[1].limit_y, 2675);
+        assert_eq!(labs2b::ELEVATORS[2].limit_y, 3115);
+        assert_eq!(labs2b::LAVAS[0].name, "lava1");
+        assert_eq!(labs2b::LAVAS[0].symbol_id, 1486);
+        assert!(labs2b::DOORS.iter().all(|d| d.symbol_id == 1325));
+        assert!(labs2b::DOOR_JAMBS.iter().all(|j| j.depth > 278));
     }
 }
