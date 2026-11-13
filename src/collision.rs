@@ -30,6 +30,17 @@ impl CollisionMask {
         )
     }
 
+    /// B14: original root21/level #1095 named ground #1094 (Penguin arena),
+    /// in LEVEL-local pixels. The baked mask comes from the SHA-locked FWS at build time.
+    #[allow(dead_code)]
+    pub fn level1c() -> Self {
+        decode_mask(
+            include_bytes!("../reverse-engineering/generated/collision_masks/level1c_penguin_ground.png"),
+            -1731,
+            -549,
+        )
+    }
+
     #[inline]
     pub fn solid(&self, x: f32, y: f32) -> bool {
         let px = x.floor() as i32 - self.origin_x;
@@ -293,5 +304,50 @@ mod bank_street_source_probes {
         assert!(!ground.check_ceiling(-11197.0, &mut y, 0.0, &mut dy, 0));
         assert_eq!(y, 0.0);
         assert_eq!(dy, 5.0);
+    }
+}
+
+#[cfg(test)]
+mod penguin_arena_source_probes {
+    use super::CollisionMask;
+    use crate::stage::StageId;
+
+    #[test]
+    fn penguin_ground_dimensions_and_spawn_space_match_source() {
+        let ground = CollisionMask::level1c();
+        assert_eq!((ground.origin_x, ground.origin_y), (-1731, -549));
+        assert_eq!((ground.w, ground.h), (2813, 926));
+        let stage = StageId::Level1C.descriptor();
+        let spawn = stage.player_spawn_level_pos();
+        assert!((spawn.x - (-1363.6)).abs() < 0.05 && (spawn.y - 42.0).abs() < 0.05);
+        assert!(
+            !ground.solid_level_pos(spawn),
+            "level1c spawn origin should be air above arena floor"
+        );
+        // Floor is at level_y = 124 (game_y = 363.25), player height = 75 -> resting origin y ~ 49.
+        assert!(
+            ground.solid(spawn.x, 124.0),
+            "level1c ground floor must be solid directly under player spawn"
+        );
+        assert!(
+            !ground.solid(spawn.x, 123.0),
+            "level1c arena air immediately above floor at level_y = 123"
+        );
+    }
+
+    #[test]
+    fn penguin_arena_floor_and_boundary_walls_match_source_bounds() {
+        let ground = CollisionMask::level1c();
+        // Arena floor at level_y = 124 spans open air between left and right walls (~gx 0..2300).
+        for gx in [122.0_f32, 500.0, 1035.65, 1500.0, 2000.0] {
+            let lx = gx - 1485.65;
+            assert!(!ground.solid(lx, 0.0), "arena interior air at gx={gx}");
+            assert!(ground.solid(lx, 124.0), "arena floor solid at gx={gx}");
+        }
+        // Enclosed arena walls at gx < 0 and gx > 2300 (chest level_y = 0)
+        assert!(ground.solid(-1500.0, 0.0), "left arena wall at lx=-1500");
+        assert!(ground.solid(850.0, 0.0), "right arena wall at lx=850");
+        // Bit-packed memory savings check (~325 KB)
+        assert!(ground.memory_usage_bytes() <= (ground.w * ground.h) / 7);
     }
 }

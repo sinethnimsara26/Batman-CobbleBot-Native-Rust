@@ -1130,3 +1130,22 @@ Do not erase two historical CI failures: documentation-only #42834460076 and ini
   - **ENGINEERING QUALITY:** PASS (exact AVM1 coordinates, stage camera parameters, checkpoints, ammo pickups, pit physics, and stage transitions).
   - **ORIGINAL-GAME FIDELITY:** VERIFIED FOR TESTED SCOPE (Level 1A gameplay and visual regression completely preserved; Level 1B stage activation, checkpoints, pickups, combat step, and transitions accurately mirror Flash AVM1 bytecode).
   - **HARDWARE SPEAKER AUDIO:** BLOCKED (hosted runner limitation, unchanged).
+
+
+## AUD-20261113-020 — Independent post-code Rust purity/engineering audit of Batch B14 (Level 1C Penguin Arena & Ground Foundations)
+
+- **Audit Date:** 2026-11-13
+- **Scope:** `src/collision.rs`, `src/stage.rs`, `src/penguin.rs`, `src/main.rs`, `reverse-engineering/tools/b14_bake_penguin_arena.py`, `.github/workflows/b14-original-penguin-arena-source.yml`, `.github/workflows/build-level1a-fidelity.yml`.
+- **Code SHA:** `94c4035` on branch `revive/level2-b14-penguin-arena-2026-11-12` (PR #46).
+- **Actual Changed Code and Engineering Review:**
+  1. Pure-Rust dormant Level 1C foundation modules:
+     - `src/collision.rs`: Adds bit-packed `CollisionMask::level1c()` for `#1094` (`2813x926`, origin `(-1731,-549)`) using existing `Box<[u64]>` bit-packing (`~325 KB`) + 2 source-grounded tests. Zero runtime changes to Level 1A/1B.
+     - `src/stage.rs`: Adds `RootHudTransform` (`Copy`, const) and `StageId::root_hud_transform(self)` cleanly separating root21's `~0.8637×` scaled HUD placement from identity `1.0×` on 1A/1B, + 1 unit test.
+     - `src/penguin.rs` & `src/main.rs`: Adds typed dormant metadata (`PENGUIN_SYMBOL_ID=1250`, `PENGUIN_CHILD_CLIPS` for 10 direct-child clips / 162 child frames, root21 stats, `LEVEL1C_PICKUPS` using `GamePos`) + 3 unit tests. Total Rust tests increased from 79 to 85.
+     - Offline tooling `reverse-engineering/tools/b14_bake_penguin_arena.py` & `.github/workflows/b14-original-penguin-arena-source.yml` execute exclusively in development/CI, verifying canonical SWF root21, `#1094` mask, 60 1× `#1095` tiles, and 4 HQ3× viewports with zero Flash/Python shipped in runtime binary.
+  2. CI execution confirmed on GitHub Actions runs [#43366474784](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43366474784) (source proof SUCCESS, artifact `#14011060531`) and [#43366474557](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43366474557) (`build-level1a-fidelity` SUCCESS): `85/85` tests passed, render p95 `23.017ms`, scenery scroll p95 `22.1898ms` (< 40ms gate), 15/15 1× hashes identical, 20/20 relocated standalone EXE HQ hashes identical, child exit 0.
+- **Verdicts:**
+  - **PURE-RUST RUNTIME COMPLIANCE:** PASS (with existing direct Win32/GDI/WinMM OS FFI qualifications). Zero new crates, zero unsafe blocks, zero runtime allocations added.
+  - **ENGINEERING QUALITY:** PASS (strongly typed `GamePos`/`LevelPos`, bit-packed `#1094` mask, verified direct-child timeline table without parent-wrap confusion).
+  - **ORIGINAL-GAME FIDELITY:** VERIFIED FOR TESTED SCOPE (Level 1A/1B regressions completely preserved; Level 1C root21 display list, `#1094` collision mask, and `#1095` arena tiles match canonical `cobblebot.swf` verbatim).
+  - **HARDWARE SPEAKER AUDIO:** BLOCKED (`BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT`, unchanged).

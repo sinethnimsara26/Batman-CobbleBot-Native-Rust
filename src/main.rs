@@ -15,6 +15,8 @@ mod bank_props;
 mod bank_goons;
 // B12: original Bank Street biker enemy metadata and AI.
 mod bank_biker;
+// B14: original Level 1C Penguin (`#1250`) dormant metadata and pickup layout.
+mod penguin;
 mod win32;
 
 fn main() {
