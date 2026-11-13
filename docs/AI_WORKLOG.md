@@ -848,3 +848,21 @@ Do not erase two historical CI failures: documentation-only #42834460076 and ini
   - Fidelity: 15/15 historical 1× screenshots identical, 20/20 relocated standalone EXE HQ3× screenshot hashes identical, child exit 0.
   - Hosted audio: BLOCKED (no hosted audio endpoint, WinMM MCI error 277).
 - **Records & Governance:** RE-20261113-019 and AUD-20261113-019 appended. All six records synchronized. No unsafe code, no external dependencies. PR #45 remains DRAFT/OPEN. STOP.
+
+
+## 2026-11-13 — B14 Level 1C Penguin Arena #1095, Ground #1094 Mask, root21 HUD Scale & #1250 Metadata (VERIFIED)
+
+- **Scope & Context:** B14 Level 1C (Penguin Boss Arena) ground `#1094` collision mask, root21 smaller `#716` HUD transform, dormant `#1250` Penguin metadata & pickups, and offline `#1095` 1× + HQ3× source proof; branch `revive/level2-b14-penguin-arena-2026-11-12`, draft PR #46 based on B13 docs commit `09c8f51`.
+- **Implementation:**
+  1. `src/collision.rs`: Added `CollisionMask::level1c()` (`level1c_penguin_ground.png`, `2813x926`, origin `(-1731,-549)`) and 2 tests in `penguin_arena_source_probes` verifying dimensions, spawn clearance, flat floor at `level_y=124` (`game_y=363.25`), and left/right boundary walls.
+  2. `src/stage.rs`: Added `RootHudTransform` and `StageId::root_hud_transform(self)` encoding root21's `#716` HUD scale (`0.8636322021484375`, `0.863800048828125`) and placement `(159.0, -11.0)`, plus test `level1c_penguin_arena_hud_transform_and_camera_invariants`.
+  3. `src/penguin.rs` & `src/main.rs`: Created dormant B14 module (`PENGUIN_SYMBOL_ID=1250`, 99 parent frames, 10 state labels & 162 child clip frames `#1103..#1249`, `PENGUIN_HEALTH=200`, `PENGUIN_SPEED=6.0`, `PENGUIN_STRENGTH=5`, `PENGUIN_KILL_SCORE=500`, `LEVEL1C_PICKUPS` `item_br01..04`) and 3 tests, bringing total Rust tests from 79 to 85.
+  4. `reverse-engineering/tools/b14_bake_penguin_arena.py`, `.github/workflows/b14-original-penguin-arena-source.yml`, `.github/workflows/build-level1a-fidelity.yml`: Verified canonical SWF root21 display list (including `#131` sky persisted at depth 1 from frame 19), backed 60 1× `#1095` tiles into dev `BCLVT001` (`117263` bytes), rendered `#1078` distant bg + 4 HQ3× viewports + contact sheet, and added `--level level1c_penguin` to `render_collision_masks.py` step.
+- **Native Windows CI Execution:**
+  - Source proof run [#43366474784](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43366474784) (`b14-original-penguin-arena-source`) completed **SUCCESS** on exact code SHA `94c4035`; artifact `#14011060531` (`804446` bytes; 60 1× tiles, 4 HQ3× viewports, `1502432` px mask, 162 child frames).
+  - Full native Windows run [#43366474557](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43366474557) (`build-level1a-fidelity`) completed **SUCCESS** on exact code SHA `94c4035`.
+  - Cargo test: **85/85 passed** (`15/15` historical 1× screenshots identical, `20/20` relocated standalone EXE HQ3× screenshot hashes identical, `child_exit: 0`).
+  - Performance: Render p95 **23.017ms**, scenery scroll p95 **22.1898ms** (below 40.0ms gate).
+  - Hosted audio: `BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT` (`audio_hardware_verified: false`).
+- **Records & Governance:** RE-20261113-020 and AUD-20261113-020 appended. All six records synchronized. No unsafe code, no external dependencies. PR #46 remains DRAFT/OPEN. STOP.
+

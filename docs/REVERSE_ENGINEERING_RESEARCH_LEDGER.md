@@ -1367,3 +1367,29 @@ Tested original source fixed CODE SHA `26dad6e07ef3dc1ca860aa98b4a8ccfb12912f72`
     - `level1b_wave2_clear_triggers_stage_complete_and_transition_to_1c`: verifies defeating Wave 2 goons emits `StageComplete`, stops music at frame 39, and creates `pending_stage_entry` to `Level1C` at frame 40.
   - Windows CI run `43358920004`: 79/79 Rust tests passed in 0.64s, render p95 `18.3410ms`, scenery scroll p95 `22.1543ms` (< 40ms gate), 15/15 historical 1× screenshots identical, 20/20 relocated standalone EXE HQ hashes identical, child exit 0.
 - **Confidence:** HIGH for AVM1 decompilation, stage activation coordinates, camera parameters, checkpoints, ammo pickups, pit physics, and stage transitions.
+
+
+## RE-20261113-020 — Level 1C Penguin Arena (#1095), Ground (#1094), root21 Display List & Boss #1250 Structure (Batch B14)
+
+- **Batch/Context:** Batch B14; branch `revive/level2-b14-penguin-arena-2026-11-12`, draft PR #46 based on B13 docs commit `09c8f51`.
+- **Target Subsystem:** `src/collision.rs`, `src/stage.rs`, `src/penguin.rs`, `src/main.rs`, `reverse-engineering/tools/b14_bake_penguin_arena.py`, `.github/workflows/b14-original-penguin-arena-source.yml`, `.github/workflows/build-level1a-fidelity.yml`.
+- **Original Architecture & Findings:**
+  1. `root` Frame 21 Display List Persistence & HUD Transform (`cobblebot.swf`, SHA `3d9e1992...`):
+     - `PlaceObject2` stream analysis proves depth 1 (`#131` sky backdrop) placed at root frame 19 is **not removed** across frames 20–21 (removed only at frame 22), so `#131` persists behind `#134` moon (`tx=300.0, ty=130.0, sx=0.76934814453125`) during Level 1C.
+     - `depth=4` places `#1251` (`game`) at `tx=0.2, ty=15.95, sx=1.000030517578125`.
+     - `depth=254` places `#716` (`HUD`) at `tx=159.0, ty=-11.0, sx=0.8636322021484375, sy=0.863800048828125` (~`0.8637×` vs `1.0×` on Level 1A/1B).
+  2. Game `#1251` Stage Layout & Arena `#1095` / Ground `#1094`:
+     - Distant background `#1078` placed at `tx=0.0, ty=-13.1, sx=1.029632568359375, sy=1.029754638671875`.
+     - Arena level `#1095` placed at `tx=1485.65, ty=239.25` containing `#1094` (`ground`) at depth 40 and 10 scenery layers.
+     - Ground mask `#1094`: `2813x926`, origin `(-1731, -549)`, `1502432` occupied pixels (`sha256: 2e59138a0babf48df745302ea1382e38432621068632d272b76cef40b7034dfd`), flat arena floor at `level_y=124` (`game_y=363.25`) across `gx=0..2300`, flanked by solid vertical walls (`gx < 0`, `gx > 2300`).
+     - Player `#691` placed at `(122.05, 281.25)`; 4 pickups (`item_br01..04`, `#695`, `sx=1.1306915283203125`) at `(-647.1, 153.0)`, `(394.4, 201.8)`, `(722.65, 212.4)`, `(1239.65, 196.95)`.
+     - Full 1× bake of `#1095` (excluding `#1094`) renders `60` non-empty `600x400` tiles (`world_bounds=[-1327, -941, 3823, 1005]`), 0 `missing_ids`, 0 `unsupported_fills`, dev `BCLVT001` pack `117263` bytes (`sha256: c7c08733...`).
+  3. Penguin `#1250` Timeline & Root21 Stats:
+     - 99 outer frames across 10 state labels mapping to 10 direct-child MovieClips totaling 162 child frames: `stand:#1103(21)`, `walk:#1117(8)`, `jump:#1135(9)`, `dodge:#1149(10)`, `block:#1156(14)`, `attack:#1172(10)`, `attack2("laser"):#1205(23)`, `hurt:#1207(6)`, `fall:#1224(21)`, `die:#1249(40)`.
+     - Initial placement `(1035.65, 316.2)`, scale `(-0.752166748046875, 0.7521820068359375)`, stats `health=200`, `speed=6.0`, `stength=5` (original spelling), `enemyWidth/Height=50`, kill score `+500`.
+- **Verification Evidence:**
+  - Rust tests increased from 79 to 85 (+6 B14 tests across `src/collision.rs`, `src/stage.rs`, `src/penguin.rs`).
+  - Windows CI source proof `#43366474784` (`b14-original-penguin-arena-source`): SUCCESS (artifact `#14011060531`, 60 1× tiles, 4 HQ3× viewports, contact sheet `6c9e22db...`, mask `2e59138a...`).
+  - Windows CI fidelity run `#43366474557` (`build-level1a-fidelity`): SUCCESS on code SHA `94c4035`; `85/85` tests passed, render p95 `23.017ms`, scenery scroll p95 `22.1898ms` (< 40ms gate), 15/15 1× identical, 20/20 relocated standalone EXE HQ hashes identical, child exit 0.
+- **Confidence:** HIGH for SWF display list extraction, `#1094` collision mask geometry, `#1095` tile coverage, root21 HUD transform, and `#1250` clip hierarchy.
+
