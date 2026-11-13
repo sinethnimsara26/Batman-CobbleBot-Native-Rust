@@ -13,6 +13,8 @@ mod stage;
 mod bank_props;
 // B09: original source goon frame metadata remains unused by the live game.
 mod bank_goons;
+// B12: original Bank Street biker enemy metadata and AI.
+mod bank_biker;
 mod win32;
 
 fn main() {
