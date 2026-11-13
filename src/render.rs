@@ -1,5 +1,5 @@
 use crate::assets::{Assets,Image,LevelTileSet};
-use crate::game::{AppScreen,Game,LEVEL_X,LEVEL_Y,LOGICAL_H,LOGICAL_W};
+use crate::game::{AppScreen,Game,LOGICAL_H,LOGICAL_W};
 use crate::surface::RenderSurface;
 
 pub const HQ_SCALE:usize=3;
@@ -142,10 +142,15 @@ pub fn render_with_config(
                 // opaque composition path unchanged.
                 draw_root_backdrop_hq(target,assets);
                 base.fill(0x00000000);
-                draw_city_background_alpha(base,game,assets);
-                draw_tiles_alpha(base,game,&assets.level1a_tiles_hq_base);
-                upscale_alpha_layer(base,target);
-                draw_tiles_hq(target,game,&assets.level1a_detail_tiles_hq);
+                if assets.stage.stage_id == crate::stage::StageId::Level1A {
+                    draw_city_background_alpha(base,game,assets);
+                    draw_tiles_alpha(base,game,&assets.stage.tiles_hq_base);
+                    upscale_alpha_layer(base,target);
+                    draw_tiles_hq(target,game,&assets.stage.detail_tiles_hq);
+                } else {
+                    draw_tiles_alpha(base,game,&assets.stage.tiles);
+                    upscale_alpha_layer(base,target);
+                }
                 draw_world_objects_hq(target,game,assets);
                 draw_batman_hq(target,game,assets);
                 draw_foreground_hq(target,game,assets);
@@ -274,7 +279,7 @@ fn render_world_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
 
 fn render_world_base_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     render_backdrop_legacy(fb,game,assets);
-    draw_tiles(fb,game,&assets.level1a_tiles);
+    draw_tiles(fb,game,&assets.stage.tiles);
 }
 
 fn render_backdrop_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
@@ -345,10 +350,15 @@ fn draw_city_background_alpha(fb:&mut RenderSurface,game:&Game,assets:&Assets){
 }
 
 fn draw_world_objects_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
+    let pickup_coords: &[(f32,f32)] = match game.active_stage() {
+        crate::stage::StageId::Level1A => &crate::game::PICKUPS,
+        crate::stage::StageId::Level1B => &crate::game::LEVEL1B_PICKUPS,
+        _ => &[],
+    };
     if !assets.pickup_frames.is_empty() {
         let pf=&assets.pickup_frames[(game.ticks as usize)%assets.pickup_frames.len()];
-        for (i,&(wx,wy)) in crate::game::PICKUPS.iter().enumerate() {
-            if game.pickups[i] { continue; }
+        for (i,&(wx,wy)) in pickup_coords.iter().enumerate() {
+            if i < game.pickups.len() && game.pickups[i] { continue; }
             let px=(wx+game.camera_x-pf.anchor_x).round() as i32;
             let py=(wy+game.camera_y-pf.anchor_y).round() as i32;
             blit(fb,&pf.image,px,py,pf.image.w as i32,pf.image.h as i32,false);
@@ -370,10 +380,16 @@ fn draw_world_objects_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     debug_assert!((assets.pickup_frames_hq.logical_pixel_scale-scale).abs()<0.001);
     debug_assert!((assets.batarang_frames_hq.logical_pixel_scale-scale).abs()<0.001);
 
+    let pickup_coords: &[(f32,f32)] = match game.active_stage() {
+        crate::stage::StageId::Level1A => &crate::game::PICKUPS,
+        crate::stage::StageId::Level1B => &crate::game::LEVEL1B_PICKUPS,
+        _ => &[],
+    };
+
     if !assets.pickup_frames_hq.is_empty() {
         let pf=&assets.pickup_frames_hq[(game.ticks as usize)%assets.pickup_frames_hq.len()];
-        for (i,&(wx,wy)) in crate::game::PICKUPS.iter().enumerate() {
-            if game.pickups[i] { continue; }
+        for (i,&(wx,wy)) in pickup_coords.iter().enumerate() {
+            if i < game.pickups.len() && game.pickups[i] { continue; }
             // Lock the stage origin to the exact same logical integer pixel
             // used by the legacy renderer, then convert that origin to HQ.
             // This avoids inventing sub-pixel world placement in Round 8.
@@ -398,8 +414,8 @@ fn draw_world_objects_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
 }
 
 fn draw_batman_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
-    let sx=(game.player.x+LEVEL_X+game.camera_x).round() as i32;
-    let sy=(game.player.y+LEVEL_Y+game.camera_y).round() as i32;
+    let sx=(game.player.x+game.level_origin_x()+game.camera_x).round() as i32;
+    let sy=(game.player.y+game.level_origin_y()+game.camera_y).round() as i32;
     let frame=&assets.batman_frames[game.animation_frame()];
     let flip=game.player.dir<0;
     let ax=if flip{frame.image.w as f32-frame.anchor_x}else{frame.anchor_x};
@@ -412,8 +428,8 @@ fn draw_batman_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
 
 fn draw_batman_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     debug_assert!((assets.batman_frames_hq.logical_pixel_scale-HQ_SCALE as f32).abs()<0.001);
-    let sx=(game.player.x+LEVEL_X+game.camera_x).round() as i32*HQ_SCALE as i32;
-    let sy=(game.player.y+LEVEL_Y+game.camera_y).round() as i32*HQ_SCALE as i32;
+    let sx=(game.player.x+game.level_origin_x()+game.camera_x).round() as i32*HQ_SCALE as i32;
+    let sy=(game.player.y+game.level_origin_y()+game.camera_y).round() as i32*HQ_SCALE as i32;
     let frame=&assets.batman_frames_hq[game.animation_frame()];
     let flip=game.player.dir<0;
     let ax=if flip{frame.image.w as f32-frame.anchor_x}else{frame.anchor_x};
