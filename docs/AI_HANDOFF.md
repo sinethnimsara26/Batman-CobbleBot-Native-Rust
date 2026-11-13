@@ -1,6 +1,13 @@
 # AI handoff — current recovery checkpoint
 
 
+## FINAL VERIFIED — B20 `Labs 2A` (`#1317`) 1× Tile Pack, `#1316` Collision Mask & `Level2A` Object Separation; STOP (2026-11-13)
+
+- **Branch / Draft PR:** `revive/level2-b20-labs2a-scenery-mask-2026-11-13` -> Draft PR [#52](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/52) (targeting `revive/level2-b19-bank-milestone-qa-2026-11-13`).
+- **Tested Code SHA:** [`3f463c4`](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/commit/3f463c4)
+- **Windows CI Status:** [Run #43407646037](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43407646037) — **SUCCESS** (`9m34s`), `108 passed; 0 failed` (`1.22s`), `20/20` HQ hashes identical (`b4c69f245265bff65f4caa9eb5a5c32502d6133897418b8a5b442f8490f5e193`), `child_exit: 0`, `render_p95_ms: 13.2068`, `scenery_p95_ms: 17.6241`, `level2a_tiles.bin` (`177` 1× tiles, `1,475,298` bytes), `level2a_ground.png` (`8781×10060`, `19,922,753` px). Audio: `BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT` (WinMM MCI 277 on headless CI).
+- **Next Authorized Batch:** **B21** (`revive/level2-b21-labs2a-camera-ground-2026-11-13`) — `Labs 2A` `#1316` runtime ground traversal, `cameraLogic2` / `cameraLogic3`, and `camera_01..10` trigger switching.
+
 ## FINAL VERIFIED — B19 Integrated Bank Chapter Milestone (`1A -> 1B -> 1C -> card:escape -> Pending(Level2A)`); STOP (2026-11-13)
 
 - **Branch / Draft PR:** `revive/level2-b19-bank-milestone-qa-2026-11-13` -> Draft PR [#51](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/51) (targeting `revive/level2-b18-penguin-escape-card-2026-11-13`).
