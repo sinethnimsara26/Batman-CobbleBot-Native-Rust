@@ -1,6 +1,15 @@
 # AI handoff — current recovery checkpoint
 
 
+## FINAL VERIFIED — B12 bikerAI & bank biker state machine; STOP (2026-11-13)
+
+- **Live recovery:** feature branch `revive/level2-b12-biker-ai-2026-11-12`, draft [PR #44](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/44) OPEN/UNMERGED based on previous B11 docs commit `4c5c189`. **TESTED CODE SHA `657ec06`**; **separate final docs SHA is the subsequent documentation-only branch HEAD, inspect GitHub after push**. Do not treat docs SHA as Windows-tested implementation.
+- **NATIVE WINDOWS PASS:** exact-code [#43340912013](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43340912013) **SUCCESS 82/82**, locked release Rust **72/72 tests in 0.83s**, Cargo lock unchanged, 1× legacy golden **15/15**, HQ3× **20/20 1800×1200**, relocated independent installed EXE **20/20 identical**, exit 0, no source SWF staged. Genuine OS Windows GUI/Enter title/start/skip/F7/F8 20/10/1234 and further fixtures, F/Esc fullscreen, focus visuals, PE/Shell icon/integration PASS; render p95 **24.1619ms**/scenery scroll **30.4693ms** vs <40ms unchanged. Verified installed EXE QA report with child exit 0, 20/20 identical HQ hashes. Audio/focus reports visual focus PASS, hardware audio BLOCKED WinMM waveOut 0, MCI 277; original Flash-player runtime fidelity UNVERIFIED.
+- **Scoped code/workflow paths:** `src/bank_biker.rs` implements `BikerState`, `BikerSound`, `BikerEvent`, and `BankBiker` with original Flash AVM1 bytecode movement at 24.0 speed, loop-around when `x > player.x + 1200.0`, engine audio cue interval, unarmed player damage (10 hp), Batman melee attack and batarang knockdown (+100 score), and child clip animation/flashing despawn; 7 new unit tests added (65→72); `.github/workflows/build-level1a-fidelity.yml` adds only the feature branch trigger. No other runtime files modified.
+- **All mandatory records:** AGENTS and both protocols READ/unchanged; AI_TASKS, AI_HANDOFF, AI_WORKLOG, RE research **RE-20261112-018**, post-change Rust engineering audit **AUD-20261112-018** updated. Native Rust runtime purity PASS with pre-existing platform FFI qualifiers. Protected `main`, frozen Level1A release SHA `49e8fd343e4f37f045ba71f24fff0999211f0f11`, earlier draft PRs unchanged; PR44 stays DRAFT/OPEN/UNMERGED.
+- **STOP. Exactly ONE NEXT independently authorized batch: B13 Level 1B Stage Activation & Transitions (75-tile Bank Street packs, checkpoints, ammo pickups, pit collision/respawn, 1A→1B transition, 1B→1C exit trigger)**; do NOT merge or release.
+
+
 ## FINAL VERIFIED — B11 goonAI combat AI, damage routing & wave 2 spawning; STOP (2026-11-12)
 
 - **Live recovery:** feature branch `revive/level2-b11-goon-combat-2026-11-12`, draft [PR #43](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/43) OPEN/UNMERGED based on previous B10 docs commit `27def5e`. **TESTED CODE SHA `3802366`**; **separate final docs SHA is the subsequent documentation-only branch HEAD, inspect GitHub after push**. Do not treat docs SHA as Windows-tested implementation.

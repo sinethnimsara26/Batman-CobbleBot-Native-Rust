@@ -1300,3 +1300,34 @@ Tested original source fixed CODE SHA `26dad6e07ef3dc1ca860aa98b4a8ccfb12912f72`
     - `defeating_wave_2_triggers_stage_clear`: verifies defeating wave 2 emits `StageComplete` event.
   - Windows CI run `43336433191`: 65/65 Rust tests passed in 0.73s, render p95 `20.9646ms`, scenery scroll p95 `25.4850ms` (< 40ms gate), 15/15 historical 1× screenshots identical, 20/20 relocated standalone EXE HQ hashes identical, child exit 0.
 - **Confidence:** HIGH for AVM1 decompilation, combat damage routing, hitbox math, and `respawn2` mechanics.
+
+
+## RE-20261112-018 — Flash AVM1 bikerAI & Bank Biker State Machine (Batch B12)
+
+- **Batch/Context:** Batch B12; branch `revive/level2-b12-biker-ai-2026-11-12`, draft PR #44 based on B11 docs commit `4c5c189`.
+- **Target Subsystem:** `src/bank_biker.rs`.
+- **Original Architecture & Findings:**
+  1. Symbolically traced and disassembled the complete Flash AVM1 bytecode for `bikerAI` (frame 15, body offset 113959, 238 ops) and DefineSprite `#1005` in `#1075` (depth 1129, initial `x = -570.25, y = 375.85`, matrix scale `1.1585846`) from `cobblebot-source.swf`.
+  2. Biker movement and looping mechanics:
+     - Horizontal movement: in `Drive`, biker moves at constant speed `24.0 * dir` (`dir = 1.0`). Position increment `this._x += 24.0` occurs at the start of each tick.
+     - Audio cue: when biker passes within `player.x - 750.0 < x < player.x - 700.0`, emits engine sound cue `Sound::Bike` (`_root.bike.play()`). Plays once per pass (`bike_sfx_played` flag).
+     - Screen loop-around: when biker travels far ahead of the player (`x > player.x + 1200.0`), it wraps around behind the player (`x = player.x - 1200.0`), resetting `visible = true`, `flash = 0`, and `bike_sfx_played = false`.
+  3. Combat interaction and damage routing:
+     - Unarmed player collision: if player is not attacking and bounding boxes overlap (`|dx| <= 45.0 && |dy| <= 40.0`), biker runs over player, dealing 10 damage (`PlayerHurt { damage: 10 }`) and playing `Sound::Kick`.
+     - Batman melee attack: if Batman is attacking (punch, kick, sweep) and bounding boxes overlap (`|dx| <= 45.0 && |dy| <= 40.0`), biker crashes, transitioning to `Fall` state, awarding +100 score (`ScoreAward(100)`), and playing `Sound::Bam`.
+     - Batarang collision: if active Batarang overlaps biker (`|dx| <= 40.0 && (bat_y - biker_y) in [-60.0, 20.0]`), biker crashes, transitioning to `Fall` state, awarding +100 score, and playing `Sound::Bam`.
+  4. Child timeline animation:
+     - DefineSprite `#981` (2 child frames: 0..1, cycling engine vibration) for `Drive` state.
+     - DefineSprite `#1004` (7 child frames: 0..6, crash and slide) for `Fall` state. Advances frame 0 through 6, then clamps at frame 6.
+     - Flashes when `flash > 50` (`(flash / 2) % 2 == 0`) and completely despawns when `flash > 100`.
+- **Verification Evidence:**
+  - Rust unit tests increased from 65 to 72:
+    - `biker_initialization_and_metadata`: verifies initial position `(-570.25, 375.85)`, scale, depth, and child bounds.
+    - `biker_drive_movement_and_animation_wrap`: verifies horizontal speed `24.0` and child frame 0..1 cycling.
+    - `biker_loop_around_when_exceeding_screen_boundary`: verifies loop-around to `player.x - 1200.0` and state reset.
+    - `biker_engine_audio_cue_trigger`: verifies engine sound trigger in range `[-750.0, -700.0]`.
+    - `biker_unarmed_player_collision_deals_ten_damage`: verifies unarmed player collision deals 10 damage and plays `Kick`.
+    - `biker_batarang_collision_causes_fall_and_score`: verifies batarang collision triggers `Fall`, +100 score, and `Bam`.
+    - `biker_player_attack_causes_fall_and_flashing_despawn`: verifies Batman attack knockdown, fall animation progression, flashing, and despawn.
+  - Windows CI run `43340912013`: 72/72 Rust tests passed in 0.83s, render p95 `24.1619ms`, scenery scroll p95 `30.4693ms` (< 40ms gate), 15/15 historical 1× screenshots identical, 20/20 relocated standalone EXE HQ hashes identical, child exit 0.
+- **Confidence:** HIGH for AVM1 decompilation, biker state machine, hitbox math, and audio cue triggers.
