@@ -1271,3 +1271,9 @@ Do not erase two historical CI failures: documentation-only #42834460076 and ini
 - **Runtime Purity & Bounds:**
   - `0` new `unsafe`, `0` new external crates, `0` per-frame heap allocations; shared `BankGoonSquad` parameterized via `GoonFamily::{Green, Gray, LabsC}` and `enable_wave2_respawn` (`src/bank_goons.rs`), pure Rust `LabsEagle` (`src/labs_bird.rs`), unified `tick_stage_enemies` (`src/game.rs`), and unified `draw_stage_enemies_scaled` (`src/render.rs`) without duplicating Bank Goon/Biker loops.
   - `CommonAssets::{labs_goon_frames, eagle_frames}` lazy-cached (`src/assets.rs`); Legacy `1x` & HQ `3x` facing/render + combat verified (`119 passed; 0 failed`) alongside untouched `20/20` HQ smokes and `15/15` Legacy baseline pixels.
+
+### AUD-20261113-031 — B25 `Labs 2A` Pickups, `halo` (`#1399`), `LEVEL 2` Banner & Audio Audit
+- **Batch / Branch:** `B25` on `revive/level2-b25-labs2a-pickups-audio-2026-11-13` (Draft PR #57, code SHA `655bcb5`, CI [#43432309195](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43432309195))
+- **Runtime Purity & Bounds:**
+  - `0` new `unsafe`, `0` new external crates, `0` per-frame heap allocations in `game.rs`/`render.rs`; shared `try_collect_batarang` helper in `src/game.rs` + `draw_root_timeline_lazy_scaled` + viewport-clamped `blit` in `src/render.rs` (dropping `render_p95_ms` to `18.2801ms` even with `2729×2729` `halo` composite), and table-driven `MusicTrack`/`SfxSlot` in `src/audio.rs`.
+  - Round 7 foreground contract honored (`draw_root_timeline_lazy_scaled` uses `blit` rather than `blit_region_hq3`); `121 passed; 0 failed`, `20/20` HQ smokes identical, `15/15` Legacy baseline pixels untouched.

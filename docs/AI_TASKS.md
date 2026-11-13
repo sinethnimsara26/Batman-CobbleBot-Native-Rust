@@ -1,6 +1,15 @@
 # Persistent development tasks — Batman Rust port
 
 
+## B25 — COMPLETED / `Labs 2A` Pickups (`item_br*`/`health01`), `halo`, `checkpoint_2a_01`/`02` & Audio (2026-11-13)
+- **Branch / Draft PR:** `revive/level2-b25-labs2a-pickups-audio-2026-11-13` -> Draft PR [#57](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/57) (base `revive/level2-b24-labs2a-enemies-2026-11-13`)
+- **CI Run:** [Run #43432309195](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43432309195) (`SUCCESS`, `12m4s`) on code SHA `655bcb5`.
+- **Verified Deliverables:**
+  - `121 passed; 0 failed` (`2.39s` CI / `3.27s` local), `hq_smoke_hashes_identical: 20`, `child_exit: 0`, `render_p95_ms: 18.2801`, `scenery_p95_ms: 22.102`, `intro_audio_focus: BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT` (`audio_hardware_verified: false`), relocated EXE SHA-256 `64a78e09a1fb1a4494ad9d855edebc0005c220ea1aa870527ca02a8e66183d4c`.
+  - Labs 2A Pickups/Halo/Audio Proof (`Batman-CobbleBot-B25-Labs2A-Pickups-Proof`, `proof_sha256: 12c241cbe8f11118b39a8df70877a30b4ea626f0b857bcc5d8f62272dcc93c5c`): `assets/labs_pickups_frames.bin` (`57,902` bytes, `2` `BCBFRM02` `1.0x` frames: `#1401` `health01` `65×37` & `#1399` `halo` `2729×2729`), `assets/level2a_title_frames.bin` (`112,814` bytes, `100` `BCBFRM02` `1.0x` frames of `#1408`), table-driven `MusicTrack`/`SfxSlot` in `src/audio.rs`, `Vec<bool>` `pickups` + `labs_health_collected` + `checkpoint_2a_01`/`02` (`OVERLAY_FIND_LAB = 66` / `OVERLAY_GLIDE_DOWN = 39`) + combat SFX events (`src/game.rs`), depth-ordered `halo` -> `health01` -> `item_br*` & viewport-clamped `blit` (`src/render.rs`), and 2 tests (`119 -> 121`).
+### Next Authorized Batch: **B26 — `card:tv` (`#1479`/`#1480`) & Live `EscapeCard -> Level2A -> TvCard` E2E QA**
+- Branch `revive/level2-b26-card-tv-2026-11-13` off the B25 `[skip ci]` docs closeout commit.
+
 ## B24 — COMPLETED / `Labs 2A` 9 Goons (`#1365`) & `eagle1` (`#1393` `birdAI`) (2026-11-13)
 - **Branch / Draft PR:** `revive/level2-b24-labs2a-enemies-2026-11-13` -> Draft PR [#56](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/56) (base `revive/level2-b23-labs2a-elevators-2026-11-13`)
 - **CI Run:** [Run #43426236375](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43426236375) (`SUCCESS`, `11m50s`) on code SHA `b8726f2`.
