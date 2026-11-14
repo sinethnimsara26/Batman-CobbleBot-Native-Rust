@@ -98,10 +98,12 @@ const OVERLAY_TO_STREET:usize=140;
 const ESCAPE_CARD_TERMINAL_FRAME:u16=224;
 const TV_CARD_AUTO_FADE_FRAME:u16=151;
 const TV_CARD_TERMINAL_FRAME:u16=184;
+const KABUKI_CARD_AUTO_FADE_FRAME:u16=159;
+const KABUKI_CARD_TERMINAL_FRAME:u16=165;
 const ESCAPE_CARD_SOUND_ID:u16=130;
 
 #[derive(Copy,Clone,Debug,PartialEq,Eq)]
-pub enum AppScreen{Title,Instructions,Intro,Playing,EscapeCard,TvCard}
+pub enum AppScreen{Title,Instructions,Intro,Playing,EscapeCard,TvCard,KabukiCard}
 
 #[derive(Copy,Clone,Debug,PartialEq,Eq)]
 pub enum AudioEvent{
@@ -276,6 +278,13 @@ pub struct Game{
     pub tv_card_fadeout_tick:Option<u16>,
     tv_card_sound_stopped:bool,
     pub tv_card_complete:bool,
+    pub level2b_exit_reached:bool,
+    /// Original root frame 26 (`card:kabuki`, `#1569`) story sequence (`0..=165` active at 25 fps).
+    pub kabuki_card_tick:u16,
+    /// Original 41-frame fadeout sprite `#34` started at `#1569` frame `159` or SKIP `#1570`.
+    pub kabuki_card_fadeout_tick:Option<u16>,
+    kabuki_card_sound_stopped:bool,
+    pub kabuki_card_complete:bool,
     pub bank_goons:Option<BankGoonSquad>,
     pub labs_eagles:Vec<LabsEagle>,
     pub labs_bird_rng:GoonRng,
@@ -338,6 +347,8 @@ impl Game{
             escape_card_tick:0,escape_card_fadeout_tick:None,escape_card_sound_stopped:false,escape_card_complete:false,
             level2a_exit_reached:false,
             tv_card_tick:0,tv_card_fadeout_tick:None,tv_card_sound_stopped:false,tv_card_complete:false,
+            level2b_exit_reached:false,
+            kabuki_card_tick:0,kabuki_card_fadeout_tick:None,kabuki_card_sound_stopped:false,kabuki_card_complete:false,
             bank_goons:None,labs_eagles:Vec::new(),labs_bird_rng:GoonRng::new(0x2A00_1393),bank_biker:None,penguin_boss:None,penguin_rng:PenguinRng::new(0x1C00_1250),
             pickups:vec![false;PICKUPS.len()],labs_health_collected:false,shots:Vec::new(),labs_doors:Vec::new(),labs_elevators:Vec::new(),
             clock_secs:80,clock_millisecs:99,clock_elapsed_ms:0,clock_last_ms:0,clock_exploded:false,
@@ -399,6 +410,8 @@ impl Game{
         self.escape_card_complete=false;
         self.level2a_exit_reached=false;
         self.tv_card_complete=false;
+        self.level2b_exit_reached=false;
+        self.kabuki_card_complete=false;
         let pickup_count = match stage {
             StageId::Level1A => PICKUPS.len(),
             StageId::Level1B => LEVEL1B_PICKUPS.len(),
@@ -569,7 +582,7 @@ impl Game{
         match card {
             StoryCard::Escape=>(AppScreen::EscapeCard,ESCAPE_CARD_TERMINAL_FRAME,ESCAPE_CARD_TERMINAL_FRAME),
             StoryCard::Tv=>(AppScreen::TvCard,TV_CARD_AUTO_FADE_FRAME,TV_CARD_TERMINAL_FRAME),
-            StoryCard::Kabuki=>unreachable!("StoryCard::Kabuki is deferred to B32"),
+            StoryCard::Kabuki=>(AppScreen::KabukiCard,KABUKI_CARD_AUTO_FADE_FRAME,KABUKI_CARD_TERMINAL_FRAME),
         }
     }
 
@@ -587,7 +600,12 @@ impl Game{
                 &mut self.tv_card_sound_stopped,
                 &mut self.tv_card_complete,
             ),
-            StoryCard::Kabuki=>unreachable!("StoryCard::Kabuki is deferred to B32"),
+            StoryCard::Kabuki=>(
+                &mut self.kabuki_card_tick,
+                &mut self.kabuki_card_fadeout_tick,
+                &mut self.kabuki_card_sound_stopped,
+                &mut self.kabuki_card_complete,
+            ),
         }
     }
 
@@ -598,7 +616,7 @@ impl Game{
         match card {
             StoryCard::Escape=>self.level1c_complete=true,
             StoryCard::Tv=>self.level2a_complete_mark(),
-            StoryCard::Kabuki=>{}
+            StoryCard::Kabuki=>self.level2b_exit_reached=true,
         }
         let (tick,fadeout_tick,sound_stopped,complete)=self.story_card_slots_mut(card);
         *tick=0;
@@ -684,12 +702,21 @@ impl Game{
         self.skip_story_card(StoryCard::Tv)
     }
 
+    /// Source button #1570's release-inside event sets `gotoNext="level3a"` and plays fadeout `#34`.
+    pub fn skip_kabuki_card(&mut self)->bool{
+        self.skip_story_card(StoryCard::Kabuki)
+    }
+
     fn begin_escape_card(&mut self){
         self.begin_story_card(StoryCard::Escape);
     }
 
     fn begin_tv_card(&mut self){
         self.begin_story_card(StoryCard::Tv);
+    }
+
+    fn begin_kabuki_card(&mut self){
+        self.begin_story_card(StoryCard::Kabuki);
     }
 
     pub fn tick(&mut self,input:&mut InputState,ground:&CollisionMask){
@@ -759,6 +786,12 @@ impl Game{
                 // Root frame 24 plays #1479 (`185` frames, `0..=184`); frame 151 starts `#34`
                 // while `#1479` continues animating through terminal `Stop()` at frame 184.
                 self.tick_story_card(StoryCard::Tv,StageId::Level2A,input);
+                return
+            },
+            AppScreen::KabukiCard=>{
+                // Root frame 26 plays #1569 (`0..=165` active before `Stop()` at frame 165);
+                // frame 159 starts `#34` for `level3a`.
+                self.tick_story_card(StoryCard::Kabuki,StageId::Level2B,input);
                 return
             },
             AppScreen::Playing=>{}
@@ -1124,7 +1157,7 @@ impl Game{
             // StopSounds before root's destination-frame jump at frame 40.
             // Change only the completed exits: pit/continue paths retain
             // their established native behavior and regression contract.
-            if next==39 && (self.level1a_exit_reached || self.level1b_exit_reached || self.level1c_exit_reached || self.level2a_exit_reached) {
+            if next==39 && (self.level1a_exit_reached || self.level1b_exit_reached || self.level1c_exit_reached || self.level2a_exit_reached || self.level2b_exit_reached) {
                 self.audio_events.push(AudioEvent::MusicStop);
             }
             return false;
@@ -1181,6 +1214,9 @@ impl Game{
         }else if self.level2a_exit_reached {
             // Original checkpoint_2a_tv sets gotoNext="card:tv", then plays #34.
             self.begin_tv_card();
+        }else if self.level2b_exit_reached {
+            // Original checkpoint_2b_end sets gotoNext="card:kabuki", then plays #34.
+            self.begin_kabuki_card();
         }else{
             // Other non-pit terminal fades preserve the old sound behavior.
             self.audio_events.push(AudioEvent::MusicStop);
@@ -1515,6 +1551,15 @@ impl Game{
                         "checkpoint_2a_tv" if !self.level2a_exit_reached && self.fadeout_tick.is_none() => {
                             // SWF checkpoint_2a_tv sets `_root.gotoNext = "card:tv"; _root.fadeout.play();`.
                             self.level2a_exit_reached = true;
+                            self.fadeout_tick = Some(0);
+                            self.player.dx = 0.0;
+                            self.player.dy = 0.0;
+                        }
+                        "checkpoint_2b_end" if !self.level2b_exit_reached && self.fadeout_tick.is_none() => {
+                            // SWF checkpoint_2b_end: `_root.camHeight += 15; _root.gotoNext = "card:kabuki"; _root.fadeout.play(); _root.game.halo.gotoAndPlay("fire");`.
+                            self.level2b_exit_reached = true;
+                            self.cam_height += 15.0;
+                            self.trigger_halo_fire();
                             self.fadeout_tick = Some(0);
                             self.player.dx = 0.0;
                             self.player.dy = 0.0;
@@ -3540,15 +3585,127 @@ mod b30_labs2b_checkpoints_pickups_entry_tests {
         game.tick(&mut input, &ground);
         assert_eq!(game.overlay_frame, super::OVERLAY_GLIDE_DOWN);
 
-        // `checkpoint_2b_end` remains inert until B31 introduces `card:kabuki`.
+        // `checkpoint_2b_end` triggers `level2b_exit_reached`, `camHeight += 15`, `halo_fire`, and `#34` fadeout.
         let cp_end = crate::stage::labs2b::CHECKPOINTS
             .iter()
             .find(|c| c.name == "checkpoint_2b_end")
             .unwrap();
         let (xe, ye, _, _) = cp_end.game_bounds();
+        let initial_cam_height = game.cam_height;
         game.player.x = (xe + 20.0) - desc.level_origin_game_local.x;
         game.player.y = (ye + 20.0) - desc.level_origin_game_local.y;
         game.tick(&mut input, &ground);
-        assert_eq!(game.fadeout_tick, None);
+        assert!(game.level2b_exit_reached);
+        assert!(game.halo_fire);
+        assert_eq!(game.cam_height, initial_cam_height + 15.0);
+        assert_eq!(game.fadeout_tick, Some(0));
+    }
+}
+
+#[cfg(test)]
+mod b31_kabuki_card_tests {
+    use super::*;
+
+    #[test]
+    fn b31_checkpoint_2b_end_fires_halo_and_plays_kabuki_card_auto_fade_to_completion() {
+        let mut game = Game::new();
+        let ground = CollisionMask::for_stage(StageId::Level2B);
+        let desc = StageId::Level2B.descriptor();
+        game.start_stage(StageId::Level2B);
+        game.screen = AppScreen::Playing;
+        game.score = 1234;
+        game.lives = 4;
+        game.batarangs = 42;
+        let _ = game.take_audio_events();
+
+        let cp_end = crate::stage::labs2b::CHECKPOINTS
+            .iter()
+            .find(|c| c.name == "checkpoint_2b_end")
+            .expect("checkpoint_2b_end exists");
+        let (xe, ye, _, _) = cp_end.game_bounds();
+        game.player.x = (xe + 20.0) - desc.level_origin_game_local.x;
+        game.player.y = (ye + 20.0) - desc.level_origin_game_local.y;
+        game.player.dx = 0.0;
+        game.player.dy = 0.0;
+
+        let mut neutral = InputState::default();
+        game.tick(&mut neutral, &ground);
+        assert!(game.level2b_exit_reached);
+        assert!(game.halo_fire);
+        assert_eq!(game.halo_frame, 21);
+        assert_eq!(game.cam_height, desc.camera.height + 15.0);
+        assert_eq!(game.fadeout_tick, Some(0));
+        assert_eq!(game.screen, AppScreen::Playing);
+
+        let mut events = Vec::new();
+        for _ in 0..41 {
+            game.tick(&mut neutral, &ground);
+            events.extend(game.take_audio_events());
+        }
+        assert_eq!(game.halo_frame, 29, "halo fire plume advances and clamps during exit fade");
+        assert_eq!(game.screen, AppScreen::KabukiCard);
+        assert_eq!(
+            events,
+            vec![AudioEvent::MusicStop, AudioEvent::IntroStart],
+            "Level 2B music stops on #34 frame 39 before KabukiCard StartSound 130 at frame 40"
+        );
+        assert_eq!(game.kabuki_card_tick, 0);
+        assert_eq!(game.kabuki_card_fadeout_tick, None);
+        assert!(!game.kabuki_card_complete);
+
+        // #1569 plays 0..=158 cleanly before triggering fadeout at frame 159.
+        for expected in 1..=158u16 {
+            game.tick(&mut neutral, &ground);
+            assert_eq!(game.kabuki_card_tick, expected);
+            assert_eq!(game.kabuki_card_fadeout_tick, None);
+        }
+
+        // Frame 159 starts #34 fadeout while #1569 advances up to terminal Stop() at frame 165.
+        game.tick(&mut neutral, &ground);
+        assert_eq!(game.kabuki_card_tick, 159);
+        assert_eq!(game.kabuki_card_fadeout_tick, Some(0));
+
+        let mut card_audio = Vec::new();
+        for _ in 0..41 {
+            game.tick(&mut neutral, &ground);
+            card_audio.extend(game.take_audio_events());
+        }
+        assert!(game.kabuki_card_complete);
+        assert_eq!(game.kabuki_card_tick, 165);
+        assert_eq!(game.kabuki_card_fadeout_tick, Some(40));
+        assert_eq!(card_audio, vec![AudioEvent::IntroStop]);
+        assert_eq!(game.pending_stage_entry(), None, "Level3A is outside Level 2 scope");
+        assert_eq!(game.consume_pending_stage_entry(), None);
+        assert_eq!(game.score, 1234);
+        assert_eq!(game.lives, 4);
+        assert_eq!(game.batarangs, 42);
+    }
+
+    #[test]
+    fn b31_kabuki_card_early_skip_runs_41_frame_fade_and_blocks_double_skip() {
+        let mut game = Game::new();
+        let ground = CollisionMask::for_stage(StageId::Level2B);
+        game.start_stage(StageId::Level2B);
+        game.begin_kabuki_card();
+        let _ = game.take_audio_events();
+
+        let mut neutral = InputState::default();
+        for _ in 0..20 {
+            game.tick(&mut neutral, &ground);
+        }
+        assert_eq!(game.kabuki_card_tick, 20);
+        assert!(game.skip_kabuki_card());
+        assert!(!game.skip_kabuki_card(), "double skip while fading must be ignored");
+        assert_eq!(game.kabuki_card_fadeout_tick, Some(0));
+
+        let mut audio = Vec::new();
+        for _ in 0..41 {
+            game.tick(&mut neutral, &ground);
+            audio.extend(game.take_audio_events());
+        }
+        assert!(game.kabuki_card_complete);
+        assert_eq!(game.kabuki_card_fadeout_tick, Some(40));
+        assert_eq!(audio, vec![AudioEvent::IntroStop]);
+        assert!(!game.skip_kabuki_card(), "skip after completion must be ignored");
     }
 }
