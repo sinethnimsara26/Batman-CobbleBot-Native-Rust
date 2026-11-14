@@ -595,6 +595,14 @@ impl StageId {
             _ => &[],
         }
     }
+
+    /// Source `#1486` lava hazard placements (`lava1`) for Labs stages.
+    pub const fn labs_lavas(self) -> &'static [LabsLavaPlacement] {
+        match self {
+            Self::Level2B => &labs2b::LAVAS,
+            _ => &[],
+        }
+    }
 }
 
 impl StoryCard {
@@ -831,6 +839,23 @@ pub struct LabsLavaPlacement {
     pub y: f32,
     pub sx: f32,
     pub sy: f32,
+}
+
+impl LabsLavaPlacement {
+    /// Exact local bounds across all 20 frames of `#1486` (`lava1`).
+    const LOCAL_BOUNDS: (f32, f32, f32, f32) = (2.6, -1.9, 94.55, 6.41);
+
+    /// Returns `(min_x, min_y, max_x, max_y)` in `#1496` GAME-local coordinates.
+    #[inline]
+    pub fn game_bounds(self) -> (f32, f32, f32, f32) {
+        scaled_game_bounds(self.x, self.y, self.sx, self.sy, Self::LOCAL_BOUNDS)
+    }
+
+    /// Evaluates `_global.lavaLogic` `this.hitTest(_root.game.player)`.
+    #[inline]
+    pub fn hits_player(self, player_game_x: f32, player_game_y: f32) -> bool {
+        aabb_hits_player(self.game_bounds(), player_game_x, player_game_y)
+    }
 }
 
 /// B20: Level 2A (`#1402`) separated dynamic & foreground objects generated from canonical SWF.

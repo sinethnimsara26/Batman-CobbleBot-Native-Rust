@@ -115,7 +115,6 @@ pub enum AudioEvent{
     Punch,
     Punch2,
     Bam,
-    #[allow(dead_code)]
     Explode,
     Metal,
 }
@@ -286,6 +285,16 @@ pub struct Game{
     pub shots:Vec<Shot>,
     pub labs_doors:Vec<LabsDoorState>,
     pub labs_elevators:Vec<LabsElevatorState>,
+    /// Original `clock` (`#1503`) countdown seconds (`80 -> 0`) and centiseconds (`99`, then `curTimer % 100`).
+    pub clock_secs:u8,
+    pub clock_millisecs:u8,
+    clock_elapsed_ms:u32,
+    clock_last_ms:u32,
+    pub clock_exploded:bool,
+    /// Original `#1495` (`halo`) timeline frame (`0..=19` loop, `21..=29` `"fire"`).
+    pub halo_frame:u8,
+    pub halo_fire:bool,
+    lava_done:bool,
     pub ticks:u64,
     audio_events:Vec<AudioEvent>,
     pit_done:bool,
@@ -328,7 +337,10 @@ impl Game{
             level2a_exit_reached:false,
             tv_card_tick:0,tv_card_fadeout_tick:None,tv_card_sound_stopped:false,tv_card_complete:false,
             bank_goons:None,labs_eagles:Vec::new(),labs_bird_rng:GoonRng::new(0x2A00_1393),bank_biker:None,penguin_boss:None,penguin_rng:PenguinRng::new(0x1C00_1250),
-            pickups:vec![false;PICKUPS.len()],labs_health_collected:false,shots:Vec::new(),labs_doors:Vec::new(),labs_elevators:Vec::new(),ticks:0,audio_events:Vec::new(),pit_done:false,respawn_after_fade:false,gameover_after_fade:false,
+            pickups:vec![false;PICKUPS.len()],labs_health_collected:false,shots:Vec::new(),labs_doors:Vec::new(),labs_elevators:Vec::new(),
+            clock_secs:80,clock_millisecs:99,clock_elapsed_ms:0,clock_last_ms:0,clock_exploded:false,
+            halo_frame:0,halo_fire:false,lava_done:false,
+            ticks:0,audio_events:Vec::new(),pit_done:false,respawn_after_fade:false,gameover_after_fade:false,
         }
     }
 
@@ -434,6 +446,14 @@ impl Game{
             .iter()
             .map(|e|LabsElevatorState{y:e.y,dy:0.0,moving:false,active:true})
             .collect();
+        self.clock_secs=80;
+        self.clock_millisecs=99;
+        self.clock_elapsed_ms=0;
+        self.clock_last_ms=0;
+        self.clock_exploded=false;
+        self.halo_frame=0;
+        self.halo_fire=false;
+        self.lava_done=false;
         self.current_platform_idx=None;
         self.gravity=GLOBAL_GRAVITY;
         self.update_camera();
@@ -744,6 +764,7 @@ impl Game{
         }
 
         self.ticks+=1;
+        self.update_level2b_halo();
         if self.advance_level_exit(){input.clear_pressed();return;}
         if self.level1a_complete{input.clear_pressed();return;}
         if self.level1b_complete{input.clear_pressed();return;}
@@ -782,6 +803,8 @@ impl Game{
         self.collect_pickups();
         self.update_shots();
         self.update_pit_logic();
+        self.update_level2b_lava();
+        self.update_level2b_clock();
         self.update_tutorial_checkpoints();
         self.update_labs_elevators();
         self.update_labs_camera_triggers();
@@ -1658,6 +1681,71 @@ impl Game{
                     state.playing=false;
                 }
             }
+        }
+    }
+
+    /// Enters the `#1495` (`halo`) `"fire"` frame sequence (`21..=29`, `Stop()` at `29`).
+    #[inline]
+    pub fn trigger_halo_fire(&mut self){
+        self.halo_fire=true;
+        self.halo_frame=21;
+    }
+
+    fn update_level2b_halo(&mut self){
+        if self.stage!=StageId::Level2B{return;}
+        if !self.halo_fire{
+            // Frame 20 executes `GotoFrame(0); Play`, cycling `0..=19` red alarm glow.
+            self.halo_frame=(self.halo_frame+1)%20;
+        }else if self.halo_frame<29{
+            self.halo_frame+=1;
+        }
+    }
+
+    fn update_level2b_clock(&mut self){
+        // AVM1 `_global.clockTimer` (`action[21]`): starts at `80 :99` unless already
+        // exploded (`secs <= 0 && !exploded` sets `00 :00`, `explode.start()`, `halo.gotoAndPlay("fire")`,
+        // `playerHealth = 0`, `playerState = "die"`).
+        if self.stage!=StageId::Level2B || self.clock_exploded || self.fadeout_tick.is_some(){return;}
+        if self.clock_secs>0{
+            self.clock_elapsed_ms=self.clock_elapsed_ms.saturating_add(40);
+            if self.clock_elapsed_ms-self.clock_last_ms>1000{
+                self.clock_last_ms=self.clock_elapsed_ms;
+                self.clock_secs-=1;
+                self.clock_millisecs=(self.clock_elapsed_ms%100) as u8;
+            }
+        }else{
+            self.clock_exploded=true;
+            self.clock_secs=0;
+            self.clock_millisecs=0;
+            self.audio_events.push(AudioEvent::Explode);
+            self.trigger_halo_fire();
+            self.apply_player_damage_with_state(self.health.max(100),PlayerState::Die);
+        }
+    }
+
+    fn update_level2b_lava(&mut self){
+        // AVM1 `_global.lavaLogic` (`action[22]`): overlapping `lava1` (`#1486`) while
+        // `!done` plays `punch2.start()`, sets `playerState = "hurt"`, `playerHealth -= 10`,
+        // `done = true`; leaving `lava1` clears `done = false`.
+        let lavas=self.stage.labs_lavas();
+        if lavas.is_empty(){return;}
+        let player_x=self.player.x+self.level_origin_x();
+        let player_y=self.player.y+self.level_origin_y();
+        let mut hit_any=false;
+        for &lava in lavas{
+            if lava.hits_player(player_x,player_y){
+                hit_any=true;
+                break;
+            }
+        }
+        if hit_any{
+            if !self.lava_done{
+                self.lava_done=true;
+                self.audio_events.push(AudioEvent::Punch2);
+                self.apply_player_damage_with_state(10,PlayerState::Hurt);
+            }
+        }else{
+            self.lava_done=false;
         }
     }
 
@@ -3255,5 +3343,114 @@ mod b28_labs2b_doors_elevators_cameras_tests {
             .filter(|c| c.camera_mode() == LabsCameraMode::CameraLogic3)
             .count();
         assert_eq!((l2, l3), (5, 5));
+    }
+}
+
+#[cfg(test)]
+mod b29_labs2b_lava_clock_halo_tests {
+    use super::*;
+
+    #[test]
+    fn level2b_clock_counts_down_explodes_at_zero_triggers_halo_fire_and_resets() {
+        let ground = CollisionMask::for_stage(StageId::Level2B);
+        let mut game = Game::new();
+        game.screen = AppScreen::Playing;
+        game.start_stage(StageId::Level2B);
+
+        assert_eq!((game.clock_secs, game.clock_millisecs), (80, 99));
+        assert!(!game.clock_exploded);
+        assert!(!game.halo_fire);
+        assert_eq!(game.halo_frame, 0);
+
+        let mut input = InputState::default();
+        // Normal halo loop cycles frames `0..=19` (`GotoFrame(0); Play` on frame 20).
+        for expected in 1..=19u8 {
+            game.tick(&mut input, &ground);
+            assert_eq!(game.halo_frame, expected);
+        }
+        game.tick(&mut input, &ground);
+        assert_eq!(game.halo_frame, 0);
+
+        // 26 ticks * 40ms = 1040ms > 1000ms -> decrements `clock_secs` from 80 to 79, `millisecs = 1040 % 100 = 40`.
+        for _ in 0..6 {
+            game.tick(&mut input, &ground);
+        }
+        assert_eq!((game.clock_secs, game.clock_millisecs), (79, 40));
+
+        // When `secs` reaches 0, next tick explodes (`00 :00`, `Explode`, `halo_fire = true`, `Die`).
+        game.clock_secs = 0;
+        let _ = game.take_audio_events();
+        game.tick(&mut input, &ground);
+        assert!(game.clock_exploded);
+        assert_eq!((game.clock_secs, game.clock_millisecs), (0, 0));
+        assert!(game.halo_fire);
+        assert_eq!(game.halo_frame, 21);
+        assert_eq!(game.health, 0);
+        assert_eq!(game.player.state, PlayerState::Die);
+        assert!(game.take_audio_events().contains(&AudioEvent::Explode));
+
+        // `"fire"` sequence advances `21..=29` and holds at `29` (`Stop()`).
+        for _ in 0..12 {
+            game.tick(&mut input, &ground);
+            assert!(game.halo_frame <= 29);
+        }
+        assert_eq!(game.halo_frame, 29);
+
+        // Let death animation + fadeout respawn on Level 2B and verify clock/halo reset to initial state.
+        for _ in 0..150 {
+            game.tick(&mut input, &ground);
+            if !game.clock_exploded {
+                break;
+            }
+        }
+        assert!(!game.clock_exploded);
+        assert_eq!((game.clock_secs, game.clock_millisecs), (80, 99));
+        assert!(!game.halo_fire);
+        assert_eq!(game.halo_frame, 0);
+    }
+
+    #[test]
+    fn level2b_lava1_hits_once_per_contact_deals_10_damage_and_rearms_when_exiting() {
+        let ground = CollisionMask::for_stage(StageId::Level2B);
+        let desc = StageId::Level2B.descriptor();
+        let lava = crate::stage::labs2b::LAVAS[0];
+        assert!(lava.hits_player(6000.0, 3850.0));
+        assert!(!lava.hits_player(5600.0, 3850.0));
+
+        let mut game = Game::new();
+        game.screen = AppScreen::Playing;
+        game.start_stage(StageId::Level2B);
+        assert_eq!(game.health, 100);
+
+        let mut input = InputState::default();
+        game.player.x = 6000.0 - desc.level_origin_game_local.x;
+        game.player.y = 3850.0 - desc.level_origin_game_local.y;
+        game.player.dy = 0.0;
+        game.player.jumping = false;
+        let _ = game.take_audio_events();
+
+        game.tick(&mut input, &ground);
+        assert_eq!(game.health, 90);
+        assert_eq!(game.player.state, PlayerState::Hurt);
+        assert!(game.lava_done);
+        assert!(game.take_audio_events().contains(&AudioEvent::Punch2));
+
+        // Remaining overlapping `lava1` does not re-trigger `lavaLogic` until leaving `lava1`.
+        for _ in 0..4 {
+            game.tick(&mut input, &ground);
+        }
+        assert_eq!(game.health, 90);
+        assert!(!game.take_audio_events().contains(&AudioEvent::Punch2));
+
+        // Leaving `lava1` clears `lava_done`, so stepping back onto `lava1` deals another 10 damage.
+        game.player.x = 5600.0 - desc.level_origin_game_local.x;
+        game.tick(&mut input, &ground);
+        assert!(!game.lava_done);
+
+        game.player.x = 6000.0 - desc.level_origin_game_local.x;
+        game.tick(&mut input, &ground);
+        assert_eq!(game.health, 80);
+        assert!(game.lava_done);
+        assert!(game.take_audio_events().contains(&AudioEvent::Punch2));
     }
 }

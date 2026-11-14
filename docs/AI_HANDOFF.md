@@ -1,6 +1,15 @@
 # AI handoff — current recovery checkpoint
 
 
+## FINAL VERIFIED — B29 `Labs 2B` `lava1` (`#1486`), `clock` (`#1503`) & `halo` (`#1495`/`#1488`) (2026-11-14)
+- **Active Branch / PR:** `revive/level2-b29-labs2b-lava-clock-halo-2026-11-14` (Draft PR `#61` against `revive/level2-b28-labs2b-doors-elevators-cameras-2026-11-14`)
+- **Latest Verified Commit / CI:** Commit `6733a8f` passed Windows CI Run `#43619250305` (`11m18s`, `135 passed; 0 failed` in `2.89s`, `hq_smoke_hashes_identical: 20`, relocated EXE SHA-256 `902b25bb336872ae8a2d76fb77af8961048062c79d633fd465febe7f2afdc5a0`, `child_exit: 0`, `render_p95_ms: 14.1057`, `scenery_p95_ms: 16.7797`, `intro_audio_focus: BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT`).
+- **Scope Verified:**
+  - Baked `lava_frames.bin` (`20f`), `halo_fire_frames.bin` (`9f`), `clock_frames.bin` (`12f`), and `clock_frames_hq.bin` (`12f`) in `reverse-engineering/tools/b29_bake_level2b_clock_lava_halo.py`, loaded via `CommonAssets` (`src/assets.rs`) and visually inspected in CI artifact `Batman-CobbleBot-B29-Clock-Lava-Halo-Proof` (`proof_png_sha256: 4346d94304038c5019e4b348585ef59cc5939a586b439c43d4e90a3af88d5e8c`).
+  - Wired `LabsLavaPlacement::{game_bounds, hits_player}` (`src/stage.rs`), `_global.clockTimer` + `#1495` `halo` + `_global.lavaLogic` (`src/game.rs`), `lava1` + `#1488` red pulse + `"fire"` plume + `1x`/`3x` `#1503` clock rendering (`src/render.rs`), and 3 tests (`132 -> 135`). `consume_pending_stage_entry` retains `Level2B` latch until **B30**.
+- **Next Batch:** Branch `revive/level2-b30-labs2b-checkpoints-pickups-entry-2026-11-14` for **B30** (`Labs 2B` checkpoints `checkpoint_2b_01..03`, `10` `item_br*` pickups, `Level2B` music/SFX wiring, and live `TvCard -> Level2B` entry).
+
+
 ## FINAL VERIFIED — B28 `Labs 2B` Doors, UP Elevators & Cameras (2026-11-14)
 - **Active Branch / PR:** `revive/level2-b28-labs2b-doors-elevators-cameras-2026-11-14` (Draft PR `#60` against `revive/level2-b27-labs2b-scenery-mask-2026-11-13`)
 - **Latest Verified Commit / CI:** Commit `047f986` passed Windows CI Run `#43615965027` (`132 passed; 0 failed` in `3.67s`, `hq_smoke_hashes_identical: 20`, relocated EXE SHA-256 `e1551660560a4b1003a58c66951ef7b2c76e314817d2b86ddd5b5e40185f4940`, `render_p95_ms: 21.1131`, `scenery_p95_ms: 26.1826`, `intro_audio_focus: BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT`).
