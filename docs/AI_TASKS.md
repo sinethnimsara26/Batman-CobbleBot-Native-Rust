@@ -1,6 +1,17 @@
 # Persistent development tasks — Batman Rust port
 
 
+## B29 — COMPLETED / `Labs 2B` `lava1` (`#1486`), Countdown `clock` (`#1503`/`#1499`) & `halo` (`#1495`/`#1488`) (2026-11-14)
+- **Status:** COMPLETED — Windows CI Run `#43619250305` (`conclusion: success`, `11m18s`) on `revive/level2-b29-labs2b-lava-clock-halo-2026-11-14` (Draft PR `#61`, code SHA `6733a8f`).
+- **Delivered:**
+  - `reverse-engineering/tools/b29_bake_level2b_clock_lava_halo.py` + `.github/workflows/build-level1a-fidelity.yml`: bakes `lava_frames.bin` (`20f`, `268×50`), `halo_fire_frames.bin` (`9f`, `1200×800`), `clock_frames.bin` (`12f`, `156×71`), and `clock_frames_hq.bin` (`12f`, `3.0x`) + proof `b29_clock_lava_halo_proof.png` (`proof_png_sha256: 4346d94304038c5019e4b348585ef59cc5939a586b439c43d4e90a3af88d5e8c`).
+  - `src/assets.rs` (`CommonAssets::{lava_frames, halo_fire_frames, clock_frames, clock_frames_hq}`), `src/stage.rs` (`LabsLavaPlacement::{game_bounds, hits_player}`, `StageId::labs_lavas`).
+  - `src/game.rs`: `AudioEvent::Explode`, AVM1 `_global.clockTimer` (`80 :99` -> `00 :00` explosion -> `trigger_halo_fire()` + `PlayerState::Die`), `#1495` `halo` `0..=19` loop / `21..=29` `"fire"` clamp, `_global.lavaLogic` (`10` dmg + `AudioEvent::Punch2` once per contact until leaving `lava1`), and `b29_labs2b_lava_clock_halo_tests` (`+2` tests).
+  - `src/render.rs`: `draw_labs_lava_scaled`, `HALO_RED_ALPHA` + `blend_full_viewport_red_tint` + `halo_fire_frames` in `draw_world_foreground_scaled`, `draw_level2b_clock_scaled` (`1x` & `3x` in `draw_foreground_legacy` / `draw_foreground_hq`), and `b29_labs2b_clock_lava_and_halo_render_in_1x_and_hq3x` (`+1` test).
+  - Verified (`cargo test --release --locked` `135 passed; 0 failed` in `2.89s` on CI / `4.24s` local, `hq_smoke_hashes_identical: 20`, relocated EXE SHA-256 `902b25bb336872ae8a2d76fb77af8961048062c79d633fd465febe7f2afdc5a0`, `render_p95_ms: 14.1057`, `scenery_p95_ms: 16.7797`, local `--qa-labs2a-route` exit `0`).
+- **Next:** **B30** (`Labs 2B` checkpoints `checkpoint_2b_01..03`, `10` `item_br*` pickups, `Level2B` music/SFX, and live `TvCard -> Level2B` entry in `consume_pending_stage_entry`).
+
+
 ## B28 — COMPLETED / `Labs 2B` Doors, UP Elevators & `+550` Cameras (2026-11-14)
 - **Status:** COMPLETED — Windows CI Run `#43615965027` (`conclusion: success`) on `revive/level2-b28-labs2b-doors-elevators-cameras-2026-11-14` (Draft PR `#60`).
 - **Delivered:**

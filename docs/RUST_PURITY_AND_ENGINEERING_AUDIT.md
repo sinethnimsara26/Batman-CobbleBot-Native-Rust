@@ -1291,3 +1291,7 @@ Do not erase two historical CI failures: documentation-only #42834460076 and ini
 - **AUD-20261114-034 (B28 `Labs 2B` Doors, UP Elevators & Cameras — CI Run `#43615965027`):**
   - `0` new `unsafe`, `0` new external crates, `0` per-frame heap allocations in `game.rs`/`render.rs`; eliminated stage-specific branching by adding `StageId::{labs_doors, labs_door_jambs, labs_elevators, labs_cameras, labs_checkpoints, labs_health_pickups, labs_batarang_pickups}` (`src/stage.rs`), shared across `Level2A` & `Level2B` in `src/game.rs` and `src/render.rs`.
   - Verified `132 passed; 0 failed` (`3.67s` CI, `+5` tests), `20/20` HQ smokes identical, `15/15` Legacy baseline pixels untouched, `render_p95_ms: 21.1131`, `scenery_p95_ms: 26.1826`, and `--qa-labs2a-route` exit `0`.
+
+- **AUD-20261114-035 (B29 `Labs 2B` `lava1`, Countdown `clock` & `halo` Fire — CI Run `#43619250305`):**
+  - `0` new `unsafe`, `0` new external crates, `0` per-frame heap allocations in `game.rs`/`render.rs` (`draw_level2b_clock_scaled` formats digits using fixed stack array `[Option<usize>; 6]`, `blend_full_viewport_red_tint` operates in-place over `fb.pixels` with zero allocation, `clockTimer`/`lavaLogic` state uses scalar fields).
+  - Verified `135 passed; 0 failed` (`2.89s` CI / `4.24s` local, `+3` tests), `20/20` HQ smokes identical, `15/15` Legacy baseline pixels untouched, `render_p95_ms: 14.1057`, `scenery_p95_ms: 16.7797`, and `--qa-labs2a-route` exit `0`.
