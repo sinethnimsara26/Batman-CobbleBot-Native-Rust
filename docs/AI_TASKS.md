@@ -1,6 +1,15 @@
 # Persistent development tasks — Batman Rust port
 
 
+## B32+ / Continuous Level 1-2 Playability Audit & Full Campaign E2E QA — COMPLETED (2026-11-15)
+- **Status:** COMPLETED — Windows CI Run `#43633529478` (`conclusion: success`) on `revive/level2-b32-e2e-qa-closeout-2026-11-14` (Draft PR `#64`, code SHA `20d005f`).
+- **Delivered:**
+  - `src/bank_biker.rs`: added `BankBiker::hits_player_y`, widened `apply_batarang_hit` (`dx <= 45.0`, `dy in [-135.0, 20.0]`), and added `standing_batman_on_bank_street_floor_interacts_with_biker_melee_contact_and_batarang` (`141 -> 142`).
+  - `src/game.rs` + `src/win32.rs`: fixed rising `Level 2B` elevator lockstep vs descending `Level 2A` `elev1` ground detachment (`update_labs_elevators`), fixed `gameover_after_fade` via `reset_to_title_fresh(true)`, added `KabukiCard` post-complete return to fresh `Title` (`dismiss_completed_kabuki_card` + `kabuki_post_complete_ticks >= 25` or key/click), synchronized Win32 `loaded_stage` (`sync_loaded_stage`, `poll_qa_navigation`, `timer`, `active_card_skip_rect`), and added `+5` tests in `continuous_e2e_and_bugfix_regression_tests` (`142 -> 147`).
+  - `src/headless.rs` + `src/main.rs` + `.github/workflows/build-level1a-fidelity.yml`: added `--qa-full-campaign` and CI artifact `Batman-CobbleBot-Full-Campaign-E2E-QA` testing `Title -> Intro -> Level1A -> Level1B -> Level1C -> EscapeCard -> Level2A -> TvCard -> Level2B -> KabukiCard -> Title -> Run2:Level1A` (`level1b_biker_defeated: true`, `level1b_biker_score_gain: 100`, `level2b_elev3_ascended_px: 552.00`, `run2_reset_verified: true`, `hq_p95_level2b_ms: 30.3581`).
+  - Verified (`cargo test --release --locked` `147 passed; 0 failed` in `5.42s` local, `20/20` HQ smokes, `15/15` Legacy smokes, `--benchmark-render 60`, `--qa-bank-route`, `--qa-labs2a-route`, `--qa-level2-route`, `--qa-full-campaign`, Windows CI Run `#43633529478`, EXE SHA-256 `57e982f3435b132bed8d687de87f5db9286b375b9bb26c6d0e54dee8fc846f62`, CI PNGs visually inspected).
+
+
 ## B32 — COMPLETED / Full Level 2 Integrated E2E QA (`--qa-level2-route`) & Goon Combat-Plane Fix (2026-11-15)
 - **Status:** COMPLETED — Windows CI Run `#43628102869` (`conclusion: success`, `19m12s`) on `revive/level2-b32-e2e-qa-closeout-2026-11-14` (Draft PR `#64`, code SHA `ba0dc63`).
 - **Delivered:**

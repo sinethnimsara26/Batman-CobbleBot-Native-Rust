@@ -1,6 +1,16 @@
 # AI handoff — current recovery checkpoint
 
 
+## FINAL VERIFIED — Continuous Level 1 -> Level 2 -> Replay E2E QA & Bugfix Closeout (2026-11-15)
+- **Active Branch / PR:** `revive/level2-b32-e2e-qa-closeout-2026-11-14` (Draft PR `#64` against `revive/level2-b31-labs2b-kabuki-card-2026-11-14`)
+- **Latest Verified Commit / CI:** Code commit `20d005f` passed Windows CI Run `#43633529478` (`conclusion: success`, EXE SHA-256 `57e982f3435b132bed8d687de87f5db9286b375b9bb26c6d0e54dee8fc846f62`, `147 passed; 0 failed` in `5.42s` local, `20/20` HQ smokes, `15/15` Legacy smokes, `level2_route_qa_report.json` `hq_frame_p95_ms: { level2a: 22.9078, level2b: 18.2730 }`, `full_campaign_qa_report.json` `hq_p95_level2b_ms: 30.3581`, `intro_audio_focus: BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT`).
+- **Scope Verified:**
+  - `src/bank_biker.rs`: fixed `BankBiker` vertical probe (`hits_player_y`, `self.y - 40.0` in `[player_y - 45.0, player_y + 75.0]`) and horizontal batarang anti-tunneling span (`dx <= 45.0`, `dy in [-135.0, 20.0]`) + unit test `standing_batman_on_bank_street_floor_interacts_with_biker_melee_contact_and_batarang`.
+  - `src/game.rs` + `src/win32.rs`: fixed rising `Level 2B` elevator lockstep without breaking `Level 2A` `elev1` ground floor detachment (`update_labs_elevators`: `state.dy >= 0.0 || (player_y - state.y).abs() > 160.0 || self.player.jumping || !on_x_span`), fixed `gameover_after_fade` via `reset_to_title_fresh(true)`, enabled clean `KabukiCard` exit back to fresh `Title` (`dismiss_completed_kabuki_card` + `kabuki_post_complete_ticks`), synchronized Win32 `loaded_stage` (`sync_loaded_stage`, `poll_qa_navigation`, `timer`, `active_card_skip_rect`), and added `+5` continuous/regression tests (`141 -> 147`).
+  - `src/headless.rs` + `src/main.rs` + `.github/workflows/build-level1a-fidelity.yml`: added `--qa-full-campaign` + CI artifact `Batman-CobbleBot-Full-Campaign-E2E-QA` (`full_campaign_qa_report.json`: `campaign_score_before_reset: 605`, `level1b_biker_defeated: true`, `level1b_biker_score_gain: 100`, `level2b_elev3_ascended_px: 552.00`, `run2_reset_verified: true`) and visually inspected downloaded CI PNGs (`campaign_2b_hq.png`, `campaign_run2_1a_hq.png`, `l2_kabuki_135_hq.png`).
+- **Milestone Status & Next Step:** **Level 1 (`1A/1B/1C/EscapeCard`) and Level 2 (`2A/TvCard/2B/KabukiCard`) are both verified playable continuously end-to-end including clean `Title -> Replay` reset.** Next future milestone is **Level 3A** (`Kabuki` Rooftops) once stacked Draft PRs (`#62 -> #63 -> #64`) are reviewed/merged per project workflow.
+
+
 ## FINAL VERIFIED — B32 Full Level 2 Integrated E2E QA (`--qa-level2-route`) & Goon Combat-Plane Fix (2026-11-15)
 - **Active Branch / PR:** `revive/level2-b32-e2e-qa-closeout-2026-11-14` (Draft PR `#64` against `revive/level2-b31-labs2b-kabuki-card-2026-11-14`)
 - **Latest Verified Commit / CI:** Commit `ba0dc63` passed Windows CI Run `#43628102869` (`19m12s`, `141 passed; 0 failed`, `hq_smoke_hashes_identical: 20`, relocated EXE SHA-256 `7063e5bcf683d219a5df966793a12626cf03250928f51a195f60776eb52299c1`, `child_exit: 0`, `render_p95_ms: 25.6914`, `scenery_p95_ms: 25.7529`, `intro_audio_focus: BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT`).
