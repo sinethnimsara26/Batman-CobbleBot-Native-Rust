@@ -1,6 +1,16 @@
 # Persistent development tasks — Batman Rust port
 
 
+## B28 — COMPLETED / `Labs 2B` Doors, UP Elevators & `+550` Cameras (2026-11-14)
+- **Status:** COMPLETED — Windows CI Run `#43615965027` (`conclusion: success`) on `revive/level2-b28-labs2b-doors-elevators-cameras-2026-11-14` (Draft PR `#60`).
+- **Delivered:**
+  - `src/stage.rs`: parameterized `StageId` Labs helpers (`labs_doors`, `labs_door_jambs`, `labs_elevators`, `labs_cameras`, `labs_checkpoints`, `labs_health_pickups`, `labs_batarang_pickups`) across `Level2A` and `Level2B`.
+  - `src/game.rs`: updated `start_stage`, `labs_camera_triggers`, `update_labs_elevators`, and `update_labs_doors` to drive `Level2B`'s 16 `#1325` doors, 3 UP elevators (`0`/`2675`/`3115` with `-12` px/tick speed and `-40` jump-off), and 10 `#153` cameras (`5` `CameraLogic2` / `5` `CameraLogic3` with `+550` settling to `275.0`), plus `b28_labs2b_doors_elevators_cameras_tests` (`+4` tests).
+  - `src/render.rs`: shared `draw_labs_doors_scaled`, `draw_labs_elevators_scaled`, and `draw_world_foreground_scaled` across `Level2A` & `Level2B` (1× Legacy & HQ3×), plus `b28_labs2b_doors_jambs_and_elevators_render_in_1x_and_hq3x` (`+1` test).
+  - Verified (`cargo test --release --locked` `132 passed; 0 failed` in `3.67s` on CI, `hq_smoke_hashes_identical: 20`, relocated EXE SHA-256 `e1551660560a4b1003a58c66951ef7b2c76e314817d2b86ddd5b5e40185f4940`, `render_p95_ms: 21.1131`, `scenery_p95_ms: 26.1826`, local `--qa-labs2a-route` exit `0`).
+- **Next:** **B29** (`Labs 2B` `lava1` `#1486`, countdown `clockTimer` `#1503`, and animated `halo` `#1495` `"fire"` explosion).
+
+
 ## B27 — COMPLETED / `Labs 2B` Scenery (`#1485`), Collision Mask (`#1484`) & Object Separation (`#1496`) (2026-11-14)
 - **Status:** COMPLETED — Windows CI Run `#43447045806` (`conclusion: success`) on `revive/level2-b27-labs2b-scenery-mask-2026-11-13` (Draft PR `#59`).
 - **Delivered:**
