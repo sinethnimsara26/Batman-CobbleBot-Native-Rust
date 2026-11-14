@@ -1,6 +1,16 @@
 # AI handoff — current recovery checkpoint
 
 
+## FINAL VERIFIED — B27 `Labs 2B` Scenery (`#1485`), Collision Mask (`#1484`) & Object Separation (`#1496`) (2026-11-14)
+- **Active Branch / PR:** `revive/level2-b27-labs2b-scenery-mask-2026-11-13` (Draft PR `#59` against `revive/level2-b26-card-tv-2026-11-13`)
+- **Latest Verified Commit / CI:** Commit `d3f3350` passed Windows CI Run `#43447045806` (`127 passed; 0 failed` in `3.57s`, `hq_smoke_hashes_identical: 20`, relocated EXE SHA-256 `a21ee6ed74d73b8c6905a4687c4a45c0c67605a0acb2735f4acf5a32c09c4483`, `render_p95_ms: 21.1193`, `scenery_p95_ms: 26.1713`, `intro_audio_focus: BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT`).
+- **Scope Verified:**
+  - `assets/level2b_tiles.bin` (`145` 1× tiles, `1,365,904` bytes, SHA-256 `9a53e1a26ecda01f4a45505e1bf95bcc2a1763234d71a879681504532f6444bd`) & `level2b_ground.png` (`8781×10060`, origin `[-1542, -2307]`, `16,245,474` occupied pixels, SHA-256 `ce8050b46d6067b048f7b8570a0dfb11ffde93861e72f01175934f2003ab365c`).
+  - `assets/labs2b_objects.rs` (`16` doors, `16` jambs, `3` UP elevators `0/2675/3115`, `4` checkpoints, `10` cameras, `10` `item_br01..10`, `1` `lava1` `#1486`, `0` goons/eagles/health) + shared `reverse-engineering/tools/labs_scenery_baker.py`.
+  - Visual proof `labs2b_multifloor_1x_vs_hq3x.png` downloaded from CI artifact `Batman-CobbleBot-B27-Labs2B-Scenery-Proof` and inspected cleanly across all 4 camera zones (`spawn_tv`, `east_shaft`, `mid_corridor`, `exit_roof`) over `#14` black backdrop.
+- **Next Batch:** Branch `revive/level2-b28-labs2b-doors-elevators-cameras-2026-11-14` for **B28** (`Labs 2B` doors, UP elevators, and cameras).
+
+
 ## FINAL VERIFIED — B26 `card:tv` (`#1479`/`#1480`) & Live `EscapeCard -> Level2A -> TvCard -> Pending(Level2B)` E2E QA; STOP (2026-11-13)
 - **Status:** **B26 COMPLETED & CLOSED OUT ON WINDOWS CI.** Code SHA `64ec7cd` PASSED Windows CI ([Run #43441565544](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43441565544)).
 - **Branch / Draft PR:** `revive/level2-b26-card-tv-2026-11-13` -> Draft PR [#58](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/58) (targeting `revive/level2-b25-labs2a-pickups-audio-2026-11-13`).

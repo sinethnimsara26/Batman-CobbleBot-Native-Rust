@@ -1,6 +1,16 @@
 # Persistent development tasks — Batman Rust port
 
 
+## B27 — COMPLETED / `Labs 2B` Scenery (`#1485`), Collision Mask (`#1484`) & Object Separation (`#1496`) (2026-11-14)
+- **Status:** COMPLETED — Windows CI Run `#43447045806` (`conclusion: success`) on `revive/level2-b27-labs2b-scenery-mask-2026-11-13` (Draft PR `#59`).
+- **Delivered:**
+  - `reverse-engineering/tools/labs_scenery_baker.py`, `reverse-engineering/tools/b27_bake_labs2b_scenery.py`, and shared refactor of `reverse-engineering/tools/b20_bake_labs2a_scenery.py`.
+  - `assets/level2b_tiles.bin` (`145` tiles, `1,365,904` bytes), `reverse-engineering/out/collision_masks/level2b_ground.png` (`8781×10060`, origin `[-1542, -2307]`, `16,245,474` occupied px), and `assets/labs2b_objects.rs` (`16` doors, `16` jambs, `3` UP elevators `0/2675/3115`, `4` checkpoints, `10` cameras, `10` `item_br*`, `1` `lava1` `#1486`, `0` goons/eagles/health).
+  - `src/stage.rs` (`LabsLavaPlacement`, `pub mod labs2b`), `src/collision.rs` (`CollisionMask::level2b`, `StageId::Level2B`), `src/assets.rs` (`StageAssets::with_tiles`, `StageAssets::load_level2b`), `src/render.rs` (1×/HQ3× multifloor `Level2B` backdrop test), and `.github/workflows/build-level1a-fidelity.yml` (`Batman-CobbleBot-B27-Labs2B-Scenery-Proof`).
+  - Verified (`cargo test --release --locked` `127 passed; 0 failed` in `3.57s` on CI, `hq_smoke_hashes_identical: 20`, relocated EXE SHA-256 `a21ee6ed74d73b8c6905a4687c4a45c0c67605a0acb2735f4acf5a32c09c4483`, `render_p95_ms: 21.1193`, `scenery_p95_ms: 26.1713`, `labs2b_multifloor_1x_vs_hq3x.png` visually inspected).
+- **Next:** **B28** (`Labs 2B` doors, UP elevators, and cameras on `StageId` parameterized helpers).
+
+
 ## B26 — COMPLETED / `card:tv` (`#1479`/`#1480`) & Live `EscapeCard -> Level2A -> TvCard -> Pending(Level2B)` E2E QA (2026-11-13)
 - **Branch / Draft PR:** `revive/level2-b26-card-tv-2026-11-13` -> Draft PR [#58](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/58) (base `revive/level2-b25-labs2a-pickups-audio-2026-11-13`)
 - **CI Run:** [Run #43441565544](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43441565544) (`SUCCESS`) on code SHA `64ec7cd`.
