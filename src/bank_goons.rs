@@ -398,9 +398,28 @@ impl BankGoon {
         }
     }
 
+    /// Vertical sprite bounds `(min_y, max_y)` in Game-local coords.
+    /// Both `#880`/`#964` (`BankStreet`) and `#1365` (`Labs`) have foot anchors (`(0,0)` at feet)
+    /// extending ~127..150px upward, so standing Batarang shots (`player.y_game - 20`) intersect.
+    #[inline]
+    fn batarang_y_bounds(&self) -> (f32, f32) {
+        let height = match self.family {
+            GoonFamily::LabsC => 150.0 * self.scale.abs().max(0.9),
+            GoonFamily::A | GoonFamily::B => 130.0 * self.scale.abs().max(1.0),
+        };
+        (self.y - height, self.y + 10.0)
+    }
+
+    /// Flash AVM1 `checkPlayer(this, dir, -20)` vertical alignment:
+    /// goon `self.y` is anchored at feet/floor while `player_y_game` is Batman's waist (~75px above feet).
+    #[inline]
+    fn same_combat_plane(&self, player_y_game: f32) -> bool {
+        let probe_y = self.y - 20.0;
+        probe_y >= player_y_game - 50.0 && probe_y <= player_y_game + 80.0
+    }
+
     /// Check if a flying batarang hits this goon.
-    /// In Flash AVM1: checkBatarang(char) -> char.curBat.
-    /// Goon bounding box: width ~50px (+-25px), height ~85px (y-75 to y+10).
+    /// In Flash AVM1: checkBatarang(char) -> batarang.hitTest(char) bounding-box overlap.
     pub fn apply_batarang_hit(
         &mut self,
         bat_x: f32,
@@ -413,8 +432,9 @@ impl BankGoon {
         if self.state == GoonState::Hurt || self.state == GoonState::Fall || self.state == GoonState::Die {
             return false;
         }
-        let hit_x = (bat_x - self.x).abs() <= 25.0;
-        let hit_y = bat_y >= self.y - 75.0 && bat_y <= self.y + 10.0;
+        let hit_x = (bat_x - self.x).abs() <= 30.0;
+        let (min_y, max_y) = self.batarang_y_bounds();
+        let hit_y = bat_y >= min_y && bat_y <= max_y;
         if hit_x && hit_y {
             self.health -= 5;
             events.push(GoonCombatEvent::Sound(GoonCombatSound::Kick));
@@ -453,8 +473,7 @@ impl BankGoon {
         }
 
         let dx = (self.x - player.x_game).abs();
-        let dy = (self.y - player.y_game).abs();
-        if dy > 50.0 {
+        if !self.same_combat_plane(player.y_game) {
             return false;
         }
 
@@ -573,8 +592,7 @@ impl BankGoon {
             // Strike window at frames 4..6
             if self.frame >= 4 && self.frame <= 6 {
                 let range = (self.x - player.x_game).abs();
-                let rangey = (self.y - player.y_game).abs();
-                if range <= 70.0 && rangey <= 40.0 && !player.is_invincible && player.state_name != "hurt" {
+                if range <= 70.0 && self.same_combat_plane(player.y_game) && !player.is_invincible && player.state_name != "hurt" {
                     events.push(GoonCombatEvent::PlayerHurt { damage: self.strength });
                     events.push(GoonCombatEvent::Sound(GoonCombatSound::Metal(1)));
                 }
@@ -590,8 +608,7 @@ impl BankGoon {
         // In Stand: check if goon decides to attack player
         if self.state == GoonState::Stand {
             let range = (self.x - player.x_game).abs();
-            let rangey = (self.y - player.y_game).abs();
-            if range < 70.0 && rangey < 40.0 && self.attack_count > 10.0 {
+            if range < 70.0 && self.same_combat_plane(player.y_game) && self.attack_count > 10.0 {
                 self.set_state(GoonState::Attack);
                 self.attack_count = 0.0;
                 return;
@@ -1358,5 +1375,51 @@ mod tests {
         squad.tick_combat(&player, &[], &ground, &mut events);
         assert!(squad.is_stage_clear());
         assert_eq!(events, vec![GoonCombatEvent::StageComplete]);
+    }
+
+    #[test]
+    fn standing_player_waist_y_hits_bank_and_labs_goons_with_batarang_and_melee() {
+        let mut events = Vec::new();
+        // Level 1B standing Batman has player_y_game = floor(398.25) - 75.0 = 323.25
+        let mut g1b = BankGoon::from_spawn(BANK_GOON_SPAWNS[0]);
+        assert!(g1b.apply_batarang_hit(g1b.x, 323.25 - 20.0, &mut events));
+        assert_eq!(g1b.health, 27);
+
+        let mut g1b_melee = BankGoon::from_spawn(BANK_GOON_SPAWNS[0]);
+        let standing_1b = PlayerCombatContext {
+            x_game: g1b_melee.x - 60.0,
+            y_game: 323.25,
+            dir: 1,
+            is_attacking: true,
+            is_invincible: false,
+            state_name: "punch",
+        };
+        assert!(g1b_melee.apply_player_attack(&standing_1b, &mut events));
+        assert_eq!(g1b_melee.health, 22);
+
+        // Level 2A goon2 has y = 2656.35 on floor 2648.25 -> player_y_game = 2573.25
+        let g2a_spawn = crate::stage::labs2a::GOONS[0];
+        let mut g2a = BankGoon::from_labs2a(g2a_spawn, 0);
+        assert!(g2a.apply_batarang_hit(g2a.x, 2573.25 - 20.0, &mut events));
+        assert_eq!(g2a.health, 65);
+
+        let mut g2a_melee = BankGoon::from_labs2a(g2a_spawn, 0);
+        let standing_2a = PlayerCombatContext {
+            x_game: g2a_melee.x - 60.0,
+            y_game: 2573.25,
+            dir: 1,
+            is_attacking: true,
+            is_invincible: false,
+            state_name: "punch",
+        };
+        assert!(g2a_melee.apply_player_attack(&standing_2a, &mut events));
+        assert_eq!(g2a_melee.health, 60);
+
+        // Goon far below (next Labs floor down) must NOT match
+        let lower_floor = PlayerCombatContext {
+            y_game: 3367.25,
+            ..standing_2a
+        };
+        assert!(!g2a_melee.same_combat_plane(lower_floor.y_game));
     }
 }

@@ -1,6 +1,6 @@
 use crate::assets::Assets;
 use crate::collision::CollisionMask;
-use crate::game::{AppScreen,AudioEvent,Game,InputState,LEVEL_X,LEVEL_Y,LOGICAL_H,LOGICAL_W,PICKUPS,VK_D,VK_ENTER,VK_RIGHT,VK_S,VK_SPACE};
+use crate::game::{AppScreen,AudioEvent,Game,InputState,LEVEL_X,LEVEL_Y,LOGICAL_H,LOGICAL_W,PICKUPS,VK_A,VK_D,VK_ENTER,VK_RIGHT,VK_S,VK_SPACE};
 use crate::render;
 use crate::surface::RenderSurface;
 use png::{BitDepth,ColorType,Encoder};
@@ -646,4 +646,291 @@ pub fn qa_labs2a_route(out_dir:&str){
         pending.progress.score,pending.progress.lives,pending.progress.batarangs
     );
     fs::write(out.join("labs2a_route_qa_report.json"),report).expect("write B26 QA report");
+}
+
+pub fn qa_level2_route(out_dir:&str){
+    use crate::stage::{labs2a,labs2b,StageId};
+    let out=Path::new(out_dir);
+    fs::create_dir_all(out).expect("create B32 Level2 QA dir");
+    let mut assets=Assets::load();
+    let mut ground=CollisionMask::for_stage(StageId::Level1C);
+    let mut game=Game::new();
+    let mut input=InputState::default();
+
+    // 1. Live EscapeCard -> StageId::Level2A handoff
+    game.screen=AppScreen::EscapeCard;
+    game.escape_card_tick=224;
+    game.score=650;
+    game.lives=4;
+    game.batarangs=15;
+    assert!(game.skip_escape_card());
+    for _ in 0..41 { game.tick(&mut input,&ground); }
+    let next_2a=game.consume_pending_stage_entry().expect("Level2A live handoff");
+    assert_eq!(next_2a,StageId::Level2A);
+    assert_eq!(game.active_stage(),StageId::Level2A);
+    let audio_2a=game.take_audio_events();
+    assert!(audio_2a.contains(&AudioEvent::StageTrack(StageId::Level2A)));
+    assert!(audio_2a.contains(&AudioEvent::MusicStart));
+    ground=CollisionMask::for_stage(next_2a);
+    assets.load_stage(next_2a);
+
+    // 2. Level 2A: spawn + banner -> checkpoint_2a_01 -> health01 + item_br01 -> door + elevator + goon kill
+    for _ in 0..25 { game.tick(&mut input,&ground); }
+    snapshot(false,out,"l2_2a_spawn.png",&mut game,&assets);
+    snapshot(true,out,"l2_2a_spawn_hq.png",&mut game,&assets);
+    let (dark_2a_spawn,fp_2a_spawn)=intro_frame_metrics(true,&mut game,&assets);
+    assert!(dark_2a_spawn<0.95,"Level 2A spawn frame unexpectedly blank");
+
+    for _ in 0..80 { game.tick(&mut input,&ground); }
+    let d2a=StageId::Level2A.descriptor();
+    let (cx01,cy01,_,_)=labs2a::CHECKPOINTS[0].game_bounds();
+    game.player.x=(cx01+30.0)-d2a.level_origin_game_local.x;
+    game.player.y=(cy01+30.0)-d2a.level_origin_game_local.y;
+    game.tick(&mut input,&ground);
+    assert_eq!(game.overlay_frame,66,"checkpoint_2a_01 must trigger findLab");
+
+    // Collect health01 & item_br01
+    let h=labs2a::HEALTH_PICKUPS[0];
+    game.player.x=h.x-d2a.level_origin_game_local.x;
+    game.player.y=h.y-d2a.level_origin_game_local.y;
+    game.player.dy=0.0;
+    let _=game.take_audio_events();
+    game.tick(&mut input,&ground);
+    assert!(game.labs_health_collected);
+    assert!(game.take_audio_events().contains(&AudioEvent::Item));
+
+    let p2a=labs2a::BATARANG_PICKUPS[0];
+    game.player.x=p2a.x-d2a.level_origin_game_local.x;
+    game.player.y=p2a.y-d2a.level_origin_game_local.y;
+    game.tick(&mut input,&ground);
+    assert!(game.pickups[0]);
+    assert_eq!(game.batarangs,20);
+
+    // Trigger #1325 door opening + down elevator movement
+    let door2a=labs2a::DOORS[0];
+    game.player.x=door2a.x-d2a.level_origin_game_local.x;
+    game.player.y=door2a.y-d2a.level_origin_game_local.y;
+    let _=game.take_audio_events();
+    game.tick(&mut input,&ground);
+    assert!(game.labs_doors[0].playing || game.labs_doors[0].frame>0);
+    assert!(game.take_audio_events().contains(&AudioEvent::DoorOpen));
+
+    // Engage & defeat goon2 with real batarang shots (`VK_A`, 5 dmg x 14 = 70 HP) while eagle1 remains inert (`y < 0`)
+    assert_eq!(game.labs_eagles.len(),1);
+    let eagle_y0=game.labs_eagles[0].y;
+    let g0=labs2a::GOONS[0];
+    let score_before_kill=game.score;
+    game.player.x=(g0.x-75.0)-d2a.level_origin_game_local.x;
+    game.player.y=(g0.y-75.0)-d2a.level_origin_game_local.y;
+    game.player.dir=1;
+    game.player.dx=0.0;
+    game.player.dy=0.0;
+    game.player.jumping=false;
+    game.player.on_ground=true;
+    for step in 0..280 {
+        let (gx, gh) = {
+            let g = &game.bank_goons.as_ref().unwrap().goons[0];
+            (g.x, g.health)
+        };
+        if gh > 0 {
+            game.player.x=(gx-90.0)-d2a.level_origin_game_local.x;
+            game.player.y=(g0.y-75.0)-d2a.level_origin_game_local.y;
+            game.player.dir=1;
+            game.player.dy=0.0;
+            if step%9==0 && game.batarangs>0 {
+                input.set(VK_A,true);
+            }
+        }
+        game.tick(&mut input,&ground);
+        input.set(VK_A,false);
+        if game.bank_goons.as_ref().map(|s|s.e_kills).unwrap_or(0)>=1 { break; }
+    }
+    let kills_2a=game.bank_goons.as_ref().map(|s|s.e_kills).unwrap_or(0);
+    assert!(kills_2a>=1,"must defeat at least 1 Level 2A goon");
+    assert!(game.score>score_before_kill);
+    assert_eq!(game.labs_eagles[0].y,eagle_y0,"eagle1 must remain inert in Level 2A");
+
+    // Verify real melee attack (`VK_S`) also lands on goon1 in Level 2A
+    let g1=labs2a::GOONS[1];
+    game.player.x=(g1.x-60.0)-d2a.level_origin_game_local.x;
+    game.player.y=(g1.y-75.0)-d2a.level_origin_game_local.y;
+    game.player.dir=1;
+    game.player.dx=0.0;
+    game.player.dy=0.0;
+    game.player.jumping=false;
+    game.player.on_ground=true;
+    let g1_hp_before=game.bank_goons.as_ref().unwrap().goons[1].health;
+    input.set(VK_S,true);
+    game.tick(&mut input,&ground);
+    input.set(VK_S,false);
+    let g1_hp_after=game.bank_goons.as_ref().unwrap().goons[1].health;
+    assert!(g1_hp_after<g1_hp_before,"standing punch must hit Level 2A goon ({g1_hp_after} vs {g1_hp_before})");
+
+    // Board elevator_02_3480 (next unvisited down elevator after elevator_01_2685 descends from spawn)
+    let elev2a=labs2a::ELEVATORS[1];
+    let e2a_y0=game.labs_elevators[1].y;
+    let (ex0,_,ex1,_)=elev2a.hitbox_bounds_at(e2a_y0);
+    game.player.x=((ex0+ex1)*0.5)-d2a.level_origin_game_local.x;
+    game.player.y=(e2a_y0-95.0)-d2a.level_origin_game_local.y;
+    game.player.dy=0.0;
+    game.tick(&mut input,&ground);
+    assert!(game.labs_elevators[1].moving,"Level 2A elevator must engage");
+    for _ in 0..12 { game.tick(&mut input,&ground); }
+    assert!(game.labs_elevators[1].y>e2a_y0,"Level 2A DOWN elevator must descend");
+    snapshot(false,out,"l2_2a_gameplay.png",&mut game,&assets);
+    snapshot(true,out,"l2_2a_gameplay_hq.png",&mut game,&assets);
+    let (dark_2a_mid,fp_2a_mid)=intro_frame_metrics(true,&mut game,&assets);
+    assert_ne!(fp_2a_mid,fp_2a_spawn);
+    assert!(dark_2a_mid<0.90);
+
+    let mut base=RenderSurface::new(LOGICAL_W,LOGICAL_H);
+    let mut hq=RenderSurface::new(render::HQ_W,render::HQ_H);
+    let p95_2a=measure_hq_p95_ms(&mut base,&mut hq,&game,&assets);
+
+    // 3. checkpoint_2a_tv -> TvCard -> consume_pending_stage_entry -> Level2B
+    let tv_cp=labs2a::CHECKPOINTS.iter().find(|c|c.name=="checkpoint_2a_tv").expect("checkpoint_2a_tv");
+    let (tx,ty,_,_)=tv_cp.game_bounds();
+    game.player.x=(tx+20.0)-d2a.level_origin_game_local.x;
+    game.player.y=(ty+20.0)-d2a.level_origin_game_local.y;
+    for _ in 0..42 {
+        game.tick(&mut input,&ground);
+        if game.screen==AppScreen::TvCard { break; }
+    }
+    assert_eq!(game.screen,AppScreen::TvCard);
+    snapshot(false,out,"l2_tv_000.png",&mut game,&assets);
+    let (_,fp_tv0)=intro_frame_metrics(false,&mut game,&assets);
+    for _ in 0..110 { game.tick(&mut input,&ground); }
+    snapshot(true,out,"l2_tv_110_hq.png",&mut game,&assets);
+    let (_,fp_tv110)=intro_frame_metrics(false,&mut game,&assets);
+    assert_ne!(fp_tv0,fp_tv110);
+
+    let score_before_2b=game.score;
+    let batarangs_before_2b=game.batarangs;
+    assert!(game.skip_tv_card());
+    for _ in 0..41 { game.tick(&mut input,&ground); }
+    assert!(game.tv_card_complete);
+    let next_2b=game.consume_pending_stage_entry().expect("Level2B live handoff");
+    assert_eq!(next_2b,StageId::Level2B);
+    assert_eq!(game.active_stage(),StageId::Level2B);
+    assert_eq!(game.pickups.len(),10);
+    assert_eq!(game.score,score_before_2b);
+    assert_eq!(game.batarangs,batarangs_before_2b);
+    let audio_2b=game.take_audio_events();
+    assert!(audio_2b.contains(&AudioEvent::StageTrack(StageId::Level2B)));
+    assert!(audio_2b.contains(&AudioEvent::MusicStart));
+    ground=CollisionMask::for_stage(next_2b);
+    assets.load_stage(next_2b);
+
+    // 4. Level 2B: fadein clear -> clock + halo -> checkpoints 2b_01..03 -> door + UP elevator + pickup + lava1
+    for _ in 0..35 { game.tick(&mut input,&ground); }
+    snapshot(false,out,"l2_2b_spawn.png",&mut game,&assets);
+    snapshot(true,out,"l2_2b_spawn_hq.png",&mut game,&assets);
+    let (dark_2b_spawn,fp_2b_spawn)=intro_frame_metrics(true,&mut game,&assets);
+    assert!(dark_2b_spawn<0.95,"Level 2B spawn frame unexpectedly blank");
+
+    let d2b=StageId::Level2B.descriptor();
+    for (name,expected_overlay) in [("checkpoint_2b_01",84_usize),("checkpoint_2b_02",93_usize),("checkpoint_2b_03",39_usize)] {
+        let cp=labs2b::CHECKPOINTS.iter().find(|c|c.name==name).expect(name);
+        let (x,y,_,_)=cp.game_bounds();
+        game.player.x=(x+20.0)-d2b.level_origin_game_local.x;
+        game.player.y=(y+20.0)-d2b.level_origin_game_local.y;
+        game.tick(&mut input,&ground);
+        assert_eq!(game.overlay_frame,expected_overlay);
+    }
+
+    let door2b=labs2b::DOORS[0];
+    game.player.x=door2b.x-d2b.level_origin_game_local.x;
+    game.player.y=door2b.y-d2b.level_origin_game_local.y;
+    let _=game.take_audio_events();
+    game.tick(&mut input,&ground);
+    assert!(game.labs_doors[0].playing || game.labs_doors[0].frame>0);
+    assert!(game.take_audio_events().contains(&AudioEvent::DoorOpen));
+
+    let p2b=labs2b::BATARANG_PICKUPS[0];
+    game.player.x=p2b.x-d2b.level_origin_game_local.x;
+    game.player.y=p2b.y-d2b.level_origin_game_local.y;
+    game.player.dy=0.0;
+    let _=game.take_audio_events();
+    game.tick(&mut input,&ground);
+    assert!(game.pickups[0]);
+    assert!(game.take_audio_events().contains(&AudioEvent::Item));
+
+    let lava=labs2b::LAVAS[0];
+    let (lx0,ly0,lx1,ly1)=lava.game_bounds();
+    game.player.x=((lx0+lx1)*0.5)-d2b.level_origin_game_local.x;
+    game.player.y=((ly0+ly1)*0.5)-30.0-d2b.level_origin_game_local.y;
+    let _=game.take_audio_events();
+    game.tick(&mut input,&ground);
+    assert_eq!(game.health,90,"lava1 must deal 10 damage");
+    assert!(game.take_audio_events().contains(&AudioEvent::Punch2));
+    assert!(game.clock_secs<80,"Level 2B countdown clock must advance");
+
+    let elev2b=labs2b::ELEVATORS[0];
+    let e2b_y0=game.labs_elevators[0].y;
+    let (bx0,by0,bx1,_)=elev2b.hitbox_bounds_at(e2b_y0);
+    game.player.x=((bx0+bx1)*0.5)-d2b.level_origin_game_local.x;
+    game.player.y=(by0-15.0)-d2b.level_origin_game_local.y;
+    game.player.dy=0.0;
+    game.tick(&mut input,&ground);
+    assert!(game.labs_elevators[0].moving,"Level 2B elevator must engage");
+    for _ in 0..4 { game.tick(&mut input,&ground); }
+    assert!(game.labs_elevators[0].y<e2b_y0,"Level 2B UP elevator must ascend");
+
+    snapshot(false,out,"l2_2b_gameplay.png",&mut game,&assets);
+    snapshot(true,out,"l2_2b_gameplay_hq.png",&mut game,&assets);
+    let (dark_2b_mid,fp_2b_mid)=intro_frame_metrics(true,&mut game,&assets);
+    assert_ne!(fp_2b_mid,fp_2b_spawn);
+    assert!(dark_2b_mid<0.95);
+    let p95_2b=measure_hq_p95_ms(&mut base,&mut hq,&game,&assets);
+
+    // 5. checkpoint_2b_end -> halo fire plume -> KabukiCard -> completion
+    input.set(VK_SPACE,true);
+    game.tick(&mut input,&ground);
+    input.set(VK_SPACE,false);
+    let cp_end=labs2b::CHECKPOINTS.iter().find(|c|c.name=="checkpoint_2b_end").expect("checkpoint_2b_end");
+    let (xe,ye,_,_)=cp_end.game_bounds();
+    game.player.x=(xe+20.0)-d2b.level_origin_game_local.x;
+    game.player.y=(ye+20.0)-d2b.level_origin_game_local.y;
+    game.player.dx=0.0;
+    game.player.dy=0.0;
+    let _=game.take_audio_events();
+    game.tick(&mut input,&ground);
+    assert!(game.level2b_exit_reached);
+    assert!(game.halo_fire);
+    assert_eq!(game.cam_height(),d2b.camera.height+15.0);
+    for _ in 0..4 { game.tick(&mut input,&ground); }
+    assert!(game.halo_frame>=24);
+    snapshot(true,out,"l2_2b_fire_hq.png",&mut game,&assets);
+    let mut exit_audio=Vec::new();
+    for _ in 0..40 {
+        game.tick(&mut input,&ground);
+        exit_audio.extend(game.take_audio_events());
+        if game.screen==AppScreen::KabukiCard { break; }
+    }
+    assert_eq!(game.screen,AppScreen::KabukiCard);
+    assert!(exit_audio.contains(&AudioEvent::MusicStop));
+    assert!(exit_audio.contains(&AudioEvent::IntroStart));
+
+    snapshot(false,out,"l2_kabuki_000.png",&mut game,&assets);
+    let (_,fp_kb0)=intro_frame_metrics(false,&mut game,&assets);
+    for _ in 0..135 { game.tick(&mut input,&ground); }
+    snapshot(true,out,"l2_kabuki_135_hq.png",&mut game,&assets);
+    let (_,fp_kb135)=intro_frame_metrics(false,&mut game,&assets);
+    assert_ne!(fp_kb0,fp_kb135,"KabukiCard must animate");
+
+    assert!(game.skip_kabuki_card());
+    let mut kb_audio=Vec::new();
+    for _ in 0..41 {
+        game.tick(&mut input,&ground);
+        kb_audio.extend(game.take_audio_events());
+    }
+    assert!(game.kabuki_card_complete);
+    assert!(kb_audio.contains(&AudioEvent::IntroStop));
+    assert_eq!(game.pending_stage_entry(),None);
+
+    let report=format!(
+        "{{\n  \"milestone\": \"B32\",\n  \"route\": [\"EscapeCard\", \"Level2A\", \"TvCard\", \"Level2B\", \"KabukiCard\", \"Complete\"],\n  \"final_score\": {},\n  \"final_lives\": {},\n  \"final_batarangs\": {},\n  \"final_health_after_lava\": {},\n  \"clock_remaining\": \"{}:{:02}\",\n  \"level2a_goon_kills\": {},\n  \"fingerprints\": {{\n    \"l2_2a_spawn_hq\": \"0x{fp_2a_spawn:016x}\",\n    \"l2_2a_gameplay_hq\": \"0x{fp_2a_mid:016x}\",\n    \"l2_tv_000\": \"0x{fp_tv0:016x}\",\n    \"l2_tv_110\": \"0x{fp_tv110:016x}\",\n    \"l2_2b_spawn_hq\": \"0x{fp_2b_spawn:016x}\",\n    \"l2_2b_gameplay_hq\": \"0x{fp_2b_mid:016x}\",\n    \"l2_kabuki_000\": \"0x{fp_kb0:016x}\",\n    \"l2_kabuki_135\": \"0x{fp_kb135:016x}\"\n  }},\n  \"dark_fraction\": {{\n    \"l2_2a_spawn_hq\": {dark_2a_spawn:.4},\n    \"l2_2a_gameplay_hq\": {dark_2a_mid:.4},\n    \"l2_2b_spawn_hq\": {dark_2b_spawn:.4},\n    \"l2_2b_gameplay_hq\": {dark_2b_mid:.4}\n  }},\n  \"hq_frame_p95_ms\": {{\n    \"level2a\": {p95_2a:.4},\n    \"level2b\": {p95_2b:.4}\n  }},\n  \"keyframes\": [\n    \"l2_2a_spawn.png\", \"l2_2a_spawn_hq.png\", \"l2_2a_gameplay.png\", \"l2_2a_gameplay_hq.png\",\n    \"l2_tv_000.png\", \"l2_tv_110_hq.png\",\n    \"l2_2b_spawn.png\", \"l2_2b_spawn_hq.png\", \"l2_2b_gameplay.png\", \"l2_2b_gameplay_hq.png\", \"l2_2b_fire_hq.png\",\n    \"l2_kabuki_000.png\", \"l2_kabuki_135_hq.png\"\n  ]\n}}\n",
+        game.score,game.lives,game.batarangs,game.health,game.clock_secs,game.clock_millisecs,kills_2a
+    );
+    fs::write(out.join("level2_route_qa_report.json"),report).expect("write B32 Level2 QA report");
 }

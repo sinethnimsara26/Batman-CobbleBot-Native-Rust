@@ -1927,6 +1927,10 @@ jobs:
           if ($labs2aQa.ExitCode -ne 0) { throw "B26 Labs 2A route QA failed with exit code $($labs2aQa.ExitCode)" }
           Get-Content ".generated/b26-labs2a-qa/labs2a_route_qa_report.json"
 
+          $level2Qa = Start-Process -FilePath $exe -ArgumentList @("--qa-level2-route", ".generated/b32-level2-qa") -Wait -PassThru
+          if ($level2Qa.ExitCode -ne 0) { throw "B32 Full Level 2 E2E route QA failed with exit code $($level2Qa.ExitCode)" }
+          Get-Content ".generated/b32-level2-qa/level2_route_qa_report.json"
+
           $legacyShots = Get-ChildItem ".generated/visual-smoke/*.png"
           $hqShots = Get-ChildItem ".generated/visual-smoke-hq/*.png"
           if ($legacyShots.Count -ne 20) { throw "Expected 20 legacy smoke screenshots, got $($legacyShots.Count)" }
@@ -2564,6 +2568,13 @@ jobs:
         with:
           name: Batman-CobbleBot-B31-KabukiCard-Proof
           path: .generated/b31-kabuki-card-proof/
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Batman-CobbleBot-B32-Level2-E2E-QA
+          path: .generated/b32-level2-qa/
           if-no-files-found: error
 
       - uses: actions/upload-artifact@v4
