@@ -119,6 +119,7 @@ pub fn render_with_config(
                     AppScreen::Intro=>game.intro_fadeout_tick,
                     AppScreen::EscapeCard=>game.escape_card_fadeout_tick,
                     AppScreen::TvCard=>game.tv_card_fadeout_tick,
+                    AppScreen::KabukiCard=>game.kabuki_card_fadeout_tick,
                     _=>None,
                 };
                 if let Some(t)=active_fade{
@@ -294,6 +295,12 @@ fn render_legacy_intro_overlay(fb:&mut RenderSurface,game:&Game,assets:&Assets,s
         AppScreen::TvCard=>{
             render_story_timeline_legacy(
                 fb,assets,&assets.tv_card_frames,game.tv_card_tick,game.tv_card_fadeout_tick,show_fade,
+            );
+            return
+        },
+        AppScreen::KabukiCard=>{
+            render_story_timeline_legacy(
+                fb,assets,&assets.kabuki_card_frames,game.kabuki_card_tick,game.kabuki_card_fadeout_tick,show_fade,
             );
             return
         },
@@ -1839,5 +1846,35 @@ mod tests{
 
         assert_ne!(uncollected.pixels, collected.pixels, "collecting Level 2B item_br01 & advancing overlay must alter rendered output");
         assert!(hq_out.pixels.iter().filter(|&&p| (p & 0x00ff_ffff) != 0).count() > 25_000);
+    }
+
+    #[test]
+    fn b31_kabuki_card_renders_timeline_and_fadeout_in_1x_and_hq3x() {
+        use super::{render, render_high_quality, HQ_H, LOGICAL_H};
+        use crate::assets::Assets;
+        use crate::game::{AppScreen, Game};
+
+        let assets = Assets::load();
+        assert_eq!(assets.common.kabuki_card_frames.len(), 166);
+        let mut game = Game::new();
+        game.screen = AppScreen::KabukiCard;
+        game.kabuki_card_tick = 110;
+
+        let mut legacy_110 = RenderSurface::new(LOGICAL_W, LOGICAL_H);
+        let mut legacy_135 = RenderSurface::new(LOGICAL_W, LOGICAL_H);
+        let mut hq_scratch = RenderSurface::new(LOGICAL_W, LOGICAL_H);
+        let mut hq_out = RenderSurface::new(HQ_W, HQ_H);
+        let mut hq_faded = RenderSurface::new(HQ_W, HQ_H);
+
+        render(&mut legacy_110, &game, &assets);
+        render_high_quality(&mut hq_scratch, &mut hq_out, &game, &assets);
+
+        game.kabuki_card_tick = 135;
+        render(&mut legacy_135, &game, &assets);
+        assert_ne!(legacy_110.pixels, legacy_135.pixels);
+
+        game.kabuki_card_fadeout_tick = Some(20);
+        render_high_quality(&mut hq_scratch, &mut hq_faded, &game, &assets);
+        assert_ne!(hq_out.pixels, hq_faded.pixels);
     }
 }

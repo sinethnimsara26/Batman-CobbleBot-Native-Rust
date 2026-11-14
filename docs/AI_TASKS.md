@@ -1,6 +1,15 @@
 # Persistent development tasks — Batman Rust port
 
 
+## B31 — COMPLETED / `checkpoint_2b_end` Halo Fire & `card:kabuki` (`#1569`/`#1570`) (2026-11-14)
+- **Status:** COMPLETED — Windows CI Run `#43623825988` (`conclusion: success`, `18m53s`) on `revive/level2-b31-labs2b-kabuki-card-2026-11-14` (Draft PR `#63`, code SHA `a72f2a5`).
+- **Delivered:**
+  - `reverse-engineering/tools/b31_bake_kabuki_card.py` + `.github/workflows/build-level1a-fidelity.yml`: audits `#1254`/`#1262`/`#1564`/`#1569`/`#1570` on root frame `26`, bakes `kabuki_card_frames.bin` (`166` active frames `0..=165`, `2,132,838` bytes), `KABUKI_CARD_SKIP_RECT` (`(528,370,573,382)`), and CI proof `Batman-CobbleBot-B31-KabukiCard-Proof` (`kabuki-card-contact-sheet.png` SHA-256 `b688f73afceed2063509f3ae5350cede2757f14ee9a45dc5374d110641c0b524`).
+  - `src/assets.rs` (`CommonAssets::kabuki_card_frames`), `src/game.rs` (`AppScreen::KabukiCard`, `checkpoint_2b_end` exit + `trigger_halo_fire()` + `cam_height += 15`, `skip_kabuki_card`, auto-fade at `159` to `Stop()` at `165`, `b31_kabuki_card_tests`), `src/render.rs` (1× & HQ3× `KabukiCard` + fadeout + test), and `src/win32.rs` (`KABUKI_CARD_SKIP_RECT` hit-test & click-skip + bounds test).
+  - Verified (`cargo test --release --locked` `140 passed; 0 failed` in `4.85s` CI / `5.00s` local, `hq_smoke_hashes_identical: 20`, relocated EXE SHA-256 `0eb5a60c07e25b7fca41f51eb0336ce342c19d8e2215a793ed2e35a43ca2d8a7`, `render_p95_ms: 23.7463`, `scenery_p95_ms: 26.7122`, local `--qa-labs2a-route` exit `0`).
+- **Next:** **B32** (Full Level 2 integrated `--qa-level2-route` E2E verification, CI artifact upload, and final Level 2 closeout).
+
+
 ## B30 — COMPLETED / `Labs 2B` Checkpoints (`84`/`93`/`39`), `10` Pickups & Live `TvCard -> Level2B` Entry (2026-11-14)
 - **Status:** COMPLETED — Windows CI Run `#43621034630` (`conclusion: success`, `15m0s`) on `revive/level2-b30-labs2b-checkpoints-pickups-entry-2026-11-14` (Draft PR `#62`, code SHA `303de79`).
 - **Delivered:**

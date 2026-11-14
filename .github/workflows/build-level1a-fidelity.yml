@@ -180,6 +180,16 @@ jobs:
           Copy-Item "$work/tv-card/168.png" ".generated/b26-tv-card-proof/168.png"
           Copy-Item "$work/tv-card/manifest.json" ".generated/b26-tv-card-proof/manifest.json"
 
+          # B31: original root frame 26 (`card:kabuki`, #1569 166 active frames before Stop@165, button #1570).
+          python "$tools/b31_bake_kabuki_card.py" "$swf" "$work/reports/symbols.json" "$work/reports/root_placements.json" "$work/bitmaps" "$work/kabuki-card"
+          python "$tools/pack_sprite_frames.py" "$work/kabuki-card" "assets/kabuki_card_frames.bin" --format-version 2 --logical-pixel-scale 1.0
+          Copy-Item "$work/kabuki-card/kabuki_card_button_bounds.rs" "assets/kabuki_card_button_bounds.rs"
+          New-Item -ItemType Directory -Force -Path ".generated/b31-kabuki-card-proof" | Out-Null
+          Copy-Item "$work/kabuki-card/kabuki-card-contact-sheet.png" ".generated/b31-kabuki-card-proof/kabuki-card-contact-sheet.png"
+          Copy-Item "$work/kabuki-card/110.png" ".generated/b31-kabuki-card-proof/110.png"
+          Copy-Item "$work/kabuki-card/135.png" ".generated/b31-kabuki-card-proof/135.png"
+          Copy-Item "$work/kabuki-card/manifest.json" ".generated/b31-kabuki-card-proof/manifest.json"
+
           python "$tools/render_collision_masks.py" "$swf" "$work/reports/symbols.json" "reverse-engineering/manifests/level-instances.json" "reverse-engineering/generated/collision_masks" --level level1a --level level1b --level level1c_penguin --level level2a --level level2b
           python "$tools/b07_probe_bank_ground.py" "reverse-engineering/generated/collision_masks/manifest.json" "reverse-engineering/generated/collision_masks/level1b_ground.png" ".generated/b07-bank-ground"
 
@@ -591,6 +601,20 @@ jobs:
                   with Image.open(".generated/tv-card/168.png") as tv168:
                       assert ImageChops.difference(tv0.convert("RGB"),tv110.convert("RGB")).getbbox(), "tv card failed to animate"
                       assert ImageChops.difference(tv110.convert("RGB"),tv168.convert("RGB")).getbbox(), "tv card countdown failed to animate"
+          kabuki_card=json.loads(Path(".generated/kabuki-card/manifest.json").read_text())
+          assert kabuki_card["source_root_frame"] == 26
+          assert kabuki_card["source_card_symbol"] == 1569
+          assert kabuki_card["frame_count"] == 166
+          assert kabuki_card["auto_fade_frame_zero_based"] == 159
+          assert kabuki_card["terminal_frame_zero_based"] == 165
+          assert kabuki_card["terminal_destination_label"] == "level3a"
+          assert kabuki_card["unsupported_fills"] == [], kabuki_card["unsupported_fills"]
+          assert kabuki_card["missing_bitmap_ids"] == [], kabuki_card["missing_bitmap_ids"]
+          with Image.open(".generated/kabuki-card/000.png") as kb0:
+              with Image.open(".generated/kabuki-card/110.png") as kb110:
+                  with Image.open(".generated/kabuki-card/135.png") as kb135:
+                      assert ImageChops.difference(kb0.convert("RGB"),kb110.convert("RGB")).getbbox(), "kabuki card failed to animate"
+                      assert ImageChops.difference(kb110.convert("RGB"),kb135.convert("RGB")).getbbox(), "kabuki card text failed to animate"
           hud=json.loads(Path("assets/hud.json").read_text())
           print("HUD:",hud)
           assert hud["hud_size"] == [283,86], hud["hud_size"]
@@ -2533,6 +2557,13 @@ jobs:
         with:
           name: Batman-CobbleBot-B29-Clock-Lava-Halo-Proof
           path: .generated/b29-labs2b-proof/
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Batman-CobbleBot-B31-KabukiCard-Proof
+          path: .generated/b31-kabuki-card-proof/
           if-no-files-found: error
 
       - uses: actions/upload-artifact@v4

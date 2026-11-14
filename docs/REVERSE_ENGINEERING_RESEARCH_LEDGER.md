@@ -1567,3 +1567,7 @@ Tested original source fixed CODE SHA `26dad6e07ef3dc1ca860aa98b4a8ccfb12912f72`
 
 - **RE-20261114-036 (`Level2B` live entry, `checkpoint_2b_01..03` & `10` `item_br*` pickups verified — `B30`):**
   - Verified live `TvCard -> Level2B` entry (`consume_pending_stage_entry` in `src/game.rs` + `--qa-labs2a-route` in `src/headless.rs`) activates `StageId::Level2B`, emits `AudioEvent::StageTrack(StageId::Level2B)` + `AudioEvent::MusicStart`, initializes all `10` `item_br01..10` pickups, and triggers overlays `#84` (`escapeLab`), `#93` (`useShaft`), and `#39` (`glidedown`) cleanly in both `1x` Legacy and `HQ3x`.
+
+- **RE-20261114-037 (`card:kabuki` `#1569`/`#1570` frame-165 stop & `#1254` hold verified — `B31`):**
+  - Audited root frame `26` tags directly in `cobblebot.swf`: verified `StartSound 130`, `Stop()`, and `#1570` `DefineButton2` `over_down_to_over_up` (`_root.gotoNext = "level3a"; _root.fadeout.play();`) at stage bounds `[528, 370, 573, 382]`.
+  - Verified `#1569` removes all child placements at frame `166` right after `Stop()` at frame `165` (`auto_fade = 159`), `#1262` (`53f`) is removed at `#1569` frame `99` before wrapping, `#1564` stops at `165`, `#1494` (`4f`) loops, and root `#1254` stops cleanly at `161` held through `165`.
