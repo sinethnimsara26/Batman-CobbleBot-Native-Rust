@@ -1804,4 +1804,40 @@ mod tests{
         assert_ne!(clock_and_lava_1x.pixels, halo_fire_1x.pixels, "#1495 halo fire plume must render in 1x");
         assert_ne!(hq_base.pixels, hq_fire.pixels, "#1495 halo fire plume + 3x clock must render in HQ3x");
     }
+
+    #[test]
+    fn b30_labs2b_pickups_and_tutorial_overlays_render_in_1x_and_hq3x() {
+        use super::{render, render_high_quality, HQ_H, LOGICAL_H};
+        use crate::assets::Assets;
+        use crate::game::{AppScreen, Game};
+
+        let mut assets = Assets::load();
+        assets.load_stage(crate::stage::StageId::Level2B);
+        let mut game = Game::new();
+        game.screen = AppScreen::Playing;
+        game.start_stage(crate::stage::StageId::Level2B);
+        game.ticks = 45;
+        game.halo_frame = 9;
+        game.overlay_frame = 84; // escapeLab (#737)
+
+        let p0 = crate::stage::labs2b::BATARANG_PICKUPS[0];
+        game.camera_x = 300.0 - p0.x;
+        game.camera_y = 220.0 - p0.y;
+        game.player.x = p0.x - game.level_origin_x();
+        game.player.y = p0.y - game.level_origin_y();
+
+        let mut uncollected = RenderSurface::new(LOGICAL_W, LOGICAL_H);
+        let mut collected = RenderSurface::new(LOGICAL_W, LOGICAL_H);
+        let mut hq_out = RenderSurface::new(HQ_W, HQ_H);
+        let mut hq_scratch = RenderSurface::new(LOGICAL_W, LOGICAL_H);
+
+        render(&mut uncollected, &game, &assets);
+        render_high_quality(&mut hq_scratch, &mut hq_out, &game, &assets);
+        game.pickups[0] = true;
+        game.overlay_frame = 93; // useShaft (#737)
+        render(&mut collected, &game, &assets);
+
+        assert_ne!(uncollected.pixels, collected.pixels, "collecting Level 2B item_br01 & advancing overlay must alter rendered output");
+        assert!(hq_out.pixels.iter().filter(|&&p| (p & 0x00ff_ffff) != 0).count() > 25_000);
+    }
 }

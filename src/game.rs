@@ -92,6 +92,8 @@ const OVERLAY_WRONGWAY:usize=30;
 const OVERLAY_GLIDE_DOWN:usize=39;
 const OVERLAY_WALK:usize=58;
 const OVERLAY_FIND_LAB:usize=66;
+const OVERLAY_ESCAPE_LAB:usize=84;
+const OVERLAY_USE_SHAFT:usize=93;
 const OVERLAY_TO_STREET:usize=140;
 const ESCAPE_CARD_TERMINAL_FRAME:u16=224;
 const TV_CARD_AUTO_FADE_FRAME:u16=151;
@@ -401,8 +403,7 @@ impl Game{
             StageId::Level1A => PICKUPS.len(),
             StageId::Level1B => LEVEL1B_PICKUPS.len(),
             StageId::Level1C => LEVEL1C_PICKUP_POINTS.len(),
-            StageId::Level2A => labs2a::BATARANG_PICKUPS.len(),
-            StageId::Level2B => 0,
+            StageId::Level2A | StageId::Level2B => stage.labs_batarang_pickups().len(),
         };
         self.pickups=vec![false;pickup_count];
         self.labs_health_collected=false;
@@ -480,11 +481,11 @@ impl Game{
     /// B04 readonly handoff; does not make Stage1B playable or start its audio.
     pub fn pending_stage_entry(&self)->Option<PendingStageEntry>{self.pending_stage_entry}
 
-    /// Consumes an implemented playable stage handoff (`Level1B`, `Level1C`, or `Level2A`),
+    /// Consumes an implemented playable stage handoff (`Level1B`, `Level1C`, `Level2A`, or `Level2B`),
     /// resetting stage actors while preserving carried `RootProgress` and restarting music.
     pub fn consume_pending_stage_entry(&mut self)->Option<StageId>{
         let entry=self.pending_stage_entry?;
-        if !matches!(entry.to,StageId::Level1B|StageId::Level1C|StageId::Level2A) {
+        if !matches!(entry.to,StageId::Level1B|StageId::Level1C|StageId::Level2A|StageId::Level2B) {
             return None;
         }
         self.start_stage(entry.to);
@@ -1493,16 +1494,23 @@ impl Game{
                     self.overlay_goto_and_play(OVERLAY_GO_RIGHT);
                 }
             }
-            StageId::Level2A => {
-                let title_done = self.level_title_finished();
-                for &cp in &labs2a::CHECKPOINTS {
+            StageId::Level2A | StageId::Level2B => {
+                // Root frame 23 (`level2a`) gates `checkpoint_2a_01` on `levelTitle` finish; root frame 25 (`level2b`) omits `levelTitle`.
+                let title_done = self.stage != StageId::Level2A || self.level_title_finished();
+                for &cp in self.stage.labs_checkpoints() {
                     if !cp.hits_player(x, y) { continue; }
                     match cp.name {
                         "checkpoint_2a_01" if title_done => {
                             self.overlay_goto_and_play(OVERLAY_FIND_LAB);
                         }
-                        "checkpoint_2a_02" => {
+                        "checkpoint_2a_02" | "checkpoint_2b_03" => {
                             self.overlay_goto_and_play(OVERLAY_GLIDE_DOWN);
+                        }
+                        "checkpoint_2b_01" => {
+                            self.overlay_goto_and_play(OVERLAY_ESCAPE_LAB);
+                        }
+                        "checkpoint_2b_02" => {
+                            self.overlay_goto_and_play(OVERLAY_USE_SHAFT);
                         }
                         "checkpoint_2a_tv" if !self.level2a_exit_reached && self.fadeout_tick.is_none() => {
                             // SWF checkpoint_2a_tv sets `_root.gotoNext = "card:tv"; _root.fadeout.play();`.
@@ -1553,21 +1561,21 @@ impl Game{
                     self.try_collect_batarang(i, px, py, x, y);
                 }
             }
-            StageId::Level2A => {
-                for (i, &p) in labs2a::BATARANG_PICKUPS.iter().enumerate() {
+            StageId::Level2A | StageId::Level2B => {
+                for (i, &p) in self.stage.labs_batarang_pickups().iter().enumerate() {
                     self.try_collect_batarang(i, px, py, p.x, p.y);
                 }
                 if !self.labs_health_collected {
-                    let h = labs2a::HEALTH_PICKUPS[0];
-                    if (px - h.x).abs() < 55.0 && (py - h.y).abs() < 55.0 {
-                        self.labs_health_collected = true;
-                        self.health = 100;
-                        self.score += 50;
-                        self.audio_events.push(AudioEvent::Item);
+                    if let Some(&h) = self.stage.labs_health_pickups().first() {
+                        if (px - h.x).abs() < 55.0 && (py - h.y).abs() < 55.0 {
+                            self.labs_health_collected = true;
+                            self.health = 100;
+                            self.score += 50;
+                            self.audio_events.push(AudioEvent::Item);
+                        }
                     }
                 }
             }
-            StageId::Level2B => {}
         }
     }
 
@@ -3086,8 +3094,17 @@ mod b26_tv_card_tests {
         assert_eq!(pending.progress.score, 777);
         assert_eq!(pending.progress.lives, 4);
         assert_eq!(pending.progress.batarangs, 12);
-        // Level 2B stays latched (None) until B27-B31 implement StageId::Level2B.
-        assert_eq!(game.consume_pending_stage_entry(), None);
+        // B30 activates StageId::Level2B live stage transition, audio, and 10 pickups.
+        let _ = game.take_audio_events();
+        assert_eq!(game.consume_pending_stage_entry(), Some(StageId::Level2B));
+        assert_eq!(game.active_stage(), StageId::Level2B);
+        assert_eq!(game.screen, AppScreen::Playing);
+        assert_eq!(game.pickups.len(), 10);
+        assert_eq!((game.score, game.lives, game.batarangs), (777, 4, 12));
+        assert_eq!(
+            game.take_audio_events(),
+            vec![AudioEvent::StageTrack(StageId::Level2B), AudioEvent::MusicStart]
+        );
     }
 
     #[test]
@@ -3452,5 +3469,86 @@ mod b29_labs2b_lava_clock_halo_tests {
         assert_eq!(game.health, 80);
         assert!(game.lava_done);
         assert!(game.take_audio_events().contains(&AudioEvent::Punch2));
+    }
+}
+
+#[cfg(test)]
+mod b30_labs2b_checkpoints_pickups_entry_tests {
+    use super::*;
+
+    #[test]
+    fn b30_labs2b_collects_all_10_batarang_pickups_and_triggers_checkpoints_01_to_03() {
+        let mut game = Game::new();
+        let ground = CollisionMask::for_stage(StageId::Level2B);
+        let desc = StageId::Level2B.descriptor();
+        game.start_stage(StageId::Level2B);
+        game.screen = AppScreen::Playing;
+        assert_eq!(game.pickups.len(), 10);
+        assert_eq!(game.health, 100);
+
+        let initial_score = game.score;
+        let initial_batarangs = game.batarangs;
+
+        // 1. All 10 item_br* pickups grant +5 batarangs, +5 score, and AudioEvent::Item once each.
+        for (i, &p) in crate::stage::labs2b::BATARANG_PICKUPS.iter().enumerate() {
+            game.player.x = p.x - desc.level_origin_game_local.x;
+            game.player.y = p.y - desc.level_origin_game_local.y;
+            game.player.dy = 0.0;
+            let _ = game.take_audio_events();
+            let mut input = InputState::default();
+            game.tick(&mut input, &ground);
+            assert!(game.pickups[i], "Level2B {} should be collected", p.name);
+            assert_eq!(game.batarangs, initial_batarangs + (i as i32 + 1) * 5);
+            assert_eq!(game.score, initial_score + (i as i32 + 1) * 5);
+            assert!(
+                game.take_audio_events().contains(&AudioEvent::Item),
+                "{} must emit Item SFX",
+                p.name
+            );
+        }
+
+        // 2. Checkpoints 2b_01 (`escapeLab`=84), 2b_02 (`useShaft`=93), and 2b_03 (`glidedown`=39)
+        //    trigger immediately (Root frame 25 has no levelTitle delay gate).
+        let mut input = InputState::default();
+        let cp1 = crate::stage::labs2b::CHECKPOINTS
+            .iter()
+            .find(|c| c.name == "checkpoint_2b_01")
+            .unwrap();
+        let (x1, y1, _, _) = cp1.game_bounds();
+        game.player.x = (x1 + 20.0) - desc.level_origin_game_local.x;
+        game.player.y = (y1 + 20.0) - desc.level_origin_game_local.y;
+        game.tick(&mut input, &ground);
+        assert_eq!(game.overlay_frame, super::OVERLAY_ESCAPE_LAB);
+
+        let cp2 = crate::stage::labs2b::CHECKPOINTS
+            .iter()
+            .find(|c| c.name == "checkpoint_2b_02")
+            .unwrap();
+        let (x2, y2, _, _) = cp2.game_bounds();
+        game.player.x = (x2 + 20.0) - desc.level_origin_game_local.x;
+        game.player.y = (y2 + 20.0) - desc.level_origin_game_local.y;
+        game.tick(&mut input, &ground);
+        assert_eq!(game.overlay_frame, super::OVERLAY_USE_SHAFT);
+
+        let cp3 = crate::stage::labs2b::CHECKPOINTS
+            .iter()
+            .find(|c| c.name == "checkpoint_2b_03")
+            .unwrap();
+        let (x3, y3, _, _) = cp3.game_bounds();
+        game.player.x = (x3 + 20.0) - desc.level_origin_game_local.x;
+        game.player.y = (y3 + 20.0) - desc.level_origin_game_local.y;
+        game.tick(&mut input, &ground);
+        assert_eq!(game.overlay_frame, super::OVERLAY_GLIDE_DOWN);
+
+        // `checkpoint_2b_end` remains inert until B31 introduces `card:kabuki`.
+        let cp_end = crate::stage::labs2b::CHECKPOINTS
+            .iter()
+            .find(|c| c.name == "checkpoint_2b_end")
+            .unwrap();
+        let (xe, ye, _, _) = cp_end.game_bounds();
+        game.player.x = (xe + 20.0) - desc.level_origin_game_local.x;
+        game.player.y = (ye + 20.0) - desc.level_origin_game_local.y;
+        game.tick(&mut input, &ground);
+        assert_eq!(game.fadeout_tick, None);
     }
 }
