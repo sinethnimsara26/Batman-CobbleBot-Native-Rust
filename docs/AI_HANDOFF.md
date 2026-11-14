@@ -1,6 +1,15 @@
 # AI handoff — current recovery checkpoint
 
 
+## FINAL VERIFIED — B32 Full Level 2 Integrated E2E QA (`--qa-level2-route`) & Goon Combat-Plane Fix (2026-11-15)
+- **Active Branch / PR:** `revive/level2-b32-e2e-qa-closeout-2026-11-14` (Draft PR `#64` against `revive/level2-b31-labs2b-kabuki-card-2026-11-14`)
+- **Latest Verified Commit / CI:** Commit `ba0dc63` passed Windows CI Run `#43628102869` (`19m12s`, `141 passed; 0 failed`, `hq_smoke_hashes_identical: 20`, relocated EXE SHA-256 `7063e5bcf683d219a5df966793a12626cf03250928f51a195f60776eb52299c1`, `child_exit: 0`, `render_p95_ms: 25.6914`, `scenery_p95_ms: 25.7529`, `intro_audio_focus: BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT`).
+- **Scope Verified:**
+  - Fixed waist-vs-foot Y-plane alignment and batarang anti-tunneling (`hit_x <= 30.0`) on `BankGoon` (`BankGoon::batarang_y_bounds`, `BankGoon::same_combat_plane` + `standing_player_waist_y_hits_bank_and_labs_goons_with_batarang_and_melee` in `src/bank_goons.rs`), so standing `VK_A` batarangs (`player.y_game - 20`) and same-floor melee attacks connect cleanly on both Level 1B and Level 2A goons.
+  - Added `--qa-level2-route` in `src/headless.rs` + `src/main.rs` + `.github/workflows/build-level1a-fidelity.yml` (`Batman-CobbleBot-B32-Level2-E2E-QA`): verified full `["EscapeCard", "Level2A", "TvCard", "Level2B", "KabukiCard", "Complete"]` route on Windows CI (`final_score: 915`, `final_lives: 4`, `final_batarangs: 16`, `final_health_after_lava: 90`, `clock_remaining: "79:40"`, `level2a_goon_kills: 1`, `hq_frame_p95_ms: { level2a: 40.8730, level2b: 31.5202 }`) and visually inspected `l2_2a_gameplay_hq.png`, `l2_2b_gameplay_hq.png`, `l2_2b_fire_hq.png`, and `l2_kabuki_135_hq.png`.
+- **Milestone Status & Next Step:** **Level 2 (`Labs 2A`, `card:tv`, `Labs 2B`, `card:kabuki`) is COMPLETE and playable end-to-end.** Future milestone: **Level 3A** (`Kabuki` Rooftops) once stacked Draft PRs (`#62 -> #63 -> #64`) are reviewed/merged per project workflow.
+
+
 ## FINAL VERIFIED — B31 `checkpoint_2b_end` Halo Fire & `card:kabuki` (`#1569`/`#1570`) (2026-11-14)
 - **Active Branch / PR:** `revive/level2-b31-labs2b-kabuki-card-2026-11-14` (Draft PR `#63` against `revive/level2-b30-labs2b-checkpoints-pickups-entry-2026-11-14`)
 - **Latest Verified Commit / CI:** Commit `a72f2a5` passed Windows CI Run `#43623825988` (`18m53s`, `140 passed; 0 failed` in `4.85s`, `hq_smoke_hashes_identical: 20`, relocated EXE SHA-256 `0eb5a60c07e25b7fca41f51eb0336ce342c19d8e2215a793ed2e35a43ca2d8a7`, `child_exit: 0`, `render_p95_ms: 23.7463`, `scenery_p95_ms: 26.7122`, `intro_audio_focus: BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT`).

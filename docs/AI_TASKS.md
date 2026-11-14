@@ -1,6 +1,15 @@
 # Persistent development tasks — Batman Rust port
 
 
+## B32 — COMPLETED / Full Level 2 Integrated E2E QA (`--qa-level2-route`) & Goon Combat-Plane Fix (2026-11-15)
+- **Status:** COMPLETED — Windows CI Run `#43628102869` (`conclusion: success`, `19m12s`) on `revive/level2-b32-e2e-qa-closeout-2026-11-14` (Draft PR `#64`, code SHA `ba0dc63`).
+- **Delivered:**
+  - `src/bank_goons.rs`: added `BankGoon::batarang_y_bounds` and `BankGoon::same_combat_plane` (`probe_y = self.y - 20.0` in `[player_y_game - 50.0 .. player_y_game + 80.0]`, plus `hit_x <= 30.0` anti-tunneling) and unit test `standing_player_waist_y_hits_bank_and_labs_goons_with_batarang_and_melee` (`140 -> 141`), fixing standing batarang (`player.y_game - 20`) and same-floor melee hit registration across Bank (`1B`) and Labs (`2A`) goons.
+  - `src/headless.rs`, `src/main.rs`, `.github/workflows/build-level1a-fidelity.yml`: implemented `--qa-level2-route` and CI artifact `Batman-CobbleBot-B32-Level2-E2E-QA` exercising `EscapeCard -> Level2A -> TvCard -> Level2B -> KabukiCard -> Complete` with real `VK_A` batarang kill + `VK_S` punch, `labs2a::ELEVATORS[1]` boarding, `lava1` damage (`90` HP), countdown clock (`79:40`), `"fire"` halo (`24+`), and `card:kabuki` skip (`final_score: 915`, `final_lives: 4`, `final_batarangs: 16`, `level2a_goon_kills: 1`, `hq_frame_p95_ms: { level2a: 40.8730, level2b: 31.5202 }`).
+  - Verified (`cargo test --release --locked` `141 passed; 0 failed` in `4.82s` local, `hq_smoke_hashes_identical: 20`, relocated EXE SHA-256 `7063e5bcf683d219a5df966793a12626cf03250928f51a195f60776eb52299c1`, `render_p95_ms: 25.6914`, `scenery_p95_ms: 25.7529`, local `--qa-labs2a-route` exit `0`, local `--qa-level2-route` exit `0`, CI HQ PNGs visually inspected).
+- **Milestone Complete:** Level 2 (`Labs 2A`, `card:tv`, `Labs 2B`, `card:kabuki`) finished end-to-end; next future milestone is **Level 3A**.
+
+
 ## B31 — COMPLETED / `checkpoint_2b_end` Halo Fire & `card:kabuki` (`#1569`/`#1570`) (2026-11-14)
 - **Status:** COMPLETED — Windows CI Run `#43623825988` (`conclusion: success`, `18m53s`) on `revive/level2-b31-labs2b-kabuki-card-2026-11-14` (Draft PR `#63`, code SHA `a72f2a5`).
 - **Delivered:**
