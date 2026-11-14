@@ -1,6 +1,16 @@
 # Persistent development tasks — Batman Rust port
 
 
+## B30 — COMPLETED / `Labs 2B` Checkpoints (`84`/`93`/`39`), `10` Pickups & Live `TvCard -> Level2B` Entry (2026-11-14)
+- **Status:** COMPLETED — Windows CI Run `#43621034630` (`conclusion: success`, `15m0s`) on `revive/level2-b30-labs2b-checkpoints-pickups-entry-2026-11-14` (Draft PR `#62`, code SHA `303de79`).
+- **Delivered:**
+  - `src/game.rs`: added `OVERLAY_ESCAPE_LAB = 84` & `OVERLAY_USE_SHAFT = 93`; parameterized `start_stage` and `collect_pickups` over `stage.labs_batarang_pickups()`; wired `checkpoint_2b_01..03` without `levelTitle` gating; enabled `StageId::Level2B` in `consume_pending_stage_entry`; updated `tv_card_auto_fades_at_151_continues_to_184_and_latches_level2b_pending` to assert live `StageId::Level2B` + `AudioEvent::StageTrack(StageId::Level2B)` + `AudioEvent::MusicStart`; added `b30_labs2b_checkpoints_pickups_entry_tests`.
+  - `src/headless.rs`: updated `qa_labs2a_route` to verify `consume_pending_stage_entry() == Some(StageId::Level2B)` and `pickups.len() == 10`.
+  - `src/render.rs`: added `b30_labs2b_pickups_and_tutorial_overlays_render_in_1x_and_hq3x` verifying `10` `item_br*` pickups and `#84`/`#93`/`#39` overlays across 1× Legacy & HQ3×.
+  - Verified (`cargo test --release --locked` `137 passed; 0 failed` in `3.57s` CI / `4.28s` local, `hq_smoke_hashes_identical: 20`, relocated EXE SHA-256 `40574d1dcb3614bd644ec3f181a78d9dc122d247b309e3c4f824f82f167de1a8`, `render_p95_ms: 18.73`, `scenery_p95_ms: 22.4025`, local `--qa-labs2a-route` exit `0`).
+- **Next:** **B31** (`checkpoint_2b_end` -> `card:kabuki` `#1569`/`#1570` Skip button -> terminal Level 2 exit handoff).
+
+
 ## B29 — COMPLETED / `Labs 2B` `lava1` (`#1486`), Countdown `clock` (`#1503`/`#1499`) & `halo` (`#1495`/`#1488`) (2026-11-14)
 - **Status:** COMPLETED — Windows CI Run `#43619250305` (`conclusion: success`, `11m18s`) on `revive/level2-b29-labs2b-lava-clock-halo-2026-11-14` (Draft PR `#61`, code SHA `6733a8f`).
 - **Delivered:**

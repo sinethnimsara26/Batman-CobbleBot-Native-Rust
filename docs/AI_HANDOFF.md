@@ -1,6 +1,15 @@
 # AI handoff — current recovery checkpoint
 
 
+## FINAL VERIFIED — B30 `Labs 2B` Checkpoints, `10` Pickups & Live `TvCard -> Level2B` Entry (2026-11-14)
+- **Active Branch / PR:** `revive/level2-b30-labs2b-checkpoints-pickups-entry-2026-11-14` (Draft PR `#62` against `revive/level2-b29-labs2b-lava-clock-halo-2026-11-14`)
+- **Latest Verified Commit / CI:** Commit `303de79` passed Windows CI Run `#43621034630` (`15m0s`, `137 passed; 0 failed` in `3.57s`, `hq_smoke_hashes_identical: 20`, relocated EXE SHA-256 `40574d1dcb3614bd644ec3f181a78d9dc122d247b309e3c4f824f82f167de1a8`, `child_exit: 0`, `render_p95_ms: 18.73`, `scenery_p95_ms: 22.4025`, `intro_audio_focus: BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT`).
+- **Scope Verified:**
+  - Enabled live `StageId::Level2B` entry in `consume_pending_stage_entry` (`src/game.rs`), loading `level2b` ground/tiles and starting `AudioEvent::StageTrack(StageId::Level2B)` + `AudioEvent::MusicStart` (`assets/level2b_music.mp3`).
+  - Wired `checkpoint_2b_01..03` (`OVERLAY_ESCAPE_LAB = 84`, `OVERLAY_USE_SHAFT = 93`, `OVERLAY_GLIDE_DOWN = 39`, no `levelTitle` delay), parameterized `start_stage` + `collect_pickups` for `10` `item_br*` pickups, updated `--qa-labs2a-route` (`src/headless.rs`) to confirm live `Level2B` entry (`pickups.len() == 10`), and added 2 tests (`135 -> 137`).
+- **Next Batch:** Branch `revive/level2-b31-labs2b-kabuki-card-2026-11-14` for **B31** (`checkpoint_2b_end` `camHeight += 15` + `halo.gotoAndPlay("fire")` -> `card:kabuki` `#1569`/`#1570` Skip button -> terminal Level 2 exit handoff).
+
+
 ## FINAL VERIFIED — B29 `Labs 2B` `lava1` (`#1486`), `clock` (`#1503`) & `halo` (`#1495`/`#1488`) (2026-11-14)
 - **Active Branch / PR:** `revive/level2-b29-labs2b-lava-clock-halo-2026-11-14` (Draft PR `#61` against `revive/level2-b28-labs2b-doors-elevators-cameras-2026-11-14`)
 - **Latest Verified Commit / CI:** Commit `6733a8f` passed Windows CI Run `#43619250305` (`11m18s`, `135 passed; 0 failed` in `2.89s`, `hq_smoke_hashes_identical: 20`, relocated EXE SHA-256 `902b25bb336872ae8a2d76fb77af8961048062c79d633fd465febe7f2afdc5a0`, `child_exit: 0`, `render_p95_ms: 14.1057`, `scenery_p95_ms: 16.7797`, `intro_audio_focus: BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT`).
