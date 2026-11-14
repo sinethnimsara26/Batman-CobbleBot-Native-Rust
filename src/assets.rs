@@ -174,6 +174,16 @@ pub struct StageAssets {
 }
 
 impl StageAssets {
+    fn with_tiles(stage_id: crate::stage::StageId, tiles_bytes: &'static [u8], label: &str) -> Self {
+        Self {
+            stage_id,
+            background: decode_png(include_bytes!("../assets/root_bg_131.png")),
+            tiles: LevelTileSet::new_expected(tiles_bytes,1.0,12,label),
+            tiles_hq_base: LevelTileSet::empty(1.0),
+            detail_tiles_hq: LevelTileSet::empty(3.0),
+        }
+    }
+
     pub fn load_level1a() -> Self {
         Self {
             stage_id: crate::stage::StageId::Level1A,
@@ -185,33 +195,19 @@ impl StageAssets {
     }
 
     pub fn load_level1b() -> Self {
-        Self {
-            stage_id: crate::stage::StageId::Level1B,
-            background: decode_png(include_bytes!("../assets/root_bg_131.png")),
-            tiles: LevelTileSet::new_expected(include_bytes!("../assets/level1b_tiles.bin"),1.0,12,"level1b_tiles"),
-            tiles_hq_base: LevelTileSet::empty(1.0),
-            detail_tiles_hq: LevelTileSet::empty(3.0),
-        }
+        Self::with_tiles(crate::stage::StageId::Level1B,include_bytes!("../assets/level1b_tiles.bin"),"level1b_tiles")
     }
 
     pub fn load_level1c() -> Self {
-        Self {
-            stage_id: crate::stage::StageId::Level1C,
-            background: decode_png(include_bytes!("../assets/root_bg_131.png")),
-            tiles: LevelTileSet::new_expected(include_bytes!("../assets/level1c_tiles.bin"),1.0,12,"level1c_tiles"),
-            tiles_hq_base: LevelTileSet::empty(1.0),
-            detail_tiles_hq: LevelTileSet::empty(3.0),
-        }
+        Self::with_tiles(crate::stage::StageId::Level1C,include_bytes!("../assets/level1c_tiles.bin"),"level1c_tiles")
     }
 
     pub fn load_level2a() -> Self {
-        Self {
-            stage_id: crate::stage::StageId::Level2A,
-            background: decode_png(include_bytes!("../assets/root_bg_131.png")),
-            tiles: LevelTileSet::new_expected(include_bytes!("../assets/level2a_tiles.bin"),1.0,12,"level2a_tiles"),
-            tiles_hq_base: LevelTileSet::empty(1.0),
-            detail_tiles_hq: LevelTileSet::empty(3.0),
-        }
+        Self::with_tiles(crate::stage::StageId::Level2A,include_bytes!("../assets/level2a_tiles.bin"),"level2a_tiles")
+    }
+
+    pub fn load_level2b() -> Self {
+        Self::with_tiles(crate::stage::StageId::Level2B,include_bytes!("../assets/level2b_tiles.bin"),"level2b_tiles")
     }
 
     pub fn load(stage_id: crate::stage::StageId) -> Self {
@@ -220,7 +216,7 @@ impl StageAssets {
             crate::stage::StageId::Level1B => Self::load_level1b(),
             crate::stage::StageId::Level1C => Self::load_level1c(),
             crate::stage::StageId::Level2A => Self::load_level2a(),
-            _ => panic!("StageAssets::load: stage {:?} assets not yet embedded", stage_id),
+            crate::stage::StageId::Level2B => Self::load_level2b(),
         }
     }
 }
@@ -627,5 +623,24 @@ mod tests{
         assert_eq!(assets.stage.tiles.index.len(),177);
         assert_eq!(assets.labs_pickups_frames.len(),2);
         assert_eq!(assets.level2a_title_frames.len(),100);
+    }
+
+    #[test]
+    fn b27_labs2b_tile_pack_and_scenery_invariants(){
+        let stage_2b=super::StageAssets::load(crate::stage::StageId::Level2B);
+        assert_eq!(stage_2b.stage_id,crate::stage::StageId::Level2B);
+        assert!((stage_2b.tiles.logical_pixel_scale-1.0).abs()<0.0001);
+        assert_eq!(stage_2b.tiles.index.len(),145);
+        assert_eq!(stage_2b.tiles_hq_base.index.len(),0);
+        assert_eq!(stage_2b.detail_tiles_hq.index.len(),0);
+        assert!(stage_2b.tiles.index.contains_key(&(4200,6800)),"spawn TV room tile (4200,6800) must exist");
+        assert!(stage_2b.tiles.index.contains_key(&(7200,6800)),"east shaft tile (7200,6800) must exist");
+        assert!(stage_2b.tiles.index.contains_key(&(4800,3200)),"mid corridor tile (4800,3200) must exist");
+        assert!(stage_2b.tiles.index.contains_key(&(0,0)),"exit roof tile (0,0) must exist");
+
+        let mut assets=super::Assets::load();
+        assets.load_stage(crate::stage::StageId::Level2B);
+        assert_eq!(assets.stage.stage_id,crate::stage::StageId::Level2B);
+        assert_eq!(assets.stage.tiles.index.len(),145);
     }
 }

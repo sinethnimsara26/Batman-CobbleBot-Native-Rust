@@ -1407,6 +1407,37 @@ mod tests{
     }
 
     #[test]
+    fn labs2b_renders_multifloor_tiles_over_black_backdrop_legacy_and_hq(){
+        let mut assets=crate::assets::Assets::load();
+        assets.load_stage(crate::stage::StageId::Level2B);
+        let mut game=crate::game::Game::new();
+        game.screen=crate::game::AppScreen::Playing;
+        game.start_stage(crate::stage::StageId::Level2B);
+        game.ticks=45;
+
+        let mut fb1x=RenderSurface::new(LOGICAL_W,super::LOGICAL_H);
+        let mut scratch=RenderSurface::new(LOGICAL_W,super::LOGICAL_H);
+        let mut fbhq=RenderSurface::new(HQ_W,super::HQ_H);
+
+        for (cam_x,cam_y) in [(-4200.0f32,-6800.0f32),(-7200.0,-6800.0),(-4800.0,-3200.0),(0.0,0.0)]{
+            game.camera_x=cam_x;
+            game.camera_y=cam_y;
+            game.player.x = -cam_x + 300.0 - game.level_origin_x();
+            game.player.y = -cam_y + 200.0 - game.level_origin_y();
+            super::render(&mut fb1x,&game,&assets);
+            super::render_high_quality(&mut scratch,&mut fbhq,&game,&assets);
+            let non_black_1x=fb1x.pixels.iter().filter(|&&p|(p&0x00ff_ffff)!=0).count();
+            let non_black_hq=fbhq.pixels.iter().filter(|&&p|(p&0x00ff_ffff)!=0).count();
+            assert!(non_black_1x>5_000,"legacy 1x Labs 2B render at ({cam_x},{cam_y}) must show lab geometry");
+            assert!(non_black_hq>45_000,"HQ Labs 2B render at ({cam_x},{cam_y}) must show lab geometry");
+            if (cam_x,cam_y)==(-4800.0,-3200.0){
+                assert_eq!(fb1x.pixels[390*LOGICAL_W]&0x00ff_ffff,0,"mid-corridor void margin must use #14 black backdrop");
+                assert_eq!(fbhq.pixels[(390*3)*HQ_W]&0x00ff_ffff,0,"HQ mid-corridor void margin must use #14 black backdrop");
+            }
+        }
+    }
+
+    #[test]
     fn b22_labs2a_doors_animate_and_jambs_occlude_batman_in_1x_and_hq3x() {
         use super::{
             draw_batman_legacy, draw_world_foreground_legacy, render, render_high_quality,

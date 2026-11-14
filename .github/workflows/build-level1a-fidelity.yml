@@ -180,7 +180,7 @@ jobs:
           Copy-Item "$work/tv-card/168.png" ".generated/b26-tv-card-proof/168.png"
           Copy-Item "$work/tv-card/manifest.json" ".generated/b26-tv-card-proof/manifest.json"
 
-          python "$tools/render_collision_masks.py" "$swf" "$work/reports/symbols.json" "reverse-engineering/manifests/level-instances.json" "reverse-engineering/generated/collision_masks" --level level1a --level level1b --level level1c_penguin --level level2a
+          python "$tools/render_collision_masks.py" "$swf" "$work/reports/symbols.json" "reverse-engineering/manifests/level-instances.json" "reverse-engineering/generated/collision_masks" --level level1a --level level1b --level level1c_penguin --level level2a --level level2b
           python "$tools/b07_probe_bank_ground.py" "reverse-engineering/generated/collision_masks/manifest.json" "reverse-engineering/generated/collision_masks/level1b_ground.png" ".generated/b07-bank-ground"
 
           # Preserve the exact 1x player pack as the legacy regression oracle.
@@ -320,6 +320,11 @@ jobs:
           python "$tools/b25_bake_labs_pickups.py" "$swf" "$work/reports/symbols.json" "$work/reports/actions.json" "$work/sounds/manifest.json" "$work/labs-pickups-frames" "$work/level2a-title-frames" --bitmaps "$work/bitmaps" --proof ".generated/b25-labs2a-proof/labs_pickups_proof.png" --report ".generated/b25-labs2a-proof/labs-pickups-report.json"
           python "$tools/pack_sprite_frames.py" "$work/labs-pickups-frames" "assets/labs_pickups_frames.bin" --format-version 2 --logical-pixel-scale 1.0
           python "$tools/pack_sprite_frames.py" "$work/level2a-title-frames" "assets/level2a_title_frames.bin" --format-version 2 --logical-pixel-scale 1.0
+
+          # Level 2B Labs (#1485 145-tile 1x pack, #1484 8781x10060 mask, #1496 objects & multi-floor HQ3x proof) (B27).
+          python "$tools/bake_level_tiles.py" "$swf" "$work/reports/symbols.json" "$work/level2b-tiles" --bitmaps "$work/bitmaps" --symbol 1485 --place-x 1210.1 --place-y 238.25 --exclude-symbol 1484 --include-source-static-text
+          python "$tools/pack_level_tiles.py" "$work/level2b-tiles" "assets/level2b_tiles.bin"
+          python "$tools/b27_bake_labs2b_scenery.py" "$swf" "$work/reports/symbols.json" "$work/bitmaps" "reverse-engineering/generated/collision_masks/manifest.json" "reverse-engineering/generated/collision_masks/level2b_ground.png" "$work/level2b-tiles" "assets/level2b_tiles.bin" ".generated/b27-labs2b-proof" --emit-rust-objects "assets/labs2b_objects.rs"
 
           # Round 10 selective scenery split.
           #
@@ -2507,6 +2512,13 @@ jobs:
         with:
           name: Batman-CobbleBot-B26-Labs2A-Route-QA
           path: .generated/b26-labs2a-qa/
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Batman-CobbleBot-B27-Labs2B-Scenery-Proof
+          path: .generated/b27-labs2b-proof/
           if-no-files-found: error
 
       - uses: actions/upload-artifact@v4

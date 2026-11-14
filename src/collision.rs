@@ -51,6 +51,16 @@ impl CollisionMask {
         )
     }
 
+    /// B27: original root25/level #1485 named ground #1484 (Labs 2B),
+    /// in LEVEL-local pixels. The baked mask comes from the SHA-locked FWS at build time.
+    pub fn level2b() -> Self {
+        decode_mask(
+            include_bytes!("../reverse-engineering/generated/collision_masks/level2b_ground.png"),
+            -1542,
+            -2307,
+        )
+    }
+
     /// Returns the runtime collision mask for the given gameplay stage.
     pub fn for_stage(stage_id: crate::stage::StageId) -> Self {
         match stage_id {
@@ -58,7 +68,7 @@ impl CollisionMask {
             crate::stage::StageId::Level1B => Self::level1b(),
             crate::stage::StageId::Level1C => Self::level1c(),
             crate::stage::StageId::Level2A => Self::level2a(),
-            _ => panic!("CollisionMask::for_stage: stage {:?} collision mask not yet embedded", stage_id),
+            crate::stage::StageId::Level2B => Self::level2b(),
         }
     }
 
@@ -397,6 +407,32 @@ mod labs2a_source_probes {
         assert!(ground.solid(right_wall_lx, spawn.y), "right entry shaft wall solid");
         assert!(ground.solid(spawn.x, 2410.0), "shaft base floor solid at level_y=2410");
         assert!(!ground.solid(spawn.x, 2409.0), "shaft interior open immediately above base floor");
+        assert!(ground.memory_usage_bytes() <= (ground.w * ground.h) / 7);
+    }
+}
+
+#[cfg(test)]
+mod labs2b_source_probes {
+    use super::CollisionMask;
+    use crate::stage::StageId;
+
+    #[test]
+    fn labs2b_ground_dimensions_and_spawn_room_match_source() {
+        let ground = CollisionMask::level2b();
+        assert_eq!((ground.origin_x, ground.origin_y), (-1542, -2307));
+        assert_eq!((ground.w, ground.h), (8781, 10060));
+        let stage = StageId::Level2B.descriptor();
+        let spawn = stage.player_spawn_level_pos();
+        assert!((spawn.x - 3203.60).abs() < 0.05 && (spawn.y - 6616.05).abs() < 0.05);
+        assert!(
+            !ground.solid_level_pos(spawn),
+            "level2b spawn (4413.7, 6854.3 game-local) must be open inside the TV control room"
+        );
+        let left_wall_lx = 4093.0 - stage.level_origin_game_local.x;
+        let room_mid_ly = 7050.0 - stage.level_origin_game_local.y;
+        assert!(ground.solid(left_wall_lx, room_mid_ly), "left TV control room wall solid");
+        let spawn_floor_ly = 7154.3 - stage.level_origin_game_local.y;
+        assert!(ground.solid(spawn.x, spawn_floor_ly), "TV control room floor solid at gy=7154.3");
         assert!(ground.memory_usage_bytes() <= (ground.w * ground.h) / 7);
     }
 }
