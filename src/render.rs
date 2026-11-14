@@ -521,10 +521,10 @@ fn draw_lazy_world_sprite(
 }
 
 fn draw_labs_doors_scaled(fb:&mut RenderSurface,game:&Game,assets:&Assets,pixel_scale:i32){
-    if game.active_stage()!=crate::stage::StageId::Level2A || assets.door_frames.len()<20 {
+    let placements=game.active_stage().labs_doors();
+    if placements.is_empty() || assets.door_frames.len()<20 {
         return;
     }
-    let placements=&crate::stage::labs2a::DOORS;
     for (i,&door) in placements.iter().enumerate(){
         let frame_idx=game.labs_doors.get(i).map_or(0,|s|(s.frame as usize).min(19));
         draw_lazy_world_sprite(
@@ -535,10 +535,10 @@ fn draw_labs_doors_scaled(fb:&mut RenderSurface,game:&Game,assets:&Assets,pixel_
 }
 
 fn draw_labs_elevators_scaled(fb:&mut RenderSurface,game:&Game,assets:&Assets,pixel_scale:i32){
-    if game.active_stage()!=crate::stage::StageId::Level2A || assets.elevator_frames.len()<2 {
+    let placements=game.active_stage().labs_elevators();
+    if placements.is_empty() || assets.elevator_frames.len()<2 {
         return;
     }
-    let placements=&crate::stage::labs2a::ELEVATORS;
     for (i,&elev) in placements.iter().enumerate(){
         let y=game.labs_elevators.get(i).map_or(elev.y,|s|s.y);
         draw_lazy_world_sprite(
@@ -549,10 +549,11 @@ fn draw_labs_elevators_scaled(fb:&mut RenderSurface,game:&Game,assets:&Assets,pi
 }
 
 fn draw_world_foreground_scaled(fb:&mut RenderSurface,game:&Game,assets:&Assets,pixel_scale:i32){
-    if game.active_stage()!=crate::stage::StageId::Level2A || assets.door_frames.len()<23 {
+    let stage=game.active_stage();
+    if !matches!(stage,crate::stage::StageId::Level2A|crate::stage::StageId::Level2B) || assets.door_frames.len()<23 {
         return;
     }
-    for &jamb in &crate::stage::labs2a::DOOR_JAMBS{
+    for &jamb in stage.labs_door_jambs(){
         if let Some(frame_idx)=jamb.jamb_pack_frame(){
             draw_lazy_world_sprite(
                 fb,&assets.door_frames.frame(frame_idx),
@@ -562,7 +563,8 @@ fn draw_world_foreground_scaled(fb:&mut RenderSurface,game:&Game,assets:&Assets,
     }
     // Flash depth 413 (`halo` #1399) follows Batman (`followPlayer`), sitting above front
     // door jambs (377..411) and underneath glinting `health01` (415) & `item_br*` (425..617).
-    if assets.labs_pickups_frames.len() >= 2 {
+    // Level 2B's animated #1495 `halo` ("fire" on explosion) is wired in B29.
+    if stage == crate::stage::StageId::Level2A && assets.labs_pickups_frames.len() >= 2 {
         let player_gx = game.player.x + game.level_origin_x();
         let player_gy = game.player.y + game.level_origin_y();
         draw_lazy_world_sprite(
@@ -576,22 +578,27 @@ fn draw_world_foreground_scaled(fb:&mut RenderSurface,game:&Game,assets:&Assets,
             pixel_scale,
         );
         if !game.labs_health_collected {
-            let h = crate::stage::labs2a::HEALTH_PICKUPS[0];
-            draw_lazy_world_sprite(
-                fb,
-                &assets.labs_pickups_frames.frame(0),
-                h.x,
-                h.y,
-                game.camera_x,
-                game.camera_y,
-                false,
-                pixel_scale,
-            );
+            if let Some(&h) = stage.labs_health_pickups().first() {
+                draw_lazy_world_sprite(
+                    fb,
+                    &assets.labs_pickups_frames.frame(0),
+                    h.x,
+                    h.y,
+                    game.camera_x,
+                    game.camera_y,
+                    false,
+                    pixel_scale,
+                );
+            }
         }
+    }
+    let batarang_pickups = stage.labs_batarang_pickups();
+    if batarang_pickups.is_empty() || (stage == crate::stage::StageId::Level2B && game.pickups.is_empty()) {
+        return;
     }
     if pixel_scale == HQ_SCALE as i32 && !assets.pickup_frames_hq.is_empty() {
         let pf = &assets.pickup_frames_hq[(game.ticks as usize) % assets.pickup_frames_hq.len()];
-        for (i, &p) in crate::stage::labs2a::BATARANG_PICKUPS.iter().enumerate() {
+        for (i, &p) in batarang_pickups.iter().enumerate() {
             if i < game.pickups.len() && game.pickups[i] { continue; }
             let logical_x = (p.x + game.camera_x).round() as i32;
             let logical_y = (p.y + game.camera_y).round() as i32;
@@ -603,7 +610,7 @@ fn draw_world_foreground_scaled(fb:&mut RenderSurface,game:&Game,assets:&Assets,
         let pf = &assets.pickup_frames[(game.ticks as usize) % assets.pickup_frames.len()];
         let dw = pf.image.w as i32 * pixel_scale;
         let dh = pf.image.h as i32 * pixel_scale;
-        for (i, &p) in crate::stage::labs2a::BATARANG_PICKUPS.iter().enumerate() {
+        for (i, &p) in batarang_pickups.iter().enumerate() {
             if i < game.pickups.len() && game.pickups[i] { continue; }
             let sx = (p.x + game.camera_x).round() as i32 * pixel_scale;
             let sy = (p.y + game.camera_y).round() as i32 * pixel_scale;
@@ -1581,5 +1588,61 @@ mod tests{
         assert!(uncollected.pixels != collected.pixels, "collecting health01 must hide #1401 pickup");
         let hq_non_black = hq_out.pixels.iter().filter(|&&p| (p & 0x00ff_ffff) != 0).count();
         assert!(hq_non_black > 25_000, "HQ Labs 2A halo + pickups + LEVEL 2 scene must render cleanly");
+    }
+
+    #[test]
+    fn b28_labs2b_doors_jambs_and_elevators_render_in_1x_and_hq3x() {
+        use super::{
+            draw_batman_legacy, draw_world_foreground_legacy, render, render_high_quality,
+            HQ_H, LOGICAL_H,
+        };
+        use crate::assets::Assets;
+        use crate::game::{AppScreen, Game};
+
+        let mut assets = Assets::load();
+        assets.load_stage(crate::stage::StageId::Level2B);
+        let mut game = Game::new();
+        game.start_stage(crate::stage::StageId::Level2B);
+        game.screen = AppScreen::Playing;
+        game.ticks = 45;
+
+        // Frame doorway `door_16`/`door_17` (gx=4968, gy=7035.35) near spawn floor:
+        // verify door animation updates rendered pixels and foreground jamb occludes Batman.
+        game.camera_x = -4668.0;
+        game.camera_y = -6835.0;
+        game.player.x = 5006.0 - game.level_origin_x();
+        game.player.y = 7060.0 - game.level_origin_y();
+
+        let mut closed_1x = RenderSurface::new(LOGICAL_W, LOGICAL_H);
+        let mut opened_1x = RenderSurface::new(LOGICAL_W, LOGICAL_H);
+        let mut no_jambs = RenderSurface::new(LOGICAL_W, LOGICAL_H);
+        let mut hq_out = RenderSurface::new(HQ_W, HQ_H);
+        let mut hq_scratch = RenderSurface::new(LOGICAL_W, LOGICAL_H);
+
+        render(&mut closed_1x, &game, &assets);
+        game.labs_doors[2].frame = 9;
+        game.labs_doors[3].frame = 9;
+        render(&mut opened_1x, &game, &assets);
+        render_high_quality(&mut hq_scratch, &mut hq_out, &game, &assets);
+        assert_ne!(closed_1x.pixels, opened_1x.pixels, "Level 2B door frame 0 -> 9 must change rendered pixels");
+
+        draw_batman_legacy(&mut no_jambs, &game, &assets);
+        let mut with_jambs = RenderSurface::new(LOGICAL_W, LOGICAL_H);
+        draw_batman_legacy(&mut with_jambs, &game, &assets);
+        draw_world_foreground_legacy(&mut with_jambs, &game, &assets);
+        assert_ne!(no_jambs.pixels, with_jambs.pixels, "Level 2B foreground door jambs must draw over Batman");
+
+        // Also verify `#1330` middle UP elevator (`elevator_02_2675`, x=2863.1, y=3484.8 -> 3050.0) moves rendered sprite.
+        let e1 = crate::stage::labs2b::ELEVATORS[1];
+        game.camera_x = 300.0 - e1.x;
+        game.camera_y = 220.0 - 3484.8;
+        let mut elev_start = RenderSurface::new(LOGICAL_W, LOGICAL_H);
+        let mut elev_up = RenderSurface::new(LOGICAL_W, LOGICAL_H);
+        render(&mut elev_start, &game, &assets);
+        game.labs_elevators[1].y = 3050.0;
+        render(&mut elev_up, &game, &assets);
+        render_high_quality(&mut hq_scratch, &mut hq_out, &game, &assets);
+        assert_ne!(elev_start.pixels, elev_up.pixels, "Level 2B UP elevator displacement must move rendered #1330 platform");
+        assert!(hq_out.pixels.iter().filter(|&&p| (p & 0x00ff_ffff) != 0).count() > 25_000);
     }
 }

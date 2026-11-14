@@ -531,6 +531,70 @@ impl StageId {
             Self::Level2B => SourceScene::Card(StoryCard::Kabuki),
         }
     }
+
+    /// Source `#1325` sliding doors for Labs stages (`Level2A` / `Level2B`).
+    pub const fn labs_doors(self) -> &'static [LabsDoorPlacement] {
+        match self {
+            Self::Level2A => &labs2a::DOORS,
+            Self::Level2B => &labs2b::DOORS,
+            _ => &[],
+        }
+    }
+
+    /// Source `#1394..=#1396` foreground door jambs for Labs stages (`Level2A` / `Level2B`).
+    pub const fn labs_door_jambs(self) -> &'static [LabsDoorPlacement] {
+        match self {
+            Self::Level2A => &labs2a::DOOR_JAMBS,
+            Self::Level2B => &labs2b::DOOR_JAMBS,
+            _ => &[],
+        }
+    }
+
+    /// Source `#1328`/`#1330` elevator platforms for Labs stages (`Level2A` / `Level2B`).
+    pub const fn labs_elevators(self) -> &'static [LabsElevatorPlacement] {
+        match self {
+            Self::Level2A => &labs2a::ELEVATORS,
+            Self::Level2B => &labs2b::ELEVATORS,
+            _ => &[],
+        }
+    }
+
+    /// Source `#153` camera trigger zones (`camera_01..10`) for Labs stages.
+    pub const fn labs_cameras(self) -> &'static [LabsTriggerPlacement] {
+        match self {
+            Self::Level2A => &labs2a::CAMERAS,
+            Self::Level2B => &labs2b::CAMERAS,
+            _ => &[],
+        }
+    }
+
+    /// Source `#153` checkpoint trigger boxes for Labs stages.
+    #[allow(dead_code)]
+    pub const fn labs_checkpoints(self) -> &'static [LabsTriggerPlacement] {
+        match self {
+            Self::Level2A => &labs2a::CHECKPOINTS,
+            Self::Level2B => &labs2b::CHECKPOINTS,
+            _ => &[],
+        }
+    }
+
+    /// Source `#1401` health pickup placements for Labs stages.
+    pub const fn labs_health_pickups(self) -> &'static [LabsPickupPlacement] {
+        match self {
+            Self::Level2A => &labs2a::HEALTH_PICKUPS,
+            Self::Level2B => &labs2b::HEALTH_PICKUPS,
+            _ => &[],
+        }
+    }
+
+    /// Source `#695` `item_br*` Batarang pickup placements for Labs stages.
+    pub const fn labs_batarang_pickups(self) -> &'static [LabsPickupPlacement] {
+        match self {
+            Self::Level2A => &labs2a::BATARANG_PICKUPS,
+            Self::Level2B => &labs2b::BATARANG_PICKUPS,
+            _ => &[],
+        }
+    }
 }
 
 impl StoryCard {
