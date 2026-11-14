@@ -1295,3 +1295,7 @@ Do not erase two historical CI failures: documentation-only #42834460076 and ini
 - **AUD-20261114-035 (B29 `Labs 2B` `lava1`, Countdown `clock` & `halo` Fire — CI Run `#43619250305`):**
   - `0` new `unsafe`, `0` new external crates, `0` per-frame heap allocations in `game.rs`/`render.rs` (`draw_level2b_clock_scaled` formats digits using fixed stack array `[Option<usize>; 6]`, `blend_full_viewport_red_tint` operates in-place over `fb.pixels` with zero allocation, `clockTimer`/`lavaLogic` state uses scalar fields).
   - Verified `135 passed; 0 failed` (`2.89s` CI / `4.24s` local, `+3` tests), `20/20` HQ smokes identical, `15/15` Legacy baseline pixels untouched, `render_p95_ms: 14.1057`, `scenery_p95_ms: 16.7797`, and `--qa-labs2a-route` exit `0`.
+
+- **AUD-20261114-036 (B30 `Labs 2B` Checkpoints, Pickups & Live `Level2B` Entry — CI Run `#43621034630`):**
+  - `0` new `unsafe`, `0` new external crates, `0` per-frame heap allocations in `game.rs`/`render.rs`; parameterized `start_stage` and `collect_pickups` via `stage.labs_batarang_pickups()`, keeping `10` `item_br*` pickups and `#84`/`#93`/`#39` overlays shared across `StageId`.
+  - Verified `137 passed; 0 failed` (`3.57s` CI / `4.28s` local, `+2` tests), `20/20` HQ smokes identical, `15/15` Legacy baseline pixels untouched, `render_p95_ms: 18.73`, `scenery_p95_ms: 22.4025`, relocated EXE SHA-256 `40574d1dcb3614bd644ec3f181a78d9dc122d247b309e3c4f824f82f167de1a8`, and `--qa-labs2a-route` exit `0`.

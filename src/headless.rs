@@ -637,7 +637,9 @@ pub fn qa_labs2a_route(out_dir:&str){
     assert_eq!(pending.from,StageId::Level2A);
     assert_eq!(pending.to,StageId::Level2B);
     assert_eq!(pending.outgoing_root_sound_id,130);
-    assert_eq!(game.consume_pending_stage_entry(),None);
+    assert_eq!(game.consume_pending_stage_entry(),Some(StageId::Level2B));
+    assert_eq!(game.active_stage(),StageId::Level2B);
+    assert_eq!(game.pickups.len(),10);
 
     let report=format!(
         "{{\n  \"milestone\": \"B26\",\n  \"route\": [\"EscapeCard\", \"Level2A\", \"TvCard\", \"Pending(Level2B)\"],\n  \"final_score\": {},\n  \"final_lives\": {},\n  \"final_batarangs\": {},\n  \"fingerprints\": {{\n    \"labs2a_spawn_hq\": \"0x{fp_2a_spawn:016x}\",\n    \"labs2a_mid_hq\": \"0x{fp_2a_mid:016x}\",\n    \"tv_card_000\": \"0x{fp_tv0:016x}\",\n    \"tv_card_110\": \"0x{fp_tv110:016x}\"\n  }},\n  \"dark_fraction\": {{\n    \"labs2a_spawn_hq\": {dark_2a_spawn:.4},\n    \"labs2a_mid_hq\": {dark_2a_mid:.4}\n  }},\n  \"hq_frame_p95_ms\": {{\n    \"level2a\": {p95_2a:.4}\n  }},\n  \"keyframes\": [\n    \"labs2a_spawn.png\", \"labs2a_spawn_hq.png\", \"labs2a_findlab_hq.png\",\n    \"labs2a_pickups_combat.png\", \"labs2a_pickups_combat_hq.png\",\n    \"tv_card_000.png\", \"tv_card_086_hq.png\", \"tv_card_110.png\"\n  ]\n}}\n",
