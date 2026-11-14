@@ -429,19 +429,11 @@ impl Game{
             Vec::new()
         };
         self.labs_bird_rng=GoonRng::new(0x2A00_1393);
-        self.labs_doors=if stage==StageId::Level2A{
-            vec![LabsDoorState::default();crate::stage::labs2a::DOORS.len()]
-        }else{
-            Vec::new()
-        };
-        self.labs_elevators=if stage==StageId::Level2A{
-            crate::stage::labs2a::ELEVATORS
-                .iter()
-                .map(|e|LabsElevatorState{y:e.y,dy:0.0,moving:false,active:true})
-                .collect()
-        }else{
-            Vec::new()
-        };
+        self.labs_doors=vec![LabsDoorState::default();stage.labs_doors().len()];
+        self.labs_elevators=stage.labs_elevators()
+            .iter()
+            .map(|e|LabsElevatorState{y:e.y,dy:0.0,moving:false,active:true})
+            .collect();
         self.current_platform_idx=None;
         self.gravity=GLOBAL_GRAVITY;
         self.update_camera();
@@ -1563,16 +1555,12 @@ impl Game{
     }
 
     fn labs_camera_triggers(&self)->&'static [LabsTriggerPlacement]{
-        match self.stage{
-            StageId::Level2A=>&labs2a::CAMERAS,
-            _=>&[],
-        }
+        self.stage.labs_cameras()
     }
 
     fn update_labs_elevators(&mut self){
-        if self.stage!=StageId::Level2A||self.labs_elevators.is_empty(){return;}
-        let placements=&crate::stage::labs2a::ELEVATORS;
-        if self.labs_elevators.len()!=placements.len(){return;}
+        let placements=self.stage.labs_elevators();
+        if placements.is_empty()||self.labs_elevators.len()!=placements.len(){return;}
 
         let origin_x=self.level_origin_x();
         let origin_y=self.level_origin_y();
@@ -1644,9 +1632,8 @@ impl Game{
     }
 
     fn update_labs_doors(&mut self){
-        if self.stage!=StageId::Level2A||self.labs_doors.is_empty(){return;}
-        let placements=&crate::stage::labs2a::DOORS;
-        if self.labs_doors.len()!=placements.len(){return;}
+        let placements=self.stage.labs_doors();
+        if placements.is_empty()||self.labs_doors.len()!=placements.len(){return;}
 
         let player_x=self.player.x+self.level_origin_x();
         let player_y=self.player.y+self.level_origin_y();
@@ -3080,5 +3067,193 @@ mod b26_tv_card_tests {
             game.pending_stage_entry().map(|p| p.to),
             Some(StageId::Level2B)
         );
+    }
+}
+
+#[cfg(test)]
+mod b28_labs2b_doors_elevators_cameras_tests {
+    use super::{AppScreen, AudioEvent, Game, InputState, VK_SPACE};
+    use crate::collision::CollisionMask;
+    use crate::stage::{labs2b, LabsCameraMode, StageId};
+
+    #[test]
+    fn labs2b_initializes_16_closed_doors_and_3_elevators() {
+        let mut game = Game::new();
+        game.start_stage(StageId::Level2B);
+        assert_eq!(game.labs_doors.len(), 16);
+        assert_eq!(labs2b::DOOR_JAMBS.len(), 16);
+        assert!(game.labs_doors.iter().all(|d| d.frame == 0 && !d.playing));
+        assert_eq!(game.labs_elevators.len(), 3);
+        for (i, &e) in labs2b::ELEVATORS.iter().enumerate() {
+            assert_eq!(game.labs_elevators[i].y, e.y);
+            assert_eq!(game.labs_elevators[i].dy, 0.0);
+            assert!(game.labs_elevators[i].active);
+            assert!(!game.labs_elevators[i].moving);
+            assert!(e.y > e.limit_y as f32, "{} must climb upward", e.name);
+        }
+
+        game.start_stage(StageId::Level1A);
+        assert!(game.labs_doors.is_empty());
+        assert!(game.labs_elevators.is_empty());
+    }
+
+    #[test]
+    fn labs2b_door_opens_emits_sound_holds_open_and_closes_on_exit() {
+        let ground = CollisionMask::for_stage(StageId::Level2B);
+        let desc = StageId::Level2B.descriptor();
+        let mut game = Game::new();
+        game.screen = AppScreen::Playing;
+        game.start_stage(StageId::Level2B);
+
+        // Position Batman overlapping `door_16` / `door_17` (gx=4968, gy=7035.35) near spawn floor.
+        let door = labs2b::DOORS[2];
+        assert_eq!(door.name, "door_16");
+        game.player.x = door.x - desc.level_origin_game_local.x;
+        game.player.y = 7060.0 - desc.level_origin_game_local.y;
+        game.player.dy = 0.0;
+        game.player.jumping = false;
+        game.player.on_ground = true;
+
+        let mut input = InputState::default();
+        game.tick(&mut input, &ground);
+        assert_eq!(game.labs_doors[2].frame, 1);
+        assert!(game.labs_doors[2].playing);
+        assert!(game.audio_events.contains(&AudioEvent::DoorOpen));
+
+        for _ in 0..8 {
+            game.tick(&mut input, &ground);
+        }
+        assert_eq!(game.labs_doors[2].frame, 9);
+        assert!(!game.labs_doors[2].playing);
+
+        // Staying inside keeps door held open at frame 9; leaving closes 9 -> 19 -> 0.
+        game.tick(&mut input, &ground);
+        assert_eq!(game.labs_doors[2].frame, 9);
+
+        game.player.x = (door.x - 400.0) - desc.level_origin_game_local.x;
+        game.tick(&mut input, &ground);
+        assert_eq!(game.labs_doors[2].frame, 10);
+        assert!(game.labs_doors[2].playing);
+
+        for _ in 0..10 {
+            game.tick(&mut input, &ground);
+        }
+        assert_eq!(game.labs_doors[2].frame, 0);
+        assert!(!game.labs_doors[2].playing);
+    }
+
+    #[test]
+    fn labs2b_three_up_elevators_mount_carry_up_jump_off_and_clamp_at_limits() {
+        let ground = CollisionMask::for_stage(StageId::Level2B);
+        let desc = StageId::Level2B.descriptor();
+        let mut game = Game::new();
+        game.screen = AppScreen::Playing;
+
+        for (idx, &elev) in labs2b::ELEVATORS.iter().enumerate() {
+            game.start_stage(StageId::Level2B);
+            game.player.x = elev.x - desc.level_origin_game_local.x;
+            game.player.y = (elev.y - 30.0) - desc.level_origin_game_local.y;
+            game.player.dy = 0.0;
+            game.player.jumping = false;
+            game.player.on_ground = true;
+
+            let mut input = InputState::default();
+            game.tick(&mut input, &ground);
+            assert!(game.labs_elevators[idx].moving, "{} should start moving", elev.name);
+            assert_eq!(game.labs_elevators[idx].dy, -12.0, "{} should climb UP (-12)", elev.name);
+            assert_eq!(game.current_platform_idx, Some(idx));
+
+            let y_after_mount = game.labs_elevators[idx].y;
+            game.tick(&mut input, &ground);
+            assert!(
+                game.labs_elevators[idx].y < y_after_mount,
+                "{} must ascend upward",
+                elev.name
+            );
+
+            // Jump off middle elevator (`#1330`) and verify `-36 + dy/3` = -40 impulse.
+            if idx == 1 {
+                input.pressed[VK_SPACE] = true;
+                input.held[VK_SPACE] = true;
+                game.tick(&mut input, &ground);
+                assert!(!game.on_platform);
+                assert_eq!(game.current_platform_idx, None);
+                assert!((game.player.dy - (-40.0)).abs() < 1e-4);
+                continue;
+            }
+
+            // Otherwise ride across `limit_y` and verify clamp + `delete onEnterFrame` (`active = false`) on the settling tick.
+            let limit = elev.limit_y as f32;
+            game.labs_elevators[idx].y = limit + 6.0;
+            game.player.y = (limit - 69.0) - desc.level_origin_game_local.y;
+            game.tick(&mut input, &ground);
+            game.tick(&mut input, &ground);
+            assert_eq!(game.labs_elevators[idx].y, limit);
+            assert_eq!(game.labs_elevators[idx].dy, 0.0);
+            assert!(!game.labs_elevators[idx].moving);
+            assert!(!game.labs_elevators[idx].active);
+            assert!(!game.on_platform);
+        }
+    }
+
+    #[test]
+    fn labs2b_cameras_use_550_height_offset_respect_airborne_gate_and_clamp_at_bounds() {
+        let ground = CollisionMask::for_stage(StageId::Level2B);
+        let desc = StageId::Level2B.descriptor();
+        let mut game = Game::new();
+        game.screen = AppScreen::Playing;
+        game.start_stage(StageId::Level2B);
+
+        // Spawn starts in CameraLogic2 until grounded inside `camera_09`. Airborne in `camera_09` must ignore trigger.
+        game.player.x = 4600.0 - desc.level_origin_game_local.x;
+        game.player.y = 7000.0 - desc.level_origin_game_local.y;
+        game.player.dy = -5.0;
+        game.player.jumping = true;
+        game.player.on_ground = false;
+        let mut input = InputState::default();
+        game.tick(&mut input, &ground);
+        assert_eq!(game.labs_camera_mode(), LabsCameraMode::CameraLogic2);
+
+        // Land grounded inside `camera_09`: switches to CameraLogic3 with `+550` offset -> settles at `camera_y + gy = 275`.
+        game.player.y = 7060.0 - desc.level_origin_game_local.y;
+        game.player.dy = 0.0;
+        game.player.jumping = false;
+        game.player.on_ground = true;
+        for _ in 0..12 {
+            game.tick(&mut input, &ground);
+        }
+        assert_eq!(game.labs_camera_mode(), LabsCameraMode::CameraLogic3);
+        let gy = game.player.y + desc.level_origin_game_local.y;
+        assert!(
+            (game.camera_y + gy - 275.0).abs() < 0.25,
+            "Level 2B CameraLogic3 (+550) should settle at screen Y ~275, got {}",
+            game.camera_y + gy
+        );
+
+        // Grounded inside `camera_10` (gx=7900, gy=7060) switches back to CameraLogic2 with camHeight = 275.
+        game.player.x = 7900.0 - desc.level_origin_game_local.x;
+        game.player.y = 7060.0 - desc.level_origin_game_local.y;
+        game.player.dy = 0.0;
+        game.player.jumping = false;
+        game.tick(&mut input, &ground);
+        assert_eq!(game.labs_camera_mode(), LabsCameraMode::CameraLogic2);
+        assert_eq!(game.cam_height(), 275.0);
+
+        // Verify left wall clamp (`camMin = 250.0` does not ease when `player_x <= 250`).
+        game.player.x = 200.0 - desc.level_origin_game_local.x;
+        game.camera_x = 0.0;
+        game.tick(&mut input, &ground);
+        assert_eq!(game.camera_x, 0.0);
+
+        // Verify 5 CameraLogic2 + 5 CameraLogic3 triggers across `labs2b::CAMERAS`.
+        let l2 = labs2b::CAMERAS
+            .iter()
+            .filter(|c| c.camera_mode() == LabsCameraMode::CameraLogic2)
+            .count();
+        let l3 = labs2b::CAMERAS
+            .iter()
+            .filter(|c| c.camera_mode() == LabsCameraMode::CameraLogic3)
+            .count();
+        assert_eq!((l2, l3), (5, 5));
     }
 }

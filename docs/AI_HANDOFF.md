@@ -1,6 +1,14 @@
 # AI handoff — current recovery checkpoint
 
 
+## FINAL VERIFIED — B28 `Labs 2B` Doors, UP Elevators & Cameras (2026-11-14)
+- **Active Branch / PR:** `revive/level2-b28-labs2b-doors-elevators-cameras-2026-11-14` (Draft PR `#60` against `revive/level2-b27-labs2b-scenery-mask-2026-11-13`)
+- **Latest Verified Commit / CI:** Commit `047f986` passed Windows CI Run `#43615965027` (`132 passed; 0 failed` in `3.67s`, `hq_smoke_hashes_identical: 20`, relocated EXE SHA-256 `e1551660560a4b1003a58c66951ef7b2c76e314817d2b86ddd5b5e40185f4940`, `render_p95_ms: 21.1131`, `scenery_p95_ms: 26.1826`, `intro_audio_focus: BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT`).
+- **Scope Verified:**
+  - Parameterized `StageId` Labs helpers (`src/stage.rs`), shared gameplay door/UP-elevator/camera updates (`src/game.rs`), shared 1× & HQ3× rendering (`src/render.rs`), and 5 new tests (`127 -> 132`). `consume_pending_stage_entry` retains `Level2B` latch until **B30**.
+- **Next Batch:** Branch `revive/level2-b29-labs2b-lava-clock-halo-2026-11-14` for **B29** (`Labs 2B` `lava1` `#1486`, countdown `clockTimer` `#1503`, and animated `halo` `#1495` `"fire"` explosion).
+
+
 ## FINAL VERIFIED — B27 `Labs 2B` Scenery (`#1485`), Collision Mask (`#1484`) & Object Separation (`#1496`) (2026-11-14)
 - **Active Branch / PR:** `revive/level2-b27-labs2b-scenery-mask-2026-11-13` (Draft PR `#59` against `revive/level2-b26-card-tv-2026-11-13`)
 - **Latest Verified Commit / CI:** Commit `d3f3350` passed Windows CI Run `#43447045806` (`127 passed; 0 failed` in `3.57s`, `hq_smoke_hashes_identical: 20`, relocated EXE SHA-256 `a21ee6ed74d73b8c6905a4687c4a45c0c67605a0acb2735f4acf5a32c09c4483`, `render_p95_ms: 21.1193`, `scenery_p95_ms: 26.1713`, `intro_audio_focus: BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT`).
