@@ -123,6 +123,15 @@ impl BankBiker {
         }
     }
 
+    /// Source `checkPlayer(this, dir, -40)` vertical alignment: biker `self.y`
+    /// sits at `375.85` (wheels/floor) while `player_y` is Batman's waist
+    /// (`323.25` when standing on the `398.25` street floor, hitbox `[player_y - 45, player_y + 75]`).
+    #[inline]
+    fn hits_player_y(&self, player_y: f32) -> bool {
+        let probe_y = self.y - 40.0;
+        probe_y >= player_y - 45.0 && probe_y <= player_y + 75.0
+    }
+
     /// Tests and applies batarang collision. Returns true if hit connected.
     pub fn apply_batarang_hit(
         &mut self,
@@ -134,10 +143,11 @@ impl BankBiker {
             return false;
         }
 
-        // Batarang hitbox: |dx| <= 35.0, dy in [-60.0, 20.0]
+        // Batarang hitbox covering #1005/#981 sprite width/height: |dx| <= 45.0 (90px span >
+        // 74px/tick combined shot+biker closing speed so head-on throws never tunnel) and dy in [-135.0, 20.0].
         let dx = (bat_x - self.x).abs();
         let dy = bat_y - self.y;
-        if dx <= 35.0 && dy >= -60.0 && dy <= 20.0 {
+        if dx <= 45.0 && dy >= -135.0 && dy <= 20.0 {
             self.set_state(BikerState::Fall);
             events.push(BikerEvent::Score(100));
             events.push(BikerEvent::Sound(BikerSound::Bam));
@@ -160,8 +170,7 @@ impl BankBiker {
         }
 
         let dx = (player_x - self.x).abs();
-        let dy = (player_y - self.y).abs();
-        if dx <= 50.0 && dy <= 50.0 {
+        if dx <= 50.0 && self.hits_player_y(player_y) {
             self.set_state(BikerState::Fall);
             events.push(BikerEvent::Score(100));
             events.push(BikerEvent::Sound(BikerSound::Bam));
@@ -217,8 +226,7 @@ impl BankBiker {
 
                 // Check collision with player
                 let dx = (player_x - self.x).abs();
-                let dy = (player_y - self.y).abs();
-                if dx <= 45.0 && dy <= 45.0 {
+                if dx <= 45.0 && self.hits_player_y(player_y) {
                     if player_attacking {
                         self.set_state(BikerState::Fall);
                         events.push(BikerEvent::Score(100));
@@ -412,5 +420,50 @@ mod tests {
         );
         assert_eq!(biker.state, BikerState::Fall);
         assert!(!biker.alive);
+    }
+
+    #[test]
+    fn standing_batman_on_bank_street_floor_interacts_with_biker_melee_contact_and_batarang() {
+        // Level 1B street floor sits at y_game = 398.25 -> standing Batman player.y_game = 323.25
+        // and standing batarang shot sits at 303.25 (323.25 - 20.0).
+        const STANDING_Y: f32 = 323.25;
+        const STANDING_BATARANG_Y: f32 = 303.25;
+
+        // 1. Standing contact damages Batman when not attacking
+        let mut biker = BankBiker::new();
+        let mut events = Vec::new();
+        biker.x = 6.0; // advances +24 -> 30.0 (within 45px of player at 0.0)
+        biker.tick(0.0, STANDING_Y, false, false, &[], &mut events);
+        assert_eq!(
+            events,
+            vec![
+                BikerEvent::Sound(BikerSound::Kick),
+                BikerEvent::PlayerHurt { damage: 10 },
+            ]
+        );
+
+        // 2. Standing melee defeats biker
+        let mut biker2 = BankBiker::new();
+        events.clear();
+        biker2.x = 6.0;
+        biker2.tick(0.0, STANDING_Y, true, false, &[], &mut events);
+        assert_eq!(biker2.state, BikerState::Fall);
+        assert!(events.contains(&BikerEvent::Score(100)));
+
+        // 3. Standing batarang defeats biker
+        let mut biker3 = BankBiker::new();
+        events.clear();
+        biker3.x = 476.0; // advances +24 -> 500.0
+        biker3.tick(0.0, STANDING_Y, false, false, &[(505.0, STANDING_BATARANG_Y, true)], &mut events);
+        assert_eq!(biker3.state, BikerState::Fall);
+        assert!(events.contains(&BikerEvent::Score(100)));
+
+        // 4. Jumping well above biker avoids contact
+        let mut biker4 = BankBiker::new();
+        events.clear();
+        biker4.x = 6.0;
+        biker4.tick(0.0, 220.0, false, false, &[], &mut events);
+        assert!(events.is_empty());
+        assert_eq!(biker4.state, BikerState::Drive);
     }
 }

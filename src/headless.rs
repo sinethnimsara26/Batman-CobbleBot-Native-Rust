@@ -934,3 +934,240 @@ pub fn qa_level2_route(out_dir:&str){
     );
     fs::write(out.join("level2_route_qa_report.json"),report).expect("write B32 Level2 QA report");
 }
+
+pub fn qa_full_campaign(out_dir:&str){
+    use crate::stage::{labs2a,labs2b,StageId};
+    let out=Path::new(out_dir);
+    fs::create_dir_all(out).expect("create full campaign QA dir");
+    let mut assets=Assets::load();
+    let mut ground=CollisionMask::for_stage(StageId::Level1A);
+    let mut game=Game::new();
+    let mut input=InputState::default();
+    let mut base=RenderSurface::new(LOGICAL_W,LOGICAL_H);
+    let mut hq=RenderSurface::new(render::HQ_W,render::HQ_H);
+
+    // 1. Title -> Intro -> Level 1A (collect pickup + clear 1A -> Level 1B)
+    input.set(VK_ENTER,true);
+    game.tick(&mut input,&ground);
+    input.set(VK_ENTER,false);
+    assert_eq!(game.screen,AppScreen::Intro);
+    assert!(game.skip_intro());
+    for _ in 0..41 { game.tick(&mut input,&ground); }
+    for _ in 0..105 { game.tick(&mut input,&ground); }
+    assert_eq!(game.screen,AppScreen::Playing);
+    assert_eq!(game.active_stage(),StageId::Level1A);
+    let (dark_1a,fp_1a)=intro_frame_metrics(true,&mut game,&assets);
+    assert!(dark_1a<0.95,"Level 1A spawn frame unexpectedly blank");
+
+    game.player.x=PICKUPS[0].0-LEVEL_X;
+    game.player.y=PICKUPS[0].1-LEVEL_Y;
+    game.tick(&mut input,&ground);
+    assert!(game.batarangs>0,"Level 1A pickup should grant batarangs");
+    game.level1a_exit_reached=true;
+    game.fadeout_tick=Some(0);
+    for _ in 0..41 { game.tick(&mut input,&ground); }
+    let s1b=game.consume_pending_stage_entry().expect("Level1B handoff");
+    assert_eq!(s1b,StageId::Level1B);
+    ground=CollisionMask::for_stage(s1b);
+    assets.load_stage(s1b);
+
+    // 2. Level 1B: verify standing Batarang hits BankBiker + melee hits goon, then exit -> Level 1C
+    let d1b=StageId::Level1B.descriptor();
+    {
+        let biker=game.bank_biker.as_mut().expect("BankBiker spawned in Level 1B");
+        biker.active=true;
+        biker.x=-1200.0;
+        biker.y=375.85;
+        biker.dir=1.0;
+    }
+    game.player.x=-1140.0-d1b.level_origin_game_local.x;
+    game.player.y=323.25-d1b.level_origin_game_local.y;
+    game.player.dir=-1;
+    game.player.jumping=false;
+    game.player.dy=0.0;
+    let score_before_biker=game.score;
+    input.set(VK_A,true);
+    game.tick(&mut input,&ground);
+    input.set(VK_A,false);
+    for _ in 0..6 { game.tick(&mut input,&ground); }
+    let biker_defeated=!game.bank_biker.as_ref().unwrap().alive;
+    let biker_score_gain=game.score-score_before_biker;
+    assert!(biker_defeated && biker_score_gain>=100,"Standing Batarang must defeat BankBiker on 1B street floor");
+    let (dark_1b,fp_1b)=intro_frame_metrics(true,&mut game,&assets);
+    assert_ne!(fp_1b,fp_1a);
+    assert!(dark_1b<0.95);
+    snapshot(true,out,"campaign_1b_hq.png",&mut game,&assets);
+
+    game.level1b_exit_reached=true;
+    game.fadeout_tick=Some(0);
+    for _ in 0..41 { game.tick(&mut input,&ground); }
+    let s1c=game.consume_pending_stage_entry().expect("Level1C handoff");
+    assert_eq!(s1c,StageId::Level1C);
+    ground=CollisionMask::for_stage(s1c);
+    assets.load_stage(s1c);
+
+    // 3. Level 1C: standing Batarang + melee defeat of Penguin -> EscapeCard
+    let d1c=StageId::Level1C.descriptor();
+    let bx={
+        let boss=game.penguin_boss.as_mut().expect("Penguin boss spawned in Level 1C");
+        boss.health=5;
+        boss.state=crate::penguin::PenguinState::Stand;
+        boss.x
+    };
+    game.player.state=crate::game::PlayerState::Stand;
+    game.player.x=(bx-150.0)-d1c.level_origin_game_local.x;
+    game.player.y=288.25-d1c.level_origin_game_local.y;
+    game.player.dir=1;
+    game.player.jumping=false;
+    game.player.on_ground=true;
+    game.player.dy=0.0;
+    input.set(VK_A,true);
+    game.tick(&mut input,&ground);
+    input.set(VK_A,false);
+    for _ in 0..8 {
+        game.tick(&mut input,&ground);
+        if game.fadeout_tick.is_some() { break; }
+    }
+    if !game.level1c_exit_reached {
+        let (bx_now,by_now)={
+            let boss=game.penguin_boss.as_mut().expect("Penguin boss");
+            boss.state=crate::penguin::PenguinState::Stand;
+            boss.health=1;
+            (boss.x,boss.y)
+        };
+        game.player.x=(bx_now-20.0)-d1c.level_origin_game_local.x;
+        game.player.y=(by_now-28.0)-d1c.level_origin_game_local.y;
+        game.player.state=crate::game::PlayerState::Stand;
+        game.player.dir=1;
+        input.set(VK_S,true);
+        game.tick(&mut input,&ground);
+        input.set(VK_S,false);
+        for _ in 0..45 {
+            game.tick(&mut input,&ground);
+            if game.level1c_exit_reached { break; }
+        }
+    }
+    assert!(game.level1c_exit_reached,"Defeating Penguin must trigger 1C exit");
+    let (dark_1c,fp_1c)=intro_frame_metrics(true,&mut game,&assets);
+    assert_ne!(fp_1c,fp_1b);
+    assert!(dark_1c<0.95);
+    snapshot(true,out,"campaign_1c_hq.png",&mut game,&assets);
+    for _ in 0..45 {
+        game.tick(&mut input,&ground);
+        if game.screen==AppScreen::EscapeCard { break; }
+    }
+    assert_eq!(game.screen,AppScreen::EscapeCard);
+
+    // 4. EscapeCard -> Level 2A (elev1 descent + cp01 + door01 + goon kill + cp_2a_tv -> TvCard)
+    assert!(game.skip_escape_card());
+    for _ in 0..41 { game.tick(&mut input,&ground); }
+    let s2a=game.consume_pending_stage_entry().expect("Level2A handoff");
+    assert_eq!(s2a,StageId::Level2A);
+    ground=CollisionMask::for_stage(s2a);
+    assets.load_stage(s2a);
+    for _ in 0..25 { game.tick(&mut input,&ground); }
+    let (dark_2a,fp_2a)=intro_frame_metrics(true,&mut game,&assets);
+    assert!(dark_2a<0.95);
+
+    let d2a=StageId::Level2A.descriptor();
+    let cp01=labs2a::CHECKPOINTS[0];
+    let (cx01,cy01,_,_)=cp01.game_bounds();
+    game.player.x=(cx01+25.0)-d2a.level_origin_game_local.x;
+    game.player.y=(cy01+25.0)-d2a.level_origin_game_local.y;
+    game.tick(&mut input,&ground);
+    let g2a=game.bank_goons.as_ref().unwrap().goons[0].clone();
+    game.player.x=(g2a.x-42.0)-d2a.level_origin_game_local.x;
+    game.player.y=(g2a.y-10.0)-d2a.level_origin_game_local.y;
+    game.player.dir=1;
+    input.set(VK_S,true);
+    game.tick(&mut input,&ground);
+    input.set(VK_S,false);
+    for _ in 0..10 { game.tick(&mut input,&ground); }
+    snapshot(true,out,"campaign_2a_hq.png",&mut game,&assets);
+
+    let cp_tv=labs2a::CHECKPOINTS.iter().find(|c|c.name=="checkpoint_2a_tv").expect("checkpoint_2a_tv");
+    let (tx,ty,_,_)=cp_tv.game_bounds();
+    game.player.x=(tx+20.0)-d2a.level_origin_game_local.x;
+    game.player.y=(ty+20.0)-d2a.level_origin_game_local.y;
+    for _ in 0..45 {
+        game.tick(&mut input,&ground);
+        if game.screen==AppScreen::TvCard { break; }
+    }
+    assert_eq!(game.screen,AppScreen::TvCard);
+
+    // 5. TvCard -> Level 2B (rising elevator_03 lockstep 45 ticks + lava + cp_2b_end -> KabukiCard)
+    assert!(game.skip_tv_card());
+    for _ in 0..41 { game.tick(&mut input,&ground); }
+    let s2b=game.consume_pending_stage_entry().expect("Level2B handoff");
+    assert_eq!(s2b,StageId::Level2B);
+    ground=CollisionMask::for_stage(s2b);
+    assets.load_stage(s2b);
+    let d2b=StageId::Level2B.descriptor();
+
+    let elev3=labs2b::ELEVATORS[2];
+    let e3_y0=game.labs_elevators[2].y;
+    let (bx0,by0,bx1,_)=elev3.hitbox_bounds_at(e3_y0);
+    game.player.x=((bx0+bx1)*0.5)-d2b.level_origin_game_local.x;
+    game.player.y=(by0-15.0)-d2b.level_origin_game_local.y;
+    game.player.dy=0.0;
+    game.tick(&mut input,&ground);
+    assert_eq!(game.active_platform_idx(),Some(2));
+    for _ in 0..45 {
+        game.tick(&mut input,&ground);
+        assert_eq!(game.active_platform_idx(),Some(2),"Level 2B rising elevator_03 dropped Batman mid-ride");
+    }
+    let e3_ascended=e3_y0-game.labs_elevators[2].y;
+    assert!(e3_ascended>=500.0);
+    input.set(VK_SPACE,true);
+    game.tick(&mut input,&ground);
+    input.set(VK_SPACE,false);
+    assert_eq!(game.active_platform_idx(),None);
+
+    let (dark_2b,fp_2b)=intro_frame_metrics(true,&mut game,&assets);
+    assert!(dark_2b<0.95);
+    snapshot(true,out,"campaign_2b_hq.png",&mut game,&assets);
+    let p95_2b=measure_hq_p95_ms(&mut base,&mut hq,&game,&assets);
+
+    let cp_end=labs2b::CHECKPOINTS.iter().find(|c|c.name=="checkpoint_2b_end").expect("checkpoint_2b_end");
+    let (ex,ey,_,_)=cp_end.game_bounds();
+    game.player.x=(ex+20.0)-d2b.level_origin_game_local.x;
+    game.player.y=(ey+20.0)-d2b.level_origin_game_local.y;
+    for _ in 0..45 {
+        game.tick(&mut input,&ground);
+        if game.screen==AppScreen::KabukiCard { break; }
+    }
+    assert_eq!(game.screen,AppScreen::KabukiCard);
+
+    // 6. KabukiCard -> VK_ENTER back to fresh Title -> Replay Run 2 (Level 1A)
+    assert!(game.skip_kabuki_card());
+    for _ in 0..41 { game.tick(&mut input,&ground); }
+    assert!(game.kabuki_card_complete);
+    let final_score=game.score;
+    input.set(VK_ENTER,true);
+    game.tick(&mut input,&ground);
+    input.set(VK_ENTER,false);
+    assert_eq!(game.screen,AppScreen::Title);
+    assert_eq!(game.active_stage(),StageId::Level1A);
+    assert_eq!((game.score,game.lives,game.health,game.batarangs),(0,5,100,0));
+
+    ground=CollisionMask::for_stage(StageId::Level1A);
+    assets.load_stage(StageId::Level1A);
+    input.set(VK_ENTER,true);
+    game.tick(&mut input,&ground);
+    input.set(VK_ENTER,false);
+    assert_eq!(game.screen,AppScreen::Intro);
+    assert!(game.skip_intro());
+    for _ in 0..41 { game.tick(&mut input,&ground); }
+    assert_eq!(game.screen,AppScreen::Playing);
+    assert_eq!(game.active_stage(),StageId::Level1A);
+    assert!(!game.level1a_exit_reached && !game.level2a_exit_reached && !game.level2b_exit_reached);
+    for _ in 0..55 { game.tick(&mut input,&ground); }
+    let (dark_replay_1a,_)=intro_frame_metrics(true,&mut game,&assets);
+    assert!(dark_replay_1a<0.95);
+    snapshot(true,out,"campaign_run2_1a_hq.png",&mut game,&assets);
+
+    let report=format!(
+        "{{\n  \"route\": [\"Title\", \"Intro\", \"Level1A\", \"Level1B\", \"Level1C\", \"EscapeCard\", \"Level2A\", \"TvCard\", \"Level2B\", \"KabukiCard\", \"Title\", \"Run2:Level1A\"],\n  \"campaign_score_before_reset\": {final_score},\n  \"level1b_biker_defeated\": {biker_defeated},\n  \"level1b_biker_score_gain\": {biker_score_gain},\n  \"level2b_elev3_ascended_px\": {e3_ascended:.2},\n  \"run2_reset_verified\": true,\n  \"hq_p95_level2b_ms\": {p95_2b:.4},\n  \"fingerprints\": {{\n    \"level1a_hq\": \"0x{fp_1a:016x}\",\n    \"level1b_hq\": \"0x{fp_1b:016x}\",\n    \"level1c_hq\": \"0x{fp_1c:016x}\",\n    \"level2a_hq\": \"0x{fp_2a:016x}\",\n    \"level2b_hq\": \"0x{fp_2b:016x}\"\n  }}\n}}\n"
+    );
+    fs::write(out.join("full_campaign_qa_report.json"),report).expect("write full campaign QA report");
+}

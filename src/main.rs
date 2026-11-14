@@ -58,6 +58,11 @@ fn main() {
         headless::qa_level2_route(out);
         return;
     }
+    if let Some(pos) = args.iter().position(|arg| arg == "--qa-full-campaign") {
+        let out = args.get(pos + 1).map(String::as_str).unwrap_or("full-campaign-qa");
+        headless::qa_full_campaign(out);
+        return;
+    }
     // Opt-in test/developer navigation, disabled for ordinary players.
     let qa_navigation = args.iter().any(|arg| arg == "--qa-navigation");
     win32::run(qa_navigation);

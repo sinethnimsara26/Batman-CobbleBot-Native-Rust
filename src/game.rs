@@ -285,6 +285,7 @@ pub struct Game{
     pub kabuki_card_fadeout_tick:Option<u16>,
     kabuki_card_sound_stopped:bool,
     pub kabuki_card_complete:bool,
+    kabuki_post_complete_ticks:u16,
     pub bank_goons:Option<BankGoonSquad>,
     pub labs_eagles:Vec<LabsEagle>,
     pub labs_bird_rng:GoonRng,
@@ -348,7 +349,7 @@ impl Game{
             level2a_exit_reached:false,
             tv_card_tick:0,tv_card_fadeout_tick:None,tv_card_sound_stopped:false,tv_card_complete:false,
             level2b_exit_reached:false,
-            kabuki_card_tick:0,kabuki_card_fadeout_tick:None,kabuki_card_sound_stopped:false,kabuki_card_complete:false,
+            kabuki_card_tick:0,kabuki_card_fadeout_tick:None,kabuki_card_sound_stopped:false,kabuki_card_complete:false,kabuki_post_complete_ticks:0,
             bank_goons:None,labs_eagles:Vec::new(),labs_bird_rng:GoonRng::new(0x2A00_1393),bank_biker:None,penguin_boss:None,penguin_rng:PenguinRng::new(0x1C00_1250),
             pickups:vec![false;PICKUPS.len()],labs_health_collected:false,shots:Vec::new(),labs_doors:Vec::new(),labs_elevators:Vec::new(),
             clock_secs:80,clock_millisecs:99,clock_elapsed_ms:0,clock_last_ms:0,clock_exploded:false,
@@ -412,6 +413,7 @@ impl Game{
         self.tv_card_complete=false;
         self.level2b_exit_reached=false;
         self.kabuki_card_complete=false;
+        self.kabuki_post_complete_ticks=0;
         let pickup_count = match stage {
             StageId::Level1A => PICKUPS.len(),
             StageId::Level1B => LEVEL1B_PICKUPS.len(),
@@ -578,6 +580,10 @@ impl Game{
         true
     }
 
+    pub fn active_platform_idx(&self)->Option<usize>{
+        if self.on_platform { self.current_platform_idx } else { None }
+    }
+
     fn story_card_spec(card:StoryCard)->(AppScreen,u16,u16){
         match card {
             StoryCard::Escape=>(AppScreen::EscapeCard,ESCAPE_CARD_TERMINAL_FRAME,ESCAPE_CARD_TERMINAL_FRAME),
@@ -645,11 +651,34 @@ impl Game{
         true
     }
 
+    /// Resets the entire campaign state back to a fresh `Title` screen (`Level1A`,
+    /// `lives=5`, `health=100`, `score=0`, `batarangs=0`) without leaking prior-stage entities or stats.
+    fn reset_to_title_fresh(&mut self,emit_music_stop:bool){
+        let mut events=std::mem::take(&mut self.audio_events);
+        if emit_music_stop {
+            events.push(AudioEvent::MusicStop);
+        }
+        events.push(AudioEvent::StageTrack(StageId::Level1A));
+        let mut fresh=Game::new();
+        fresh.audio_events=events;
+        *self=fresh;
+    }
+
+    /// Returns a finished `KabukiCard` end-of-episode screen cleanly to `Title` on click/input.
+    pub fn dismiss_completed_kabuki_card(&mut self)->bool{
+        if self.screen!=AppScreen::KabukiCard || !self.kabuki_card_complete {
+            return false;
+        }
+        self.reset_to_title_fresh(false);
+        true
+    }
+
     fn tick_story_card(&mut self,card:StoryCard,from_stage:StageId,input:&mut InputState){
         let (_,auto_fade_frame,terminal_frame)=Self::story_card_spec(card);
         let skip_pressed=input.pressed(VK_ENTER)||input.pressed(VK_SPACE)||input.pressed(VK_ESCAPE);
         let mut finished=false;
         let mut stop_sound=false;
+        let mut return_to_title=false;
         {
             let (tick,fadeout_tick,sound_stopped,complete)=self.story_card_slots_mut(card);
             if !*complete {
@@ -676,6 +705,8 @@ impl Game{
                         *fadeout_tick=Some(0);
                     }
                 }
+            }else if card==StoryCard::Kabuki {
+                return_to_title=true;
             }
         }
         if stop_sound {
@@ -688,6 +719,11 @@ impl Game{
                 ESCAPE_CARD_SOUND_ID,
                 RootProgress{score:self.score,lives:self.lives,batarangs:self.batarangs},
             );
+        }else if return_to_title {
+            self.kabuki_post_complete_ticks=self.kabuki_post_complete_ticks.saturating_add(1);
+            if skip_pressed || self.kabuki_post_complete_ticks>=25 {
+                self.reset_to_title_fresh(false);
+            }
         }
         input.clear_pressed();
     }
@@ -1186,11 +1222,7 @@ impl Game{
             return true;
         }
         if self.gameover_after_fade{
-            self.audio_events.push(AudioEvent::MusicStop);
-            self.screen=AppScreen::Title;
-            self.fadeout_tick=None;
-            self.gameover_after_fade=false;
-            self.ticks=0;
+            self.reset_to_title_fresh(true);
             return true;
         }
 
@@ -1681,10 +1713,22 @@ impl Game{
                         self.player.dy=-36.0+state.dy/3.0;
                         self.gravity=GLOBAL_GRAVITY;
                     }
-                }else if (player_y-state.y).abs()>160.0 || !self.player.jumping{
-                    self.on_platform=false;
-                    self.current_platform_idx=None;
-                    self.gravity=GLOBAL_GRAVITY;
+                }else{
+                    let (bx0,_,bx1,_)=elev.hitbox_bounds_at(state.y);
+                    let on_x_span=player_x+25.0>=bx0 && player_x-25.0<=bx1;
+                    if state.dy>=0.0 || (player_y-state.y).abs()>160.0 || self.player.jumping || !on_x_span{
+                        self.on_platform=false;
+                        self.current_platform_idx=None;
+                        self.gravity=GLOBAL_GRAVITY;
+                    }else{
+                        // Keep lockstep on rising mounts before platform catches up with -32px step.
+                        self.on_platform=true;
+                        self.current_platform_x=elev.x;
+                        self.player.dy=state.dy;
+                        self.gravity=0.0;
+                        let snap=if state.dy>0.0{20.0}else{40.0};
+                        self.player.y=(state.y-PLAYER_H-snap)-origin_y;
+                    }
                 }
             }
 
@@ -3707,5 +3751,411 @@ mod b31_kabuki_card_tests {
         assert_eq!(game.kabuki_card_fadeout_tick, Some(40));
         assert_eq!(audio, vec![AudioEvent::IntroStop]);
         assert!(!game.skip_kabuki_card(), "skip after completion must be ignored");
+    }
+}
+
+#[cfg(test)]
+mod continuous_e2e_and_bugfix_regression_tests {
+    use super::{
+        AppScreen, AudioEvent, Game, InputState, PlayerState, LEVEL_X, LEVEL_Y, PICKUPS, VK_A,
+        VK_ENTER, VK_LEFT, VK_S, VK_SPACE,
+    };
+    use crate::bank_biker::BikerState;
+    use crate::collision::CollisionMask;
+    use crate::stage::{labs2b, StageId};
+
+    #[test]
+    fn gameover_after_fade_resets_stage_entities_and_emits_title_audio() {
+        let ground_2b = CollisionMask::for_stage(StageId::Level2B);
+        let mut game = Game::new();
+        let mut input = InputState::default();
+        game.screen = AppScreen::Playing;
+        game.start_stage(StageId::Level2B);
+        game.score = 4500;
+        game.batarangs = 12;
+        game.lives = 0;
+        game.health = 0;
+        game.player.state = PlayerState::Die;
+        game.gameover_after_fade = true;
+        game.fadeout_tick = Some(39);
+        let _ = game.take_audio_events();
+
+        // Frame 40 hits gameover_after_fade branch and resets to a pristine Title state.
+        game.tick(&mut input, &ground_2b);
+        game.tick(&mut input, &ground_2b);
+
+        assert_eq!(game.screen, AppScreen::Title);
+        assert_eq!(game.active_stage(), StageId::Level1A);
+        assert_eq!(game.pending_stage_entry(), None);
+        assert!(!game.gameover_after_fade);
+        assert_eq!(game.fadeout_tick, None);
+        assert_eq!(game.ticks, 0);
+        assert_eq!((game.score, game.lives, game.health, game.batarangs), (0, 5, 100, 0));
+        assert_eq!(game.player.state, PlayerState::Fall);
+        assert!(game.labs_doors.is_empty());
+        assert!(game.labs_elevators.is_empty());
+        assert!(game.bank_goons.is_none());
+        assert!(game.bank_biker.is_none());
+        assert!(game.penguin_boss.is_none());
+
+        let audio = game.take_audio_events();
+        assert_eq!(audio, vec![AudioEvent::MusicStop, AudioEvent::StageTrack(StageId::Level1A)]);
+    }
+
+    #[test]
+    fn kabuki_card_exits_to_fresh_title_on_enter_or_auto_timer_for_clean_replay() {
+        let ground_2b = CollisionMask::for_stage(StageId::Level2B);
+        let ground_1a = CollisionMask::for_stage(StageId::Level1A);
+
+        // Path A: player presses Enter after KabukiCard fade finishes.
+        let mut by_key = Game::new();
+        by_key.start_stage(StageId::Level2B);
+        by_key.score = 9999;
+        by_key.lives = 2;
+        by_key.batarangs = 7;
+        by_key.begin_kabuki_card();
+        assert!(by_key.skip_kabuki_card());
+        let mut input = InputState::default();
+        for _ in 0..41 {
+            by_key.tick(&mut input, &ground_2b);
+        }
+        assert!(by_key.kabuki_card_complete);
+        let _ = by_key.take_audio_events();
+
+        input.set(VK_ENTER, true);
+        by_key.tick(&mut input, &ground_2b);
+        input.set(VK_ENTER, false);
+        assert_eq!(by_key.screen, AppScreen::Title);
+        assert_eq!(by_key.active_stage(), StageId::Level1A);
+        assert_eq!((by_key.score, by_key.lives, by_key.batarangs), (0, 5, 0));
+
+        // Run 2 can immediately start normally from Title -> Intro -> Level1A.
+        input.set(VK_ENTER, true);
+        by_key.tick(&mut input, &ground_1a);
+        input.set(VK_ENTER, false);
+        assert_eq!(by_key.screen, AppScreen::Intro);
+        assert!(by_key.skip_intro());
+        for _ in 0..41 {
+            by_key.tick(&mut input, &ground_1a);
+        }
+        assert_eq!(by_key.screen, AppScreen::Playing);
+        assert_eq!(by_key.active_stage(), StageId::Level1A);
+
+        // Path B: auto-timer returns to fresh Title after 25 post-complete ticks.
+        let mut by_timer = Game::new();
+        by_timer.start_stage(StageId::Level2B);
+        by_timer.begin_kabuki_card();
+        assert!(by_timer.skip_kabuki_card());
+        for _ in 0..41 {
+            by_timer.tick(&mut input, &ground_2b);
+        }
+        assert!(by_timer.kabuki_card_complete);
+        for _ in 0..24 {
+            by_timer.tick(&mut input, &ground_2b);
+            assert_eq!(by_timer.screen, AppScreen::KabukiCard);
+        }
+        by_timer.tick(&mut input, &ground_2b);
+        assert_eq!(by_timer.screen, AppScreen::Title);
+        assert_eq!(by_timer.active_stage(), StageId::Level1A);
+    }
+
+    #[test]
+    fn level2b_rising_elevators_hold_lockstep_and_allow_jump_or_walkoff() {
+        let ground = CollisionMask::for_stage(StageId::Level2B);
+        let d2b = StageId::Level2B.descriptor();
+        let mut game = Game::new();
+        game.screen = AppScreen::Playing;
+        game.start_stage(StageId::Level2B);
+
+        // Mount Level 2B rising elevator_03 (`7197.65 -> 3115`) and ride for 45 ticks.
+        let elev3 = labs2b::ELEVATORS[2];
+        let e3_y0 = game.labs_elevators[2].y;
+        let (bx0, by0, bx1, _) = elev3.hitbox_bounds_at(e3_y0);
+        game.player.x = ((bx0 + bx1) * 0.5) - d2b.level_origin_game_local.x;
+        game.player.y = (by0 - 15.0) - d2b.level_origin_game_local.y;
+        game.player.dy = 0.0;
+
+        let mut input = InputState::default();
+        game.tick(&mut input, &ground);
+        assert!(game.on_platform);
+        assert_eq!(game.current_platform_idx, Some(2));
+        assert!(game.labs_elevators[2].moving);
+
+        for tick_idx in 0..45 {
+            game.tick(&mut input, &ground);
+            assert!(
+                game.on_platform && game.current_platform_idx == Some(2),
+                "Batman fell off rising elevator_03 at tick {tick_idx}"
+            );
+        }
+        assert!(
+            e3_y0 - game.labs_elevators[2].y >= 500.0,
+            "elevator_03 should carry Batman up >=500px cleanly"
+        );
+
+        // Jumping off rising elevator detaches cleanly with elevator jump boost.
+        input.set(VK_SPACE, true);
+        game.tick(&mut input, &ground);
+        input.set(VK_SPACE, false);
+        assert!(!game.on_platform);
+        assert!(game.player.jumping);
+        assert!(game.player.dy < -30.0);
+
+        // Mount rising elevator_03 (`7197.65 -> 3115`) near the left side of the open entry (`gy 7020..7150`),
+        // ride 2 ticks, then walk LEFT past bx0 - 25 before entering the stone shaft above 6960.
+        let mut game2 = Game::new();
+        game2.screen = AppScreen::Playing;
+        game2.start_stage(StageId::Level2B);
+        let (rx0, ry0, _, _) = elev3.hitbox_bounds_at(e3_y0);
+        game2.player.x = (rx0 + 30.0) - d2b.level_origin_game_local.x;
+        game2.player.y = (ry0 - 15.0) - d2b.level_origin_game_local.y;
+        game2.player.dy = 0.0;
+        let mut walk_input = InputState::default();
+        for _ in 0..2 {
+            game2.tick(&mut walk_input, &ground);
+        }
+        assert!(game2.on_platform && game2.current_platform_idx == Some(2));
+
+        walk_input.set(VK_LEFT, true);
+        let mut walked_off = false;
+        for _ in 0..20 {
+            game2.tick(&mut walk_input, &ground);
+            if !game2.on_platform {
+                walked_off = true;
+                break;
+            }
+        }
+        assert!(walked_off, "Walking horizontally past rising elevator span must detach cleanly");
+        walk_input.set(VK_LEFT, false);
+        // Upward platform momentum (-12) decelerates under GLOBAL_GRAVITY (+5/tick -> -7, -2, +3).
+        for _ in 0..4 {
+            game2.tick(&mut walk_input, &ground);
+        }
+        assert!(game2.player.dy > 0.0, "Detached Batman must fall under gravity");
+    }
+
+    #[test]
+    fn continuous_campaign_level1_through_level2_to_replay_without_conflict() {
+        let mut game = Game::new();
+        let mut ground = CollisionMask::for_stage(StageId::Level1A);
+        let mut input = InputState::default();
+
+        // 1. Title -> Intro -> Level 1A
+        input.set(VK_ENTER, true);
+        game.tick(&mut input, &ground);
+        input.set(VK_ENTER, false);
+        assert_eq!(game.screen, AppScreen::Intro);
+        assert!(game.skip_intro());
+        for _ in 0..41 {
+            game.tick(&mut input, &ground);
+        }
+        assert_eq!(game.screen, AppScreen::Playing);
+        assert_eq!(game.active_stage(), StageId::Level1A);
+
+        // Collect 1A pickup + clear 1A exit -> Level 1B
+        game.player.x = PICKUPS[0].0 - LEVEL_X;
+        game.player.y = PICKUPS[0].1 - LEVEL_Y;
+        game.tick(&mut input, &ground);
+        assert!(game.batarangs > 0);
+        game.level1a_exit_reached = true;
+        game.fadeout_tick = Some(0);
+        for _ in 0..41 {
+            game.tick(&mut input, &ground);
+        }
+        assert_eq!(game.consume_pending_stage_entry(), Some(StageId::Level1B));
+        assert_eq!(game.active_stage(), StageId::Level1B);
+        ground = CollisionMask::for_stage(StageId::Level1B);
+
+        // 2. Level 1B: verify standing Batman on bank street floor can fight biker + goons, then exit -> Level 1C
+        let d1b = StageId::Level1B.descriptor();
+        {
+            let biker = game.bank_biker.as_mut().expect("1B biker");
+            biker.active = true;
+            biker.x = -1200.0;
+            biker.y = 375.85;
+            biker.dir = 1.0;
+        }
+        game.player.x = -1140.0 - d1b.level_origin_game_local.x;
+        game.player.y = 323.25 - d1b.level_origin_game_local.y;
+        game.player.dir = -1;
+        game.player.jumping = false;
+        game.player.dy = 0.0;
+        let score_before_biker = game.score;
+        input.set(VK_A, true);
+        game.tick(&mut input, &ground);
+        input.set(VK_A, false);
+        for _ in 0..6 {
+            game.tick(&mut input, &ground);
+        }
+        let biker_after = game.bank_biker.as_ref().unwrap();
+        assert!(
+            !biker_after.alive && biker_after.state == BikerState::Fall && game.score >= score_before_biker + 100,
+            "Standing Batarang in Level 1B must hit BankBiker cleanly"
+        );
+        game.level1b_exit_reached = true;
+        game.fadeout_tick = Some(0);
+        for _ in 0..41 {
+            game.tick(&mut input, &ground);
+        }
+        assert_eq!(game.consume_pending_stage_entry(), Some(StageId::Level1C));
+        assert_eq!(game.active_stage(), StageId::Level1C);
+        ground = CollisionMask::for_stage(StageId::Level1C);
+
+        // 3. Level 1C: throw standing Batarang at Penguin (60% block / 40% hit per SWF), then finish with melee punch -> EscapeCard
+        let d1c = StageId::Level1C.descriptor();
+        let bx = {
+            let boss = game.penguin_boss.as_mut().expect("Penguin boss");
+            boss.health = 5;
+            boss.state = crate::penguin::PenguinState::Stand;
+            boss.x
+        };
+        game.player.state = PlayerState::Stand;
+        game.player.x = (bx - 150.0) - d1c.level_origin_game_local.x;
+        game.player.y = 288.25 - d1c.level_origin_game_local.y;
+        game.player.dir = 1;
+        game.player.jumping = false;
+        game.player.on_ground = true;
+        game.player.dy = 0.0;
+        input.set(VK_A, true);
+        game.tick(&mut input, &ground);
+        input.set(VK_A, false);
+        for _ in 0..8 {
+            game.tick(&mut input, &ground);
+            if game.fadeout_tick.is_some() {
+                break;
+            }
+        }
+        if !game.level1c_exit_reached {
+            let (bx_now, by_now) = {
+                let boss = game.penguin_boss.as_mut().expect("Penguin boss");
+                boss.state = crate::penguin::PenguinState::Stand;
+                boss.health = 1;
+                (boss.x, boss.y)
+            };
+            game.player.x = (bx_now - 20.0) - d1c.level_origin_game_local.x;
+            game.player.y = (by_now - 28.0) - d1c.level_origin_game_local.y;
+            game.player.state = PlayerState::Stand;
+            game.player.dir = 1;
+            input.set(VK_S, true);
+            game.tick(&mut input, &ground);
+            input.set(VK_S, false);
+            for _ in 0..45 {
+                game.tick(&mut input, &ground);
+                if game.level1c_exit_reached {
+                    break;
+                }
+            }
+        }
+        assert!(game.level1c_exit_reached, "Defeating Penguin should trigger 1C exit");
+        for _ in 0..45 {
+            game.tick(&mut input, &ground);
+            if game.screen == AppScreen::EscapeCard {
+                break;
+            }
+        }
+        assert_eq!(game.screen, AppScreen::EscapeCard);
+
+        // 4. EscapeCard -> Level 2A
+        assert!(game.skip_escape_card());
+        for _ in 0..41 {
+            game.tick(&mut input, &ground);
+        }
+        assert_eq!(game.consume_pending_stage_entry(), Some(StageId::Level2A));
+        assert_eq!(game.active_stage(), StageId::Level2A);
+        ground = CollisionMask::for_stage(StageId::Level2A);
+
+        // Quick real action in Level 2A: punch goon 0 then enter checkpoint_2a_tv -> TvCard
+        let d2a = StageId::Level2A.descriptor();
+        let g0 = game.bank_goons.as_ref().unwrap().goons[0].x;
+        let g0_y = game.bank_goons.as_ref().unwrap().goons[0].y;
+        game.player.x = (g0 - 45.0) - d2a.level_origin_game_local.x;
+        game.player.y = (g0_y - 10.0) - d2a.level_origin_game_local.y;
+        game.player.dir = 1;
+        input.set(VK_S, true);
+        game.tick(&mut input, &ground);
+        input.set(VK_S, false);
+        let cp_tv = StageId::Level2A
+            .labs_checkpoints()
+            .iter()
+            .find(|c| c.name == "checkpoint_2a_tv")
+            .unwrap();
+        let (tx, ty, _, _) = cp_tv.game_bounds();
+        game.player.x = (tx + 20.0) - d2a.level_origin_game_local.x;
+        game.player.y = (ty + 20.0) - d2a.level_origin_game_local.y;
+        for _ in 0..42 {
+            game.tick(&mut input, &ground);
+            if game.screen == AppScreen::TvCard {
+                break;
+            }
+        }
+        assert_eq!(game.screen, AppScreen::TvCard);
+
+        // 5. TvCard -> Level 2B
+        assert!(game.skip_tv_card());
+        for _ in 0..41 {
+            game.tick(&mut input, &ground);
+        }
+        assert_eq!(game.consume_pending_stage_entry(), Some(StageId::Level2B));
+        assert_eq!(game.active_stage(), StageId::Level2B);
+        ground = CollisionMask::for_stage(StageId::Level2B);
+
+        // Ride rising elevator in 2B cleanly, hit checkpoint_2b_end -> KabukiCard -> fresh Title
+        let d2b = StageId::Level2B.descriptor();
+        let cp_end = labs2b::CHECKPOINTS.iter().find(|c| c.name == "checkpoint_2b_end").unwrap();
+        let (ex, ey, _, _) = cp_end.game_bounds();
+        game.player.x = (ex + 20.0) - d2b.level_origin_game_local.x;
+        game.player.y = (ey + 20.0) - d2b.level_origin_game_local.y;
+        for _ in 0..42 {
+            game.tick(&mut input, &ground);
+            if game.screen == AppScreen::KabukiCard {
+                break;
+            }
+        }
+        assert_eq!(game.screen, AppScreen::KabukiCard);
+        assert!(game.skip_kabuki_card());
+        for _ in 0..41 {
+            game.tick(&mut input, &ground);
+        }
+        assert!(game.kabuki_card_complete);
+        input.set(VK_ENTER, true);
+        game.tick(&mut input, &ground);
+        input.set(VK_ENTER, false);
+        assert_eq!(game.screen, AppScreen::Title);
+        assert_eq!(game.active_stage(), StageId::Level1A);
+
+        // 6. Verify Run 2 starts without any leaked state from Level 1B/1C/2A/2B
+        let _ = game.take_audio_events();
+        input.set(VK_ENTER, true);
+        ground = CollisionMask::for_stage(StageId::Level1A);
+        game.tick(&mut input, &ground);
+        input.set(VK_ENTER, false);
+        assert_eq!(game.screen, AppScreen::Intro);
+        assert!(game.skip_intro());
+        for _ in 0..41 {
+            game.tick(&mut input, &ground);
+        }
+        assert_eq!(game.screen, AppScreen::Playing);
+        assert_eq!(game.active_stage(), StageId::Level1A);
+        assert_eq!((game.score, game.lives, game.health, game.batarangs), (0, 5, 100, 0));
+        assert!(!game.level1a_complete && !game.level1b_complete && !game.level1c_complete);
+        assert!(!game.level2a_exit_reached && !game.level2b_exit_reached);
+    }
+
+    #[test]
+    fn labs2a_walking_left_from_elev2_lands_on_floor_without_leak() {
+        let ground = CollisionMask::for_stage(StageId::Level2A);
+        let d2a = StageId::Level2A.descriptor();
+        let mut game = Game::new();
+        game.screen = AppScreen::Playing;
+        game.start_stage(StageId::Level2A);
+        game.player.x = 600.0 - d2a.level_origin_game_local.x;
+        game.player.y = 2573.2 - d2a.level_origin_game_local.y;
+        let mut input = InputState::default();
+        input.set(VK_LEFT, true);
+        for _ in 0..10 {
+            game.tick(&mut input, &ground);
+        }
+        input.set(VK_LEFT, false);
+        assert!(!game.on_platform);
     }
 }

@@ -1931,6 +1931,10 @@ jobs:
           if ($level2Qa.ExitCode -ne 0) { throw "B32 Full Level 2 E2E route QA failed with exit code $($level2Qa.ExitCode)" }
           Get-Content ".generated/b32-level2-qa/level2_route_qa_report.json"
 
+          $campaignQa = Start-Process -FilePath $exe -ArgumentList @("--qa-full-campaign", ".generated/full-campaign-qa") -Wait -PassThru
+          if ($campaignQa.ExitCode -ne 0) { throw "Continuous Level 1 -> Level 2 -> Replay campaign QA failed with exit code $($campaignQa.ExitCode)" }
+          Get-Content ".generated/full-campaign-qa/full_campaign_qa_report.json"
+
           $legacyShots = Get-ChildItem ".generated/visual-smoke/*.png"
           $hqShots = Get-ChildItem ".generated/visual-smoke-hq/*.png"
           if ($legacyShots.Count -ne 20) { throw "Expected 20 legacy smoke screenshots, got $($legacyShots.Count)" }
@@ -2575,6 +2579,13 @@ jobs:
         with:
           name: Batman-CobbleBot-B32-Level2-E2E-QA
           path: .generated/b32-level2-qa/
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Batman-CobbleBot-Full-Campaign-E2E-QA
+          path: .generated/full-campaign-qa/
           if-no-files-found: error
 
       - uses: actions/upload-artifact@v4
