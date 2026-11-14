@@ -2,6 +2,16 @@
 
 This is the **short index of meaningful, verified progress and mistakes**. Detailed source analysis, source IDs, full decisions and original screenshots remain in [the original Level 1A presentation diary](revival/LEVEL1A_PRESENTATION_FIDELITY_LOG_2026-11-09.md). Current state and exact next action are in [AI_HANDOFF.md](AI_HANDOFF.md); prioritized task statuses in [AI_TASKS.md](AI_TASKS.md).
 
+## 2026-11-14 — B31 `checkpoint_2b_end` Halo Fire & `card:kabuki` (`#1569`/`#1570`) (`revive/level2-b31-labs2b-kabuki-card-2026-11-14`, Draft PR #63)
+
+- **Problem / Scope:** Implement `Labs 2B` exit trigger (`checkpoint_2b_end`: `camHeight += 15`, `halo.gotoAndPlay("fire")`, `#34` fadeout), bake `card:kabuki` (`#1569`, `166` active frames before `Stop()` at `165`, auto-fade at `159` -> `level3a`, `#1254` held at `161`, `#1570` SKIP bounds `528,370,573,382`), and wire `AppScreen::KabukiCard` across 1x/HQ3x rendering & Win32 click-skip.
+- **Verification:** `cargo test --release --locked` `140 passed; 0 failed` (`5.00s` local / `4.85s` CI, `+3` tests), local `--qa-labs2a-route` exit `0`, Windows CI Run `#43623825988` (`18m53s`, **SUCCESS** on code SHA `a72f2a5`), `20/20` HQ smokes identical, relocated EXE SHA-256 `0eb5a60c07e25b7fca41f51eb0336ce342c19d8e2215a793ed2e35a43ca2d8a7`, `render_p95_ms: 23.7463`, `scenery_p95_ms: 26.7122`, visually verified CI proof `kabuki-card-contact-sheet.png` (SHA-256 `b688f73afceed2063509f3ae5350cede2757f14ee9a45dc5374d110641c0b524`).
+
+## 2026-11-14 — B30 `Labs 2B` Checkpoints, `10` Pickups & Live `TvCard -> Level2B` Entry (`revive/level2-b30-labs2b-checkpoints-pickups-entry-2026-11-14`, Draft PR #62)
+
+- **Problem / Scope:** Wire `checkpoint_2b_01..03` (`84`/`93`/`39` without `#1408` `levelTitle` delay), all `10` `item_br01..10` pickups, `MusicTrack::Level2B` playback, and live `consume_pending_stage_entry` transition from `TvCard` into `StageId::Level2B`.
+- **Verification:** `cargo test --release --locked` `137 passed; 0 failed` (`4.28s` local / `3.57s` CI, `+2` tests), local `--qa-labs2a-route` exit `0`, Windows CI Run `#43621034630` (`15m0s`, **SUCCESS** on code SHA `303de79`), `20/20` HQ smokes identical, relocated EXE SHA-256 `40574d1dcb3614bd644ec3f181a78d9dc122d247b309e3c4f824f82f167de1a8`, `render_p95_ms: 18.73`, `scenery_p95_ms: 22.4025`.
+
 ## 2026-11-14 — B29 `Labs 2B` `lava1`, Countdown `clock` (`#1503`), and `halo` (`#1495`/`#1488`) (`revive/level2-b29-labs2b-lava-clock-halo-2026-11-14`, Draft PR #61)
 
 - **Problem / Scope:** Implement `Labs 2B` `#1486` `lava1` hazard (`ACT[22]`), `#1503`/`#1499` red LED countdown clock (`ACT[21]` `clockTimer`), and `#1495` `halo` red alarm pulse (`#1488`) + `"fire"` explosion plume (`21..=29`) across 1× & HQ3× while keeping `StageId::Level2B` latched in `consume_pending_stage_entry` until B30.

@@ -1299,3 +1299,7 @@ Do not erase two historical CI failures: documentation-only #42834460076 and ini
 - **AUD-20261114-036 (B30 `Labs 2B` Checkpoints, Pickups & Live `Level2B` Entry — CI Run `#43621034630`):**
   - `0` new `unsafe`, `0` new external crates, `0` per-frame heap allocations in `game.rs`/`render.rs`; parameterized `start_stage` and `collect_pickups` via `stage.labs_batarang_pickups()`, keeping `10` `item_br*` pickups and `#84`/`#93`/`#39` overlays shared across `StageId`.
   - Verified `137 passed; 0 failed` (`3.57s` CI / `4.28s` local, `+2` tests), `20/20` HQ smokes identical, `15/15` Legacy baseline pixels untouched, `render_p95_ms: 18.73`, `scenery_p95_ms: 22.4025`, relocated EXE SHA-256 `40574d1dcb3614bd644ec3f181a78d9dc122d247b309e3c4f824f82f167de1a8`, and `--qa-labs2a-route` exit `0`.
+
+- **AUD-20261114-037 (B31 `checkpoint_2b_end` Halo Fire & `card:kabuki` — CI Run `#43623825988`):**
+  - `0` new `unsafe`, `0` new external crates, `0` per-frame heap allocations in `game.rs`/`render.rs`; reused `story_card_baker.py` (`b31_bake_kabuki_card.py`), `story_card_spec`/`story_card_slots_mut`/`tick_story_card`, `render_story_timeline_legacy`, and `active_card_skip_rect` with zero logic duplication.
+  - Verified `140 passed; 0 failed` (`4.85s` CI / `5.00s` local, `+3` tests), `20/20` HQ smokes identical, `15/15` Legacy baseline pixels untouched, `render_p95_ms: 23.7463`, `scenery_p95_ms: 26.7122`, relocated EXE SHA-256 `0eb5a60c07e25b7fca41f51eb0336ce342c19d8e2215a793ed2e35a43ca2d8a7`, and `--qa-labs2a-route` exit `0`.

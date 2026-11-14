@@ -1,6 +1,15 @@
 # AI handoff — current recovery checkpoint
 
 
+## FINAL VERIFIED — B31 `checkpoint_2b_end` Halo Fire & `card:kabuki` (`#1569`/`#1570`) (2026-11-14)
+- **Active Branch / PR:** `revive/level2-b31-labs2b-kabuki-card-2026-11-14` (Draft PR `#63` against `revive/level2-b30-labs2b-checkpoints-pickups-entry-2026-11-14`)
+- **Latest Verified Commit / CI:** Commit `a72f2a5` passed Windows CI Run `#43623825988` (`18m53s`, `140 passed; 0 failed` in `4.85s`, `hq_smoke_hashes_identical: 20`, relocated EXE SHA-256 `0eb5a60c07e25b7fca41f51eb0336ce342c19d8e2215a793ed2e35a43ca2d8a7`, `child_exit: 0`, `render_p95_ms: 23.7463`, `scenery_p95_ms: 26.7122`, `intro_audio_focus: BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT`).
+- **Scope Verified:**
+  - Baked `kabuki_card_frames.bin` (`166` `BCBFRM02` frames of `#1569` at `1.0x`, `2,132,838` bytes) + `KABUKI_CARD_SKIP_RECT` (`528,370,573,382`) in `reverse-engineering/tools/b31_bake_kabuki_card.py` and visually inspected CI proof `Batman-CobbleBot-B31-KabukiCard-Proof` (`kabuki-card-contact-sheet.png` SHA-256 `b688f73afceed2063509f3ae5350cede2757f14ee9a45dc5374d110641c0b524`).
+  - Wired `checkpoint_2b_end` (`cam_height += 15.0`, `trigger_halo_fire()`, `fadeout`), `AppScreen::KabukiCard` (auto-fade at `159` -> terminal `Stop()` at `165`, `StartSound 130` / `IntroStop` at `#34` frame `39`), `#1570` Skip click & keyboard skip, Legacy/HQ3x rendering, and `+3` tests (`137 -> 140`).
+- **Next Batch:** Branch `revive/level2-b32-e2e-qa-closeout-2026-11-14` for **B32** (Full Level 2 integrated `--qa-level2-route` E2E verification & final Level 2 closeout).
+
+
 ## FINAL VERIFIED — B30 `Labs 2B` Checkpoints, `10` Pickups & Live `TvCard -> Level2B` Entry (2026-11-14)
 - **Active Branch / PR:** `revive/level2-b30-labs2b-checkpoints-pickups-entry-2026-11-14` (Draft PR `#62` against `revive/level2-b29-labs2b-lava-clock-halo-2026-11-14`)
 - **Latest Verified Commit / CI:** Commit `303de79` passed Windows CI Run `#43621034630` (`15m0s`, `137 passed; 0 failed` in `3.57s`, `hq_smoke_hashes_identical: 20`, relocated EXE SHA-256 `40574d1dcb3614bd644ec3f181a78d9dc122d247b309e3c4f824f82f167de1a8`, `child_exit: 0`, `render_p95_ms: 18.73`, `scenery_p95_ms: 22.4025`, `intro_audio_focus: BLOCKED_HOSTED_RUNNER_NO_AUDIO_ENDPOINT`).
