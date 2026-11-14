@@ -402,6 +402,7 @@ fn draw_city_background_alpha(fb:&mut RenderSurface,game:&Game,assets:&Assets){
 fn draw_world_objects_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     draw_labs_doors_scaled(fb,game,assets,1);
     draw_labs_elevators_scaled(fb,game,assets,1);
+    draw_labs_lava_scaled(fb,game,assets,1);
     let pickup_coords: &[(f32,f32)] = match game.active_stage() {
         crate::stage::StageId::Level1A => &crate::game::PICKUPS,
         crate::stage::StageId::Level1B => &crate::game::LEVEL1B_PICKUPS,
@@ -431,6 +432,7 @@ fn draw_world_objects_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
 fn draw_world_objects_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     draw_labs_doors_scaled(fb,game,assets,HQ_SCALE as i32);
     draw_labs_elevators_scaled(fb,game,assets,HQ_SCALE as i32);
+    draw_labs_lava_scaled(fb,game,assets,HQ_SCALE as i32);
     let scale=HQ_SCALE as f32;
     debug_assert!((assets.pickup_frames_hq.logical_pixel_scale-scale).abs()<0.001);
     debug_assert!((assets.batarang_frames_hq.logical_pixel_scale-scale).abs()<0.001);
@@ -548,6 +550,40 @@ fn draw_labs_elevators_scaled(fb:&mut RenderSurface,game:&Game,assets:&Assets,pi
     }
 }
 
+fn draw_labs_lava_scaled(fb:&mut RenderSurface,game:&Game,assets:&Assets,pixel_scale:i32){
+    let lavas=game.active_stage().labs_lavas();
+    if lavas.is_empty() || assets.lava_frames.is_empty() {
+        return;
+    }
+    let frame_idx=(game.ticks as usize)%assets.lava_frames.len();
+    let frame=assets.lava_frames.frame(frame_idx);
+    for &lava in lavas{
+        draw_lazy_world_sprite(
+            fb,&frame,lava.x,lava.y,game.camera_x,game.camera_y,false,pixel_scale,
+        );
+    }
+}
+
+/// Exact `#1488` red alarm `CXFORMWITHALPHA` (`mult[3]` out of `256`) across `#1495` (`halo`) frames `0..=29`.
+const HALO_RED_ALPHA: [u32; 30] = [
+    128, 114, 100, 85, 71, 57, 43, 28, 14, 0,
+    0, 0, 0, 18, 37, 55, 73, 91, 110, 128,
+    128, 128, 133, 138, 142, 147, 152, 157, 161, 166,
+];
+
+fn blend_full_viewport_red_tint(fb:&mut RenderSurface,alpha_256:u32){
+    if alpha_256==0{return;}
+    let inv=256-alpha_256;
+    let tint_r=192*alpha_256;
+    for px in &mut fb.pixels{
+        let p=*px;
+        let r=(((p>>16)&255)*inv+tint_r)>>8;
+        let g=(((p>>8)&255)*inv)>>8;
+        let b=((p&255)*inv)>>8;
+        *px=0xff00_0000|(r<<16)|(g<<8)|b;
+    }
+}
+
 fn draw_world_foreground_scaled(fb:&mut RenderSurface,game:&Game,assets:&Assets,pixel_scale:i32){
     let stage=game.active_stage();
     if !matches!(stage,crate::stage::StageId::Level2A|crate::stage::StageId::Level2B) || assets.door_frames.len()<23 {
@@ -561,9 +597,20 @@ fn draw_world_foreground_scaled(fb:&mut RenderSurface,game:&Game,assets:&Assets,
             );
         }
     }
-    // Flash depth 413 (`halo` #1399) follows Batman (`followPlayer`), sitting above front
-    // door jambs (377..411) and underneath glinting `health01` (415) & `item_br*` (425..617).
-    // Level 2B's animated #1495 `halo` ("fire" on explosion) is wired in B29.
+    // Flash depth 413 (`halo` #1399 on 2A) / depth 313 (`halo` #1495 on 2B) follows Batman.
+    if stage == crate::stage::StageId::Level2B {
+        let alpha=HALO_RED_ALPHA[(game.halo_frame as usize).min(HALO_RED_ALPHA.len()-1)];
+        blend_full_viewport_red_tint(fb,alpha);
+        if game.halo_fire && game.halo_frame>=21 && !assets.halo_fire_frames.is_empty(){
+            let fire_idx=(game.halo_frame as usize - 21).min(assets.halo_fire_frames.len()-1);
+            let player_gx=game.player.x+game.level_origin_x();
+            let player_gy=game.player.y+game.level_origin_y();
+            draw_lazy_world_sprite(
+                fb,&assets.halo_fire_frames.frame(fire_idx),
+                player_gx,player_gy,game.camera_x,game.camera_y,false,pixel_scale,
+            );
+        }
+    }
     if stage == crate::stage::StageId::Level2A && assets.labs_pickups_frames.len() >= 2 {
         let player_gx = game.player.x + game.level_origin_x();
         let player_gy = game.player.y + game.level_origin_y();
@@ -698,8 +745,68 @@ fn draw_stage_enemies_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     draw_stage_enemies_scaled(fb,game,assets,HQ_SCALE as i32);
 }
 
+fn draw_level2b_clock_scaled(fb:&mut RenderSurface,game:&Game,assets:&Assets,pixel_scale:i32){
+    if game.active_stage()!=crate::stage::StageId::Level2B{return;}
+    let pack=if pixel_scale==HQ_SCALE as i32{&assets.clock_frames_hq}else{&assets.clock_frames};
+    if pack.len()<12{return;}
+    const CLOCK_ROOT_X:f32=-83.0;
+    const CLOCK_ROOT_Y:f32=-11.0;
+    let scale=pixel_scale as f32;
+    let shell=pack.frame(0);
+    blit(
+        fb,&shell.image,
+        (CLOCK_ROOT_X*scale-shell.anchor_x).round() as i32,
+        (CLOCK_ROOT_Y*scale-shell.anchor_y).round() as i32,
+        shell.image.w as i32,shell.image.h as i32,false,
+    );
+    // Stack-only formatting matching AVM1 clockTimer (`SS :MM` or `"00 :00"`).
+    let secs=game.clock_secs.min(99);
+    let ms=game.clock_millisecs.min(99);
+    let mut slots:[Option<usize>;6]=[
+        Some((secs/10) as usize + 1),
+        Some((secs%10) as usize + 1),
+        None,
+        Some(11),
+        None,
+        None,
+    ];
+    if game.clock_exploded || ms>=10{
+        slots[4]=Some((ms/10) as usize + 1);
+        slots[5]=Some((ms%10) as usize + 1);
+    }else{
+        slots[4]=Some(ms as usize + 1);
+    }
+    let mut slot_x=0i32;
+    for slot in slots{
+        match slot{
+            None=>{slot_x+=5*pixel_scale;}
+            Some(11)=>{
+                let f=pack.frame(11);
+                blit(
+                    fb,&f.image,
+                    (CLOCK_ROOT_X*scale-f.anchor_x).round() as i32 + slot_x,
+                    (CLOCK_ROOT_Y*scale-f.anchor_y).round() as i32,
+                    f.image.w as i32,f.image.h as i32,false,
+                );
+                slot_x+=5*pixel_scale;
+            }
+            Some(frame_idx)=>{
+                let f=pack.frame(frame_idx);
+                blit(
+                    fb,&f.image,
+                    (CLOCK_ROOT_X*scale-f.anchor_x).round() as i32 + slot_x,
+                    (CLOCK_ROOT_Y*scale-f.anchor_y).round() as i32,
+                    f.image.w as i32,f.image.h as i32,false,
+                );
+                slot_x+=17*pixel_scale;
+            }
+        }
+    }
+}
+
 fn draw_foreground_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     draw_hud(fb,game,assets);
+    draw_level2b_clock_scaled(fb,game,assets,1);
 
     if !assets.tutorial_overlay_frames.is_empty(){
         let i=game.overlay_frame.min(assets.tutorial_overlay_frames.len()-1);
@@ -729,6 +836,7 @@ fn draw_foreground_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
 
 fn draw_foreground_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     draw_hud_hq(fb,game,assets);
+    draw_level2b_clock_scaled(fb,game,assets,HQ_SCALE as i32);
 
     // Round 7 foreground timelines are already true 3x assets. Their SWF
     // display lists, embedded DefineText glyphs, masks and CXFORMWITHALPHA were
@@ -1421,6 +1529,7 @@ mod tests{
         game.screen=crate::game::AppScreen::Playing;
         game.start_stage(crate::stage::StageId::Level2B);
         game.ticks=45;
+        game.halo_frame=9; // HALO_RED_ALPHA[9] == 0 clear phase to inspect #14 black void backdrop
 
         let mut fb1x=RenderSurface::new(LOGICAL_W,super::LOGICAL_H);
         let mut scratch=RenderSurface::new(LOGICAL_W,super::LOGICAL_H);
@@ -1644,5 +1753,55 @@ mod tests{
         render_high_quality(&mut hq_scratch, &mut hq_out, &game, &assets);
         assert_ne!(elev_start.pixels, elev_up.pixels, "Level 2B UP elevator displacement must move rendered #1330 platform");
         assert!(hq_out.pixels.iter().filter(|&&p| (p & 0x00ff_ffff) != 0).count() > 25_000);
+    }
+
+    #[test]
+    fn b29_labs2b_clock_lava_and_halo_render_in_1x_and_hq3x() {
+        use super::{render, render_high_quality, HQ_H, LOGICAL_H};
+        use crate::assets::Assets;
+        use crate::game::{AppScreen, Game};
+
+        let mut assets = Assets::load();
+        assets.load_stage(crate::stage::StageId::Level2B);
+        let mut game = Game::new();
+        game.screen = AppScreen::Playing;
+        game.start_stage(crate::stage::StageId::Level2B);
+        game.ticks = 45;
+
+        // Center camera on `lava1` (#1486) so animated lava + red #1488 halo + #1503 clock are all visible.
+        let lava = crate::stage::labs2b::LAVAS[0];
+        game.camera_x = 300.0 - (lava.x + 120.0);
+        game.camera_y = 220.0 - (lava.y + 10.0);
+
+        let mut base_1x = RenderSurface::new(LOGICAL_W, LOGICAL_H);
+        let mut halo_clear_1x = RenderSurface::new(LOGICAL_W, LOGICAL_H);
+        let mut clock_and_lava_1x = RenderSurface::new(LOGICAL_W, LOGICAL_H);
+        let mut halo_fire_1x = RenderSurface::new(LOGICAL_W, LOGICAL_H);
+        let mut hq_scratch = RenderSurface::new(LOGICAL_W, LOGICAL_H);
+        let mut hq_base = RenderSurface::new(HQ_W, HQ_H);
+        let mut hq_fire = RenderSurface::new(HQ_W, HQ_H);
+
+        // 1) Halo pulse (`frame 0` alpha=128 vs `frame 9` alpha=0) changes viewport tint pixels.
+        game.halo_frame = 0;
+        render(&mut base_1x, &game, &assets);
+        render_high_quality(&mut hq_scratch, &mut hq_base, &game, &assets);
+        game.halo_frame = 9;
+        render(&mut halo_clear_1x, &game, &assets);
+        assert_ne!(base_1x.pixels, halo_clear_1x.pixels, "#1488 red halo alpha 128 -> 0 must alter viewport pixels");
+
+        // 2) Clock countdown (`80 :99` -> `00 :00`) and lava (`ticks 45 -> 55`) change rendered pixels.
+        game.clock_secs = 0;
+        game.clock_millisecs = 0;
+        game.ticks = 55;
+        render(&mut clock_and_lava_1x, &game, &assets);
+        assert_ne!(halo_clear_1x.pixels, clock_and_lava_1x.pixels, "Level 2B clock digits and lava1 frame must animate");
+
+        // 3) Halo `"fire"` explosion plume (`halo_frame = 25`) renders in both 1x and HQ3x.
+        game.trigger_halo_fire();
+        game.halo_frame = 25;
+        render(&mut halo_fire_1x, &game, &assets);
+        render_high_quality(&mut hq_scratch, &mut hq_fire, &game, &assets);
+        assert_ne!(clock_and_lava_1x.pixels, halo_fire_1x.pixels, "#1495 halo fire plume must render in 1x");
+        assert_ne!(hq_base.pixels, hq_fire.pixels, "#1495 halo fire plume + 3x clock must render in HQ3x");
     }
 }

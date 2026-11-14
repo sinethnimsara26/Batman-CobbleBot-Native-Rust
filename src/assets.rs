@@ -117,6 +117,14 @@ pub struct CommonAssets {
     pub labs_pickups_frames: LazySpriteSet,
     /// 100 Level 2A `LEVEL 2` title banner (`#1408`) frames, loaded lazily.
     pub level2a_title_frames: LazySpriteSet,
+    /// 20 Level 2B animated lava pit (`#1486` `lava1`) frames at world scale, loaded lazily.
+    pub lava_frames: LazySpriteSet,
+    /// 9 Level 2B explosion plume (`#1495` `"fire"` frames `21..=29` excl. `#1488`) frames, loaded lazily.
+    pub halo_fire_frames: LazySpriteSet,
+    /// 12 Level 2B countdown clock (`#1503` shell + `#1499` LED glyphs `'0'..'9'` & `':'`) at 1x, loaded lazily.
+    pub clock_frames: LazySpriteSet,
+    /// 12 Level 2B countdown clock (`#1503` shell + `#1499` LED glyphs `'0'..'9'` & `':'`) at 3x HQ, loaded lazily.
+    pub clock_frames_hq: LazySpriteSet,
 }
 
 impl CommonAssets {
@@ -161,6 +169,10 @@ impl CommonAssets {
             eagle_frames: decode_sprite_frames_lazy_expected(include_bytes!("../assets/eagle_frames.bin"),1.0,"eagle_frames"),
             labs_pickups_frames: decode_sprite_frames_lazy_expected(include_bytes!("../assets/labs_pickups_frames.bin"),1.0,"labs_pickups_frames"),
             level2a_title_frames: decode_sprite_frames_lazy_expected(include_bytes!("../assets/level2a_title_frames.bin"),1.0,"level2a_title_frames"),
+            lava_frames: decode_sprite_frames_lazy_expected(include_bytes!("../assets/lava_frames.bin"),1.0,"lava_frames"),
+            halo_fire_frames: decode_sprite_frames_lazy_expected(include_bytes!("../assets/halo_fire_frames.bin"),1.0,"halo_fire_frames"),
+            clock_frames: decode_sprite_frames_lazy_expected(include_bytes!("../assets/clock_frames.bin"),1.0,"clock_frames"),
+            clock_frames_hq: decode_sprite_frames_lazy_expected(include_bytes!("../assets/clock_frames_hq.bin"),3.0,"clock_frames_hq"),
         }
     }
 }

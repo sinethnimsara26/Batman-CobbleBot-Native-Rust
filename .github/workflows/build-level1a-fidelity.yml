@@ -326,6 +326,13 @@ jobs:
           python "$tools/pack_level_tiles.py" "$work/level2b-tiles" "assets/level2b_tiles.bin"
           python "$tools/b27_bake_labs2b_scenery.py" "$swf" "$work/reports/symbols.json" "$work/bitmaps" "reverse-engineering/generated/collision_masks/manifest.json" "reverse-engineering/generated/collision_masks/level2b_ground.png" "$work/level2b-tiles" "assets/level2b_tiles.bin" ".generated/b27-labs2b-proof" --emit-rust-objects "assets/labs2b_objects.rs"
 
+          # Level 2B lava1 (#1486), halo fire (#1495), and clock (#1503/#1499) packs (B29).
+          python "$tools/b29_bake_level2b_clock_lava_halo.py" "$swf" "$work/reports/symbols.json" "$work/reports/actions.json" --bitmaps "$work/bitmaps" --lava-dir "$work/lava-frames" --halo-fire-dir "$work/halo-fire-frames" --clock-dir "$work/clock-frames" --clock-hq-dir "$work/clock-frames-hq" --proof ".generated/b29-labs2b-proof/b29_clock_lava_halo_proof.png" --report ".generated/b29-labs2b-proof/b29-clock-lava-halo-report.json"
+          python "$tools/pack_sprite_frames.py" "$work/lava-frames" "assets/lava_frames.bin" --format-version 2 --logical-pixel-scale 1.0
+          python "$tools/pack_sprite_frames.py" "$work/halo-fire-frames" "assets/halo_fire_frames.bin" --format-version 2 --logical-pixel-scale 1.0
+          python "$tools/pack_sprite_frames.py" "$work/clock-frames" "assets/clock_frames.bin" --format-version 2 --logical-pixel-scale 1.0
+          python "$tools/pack_sprite_frames.py" "$work/clock-frames-hq" "assets/clock_frames_hq.bin" --format-version 2 --logical-pixel-scale 3.0
+
           # Round 10 selective scenery split.
           #
           # HQ base: retain only the cheap depth-1 symbol 14. Symbol 146
@@ -2519,6 +2526,13 @@ jobs:
         with:
           name: Batman-CobbleBot-B27-Labs2B-Scenery-Proof
           path: .generated/b27-labs2b-proof/
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Batman-CobbleBot-B29-Clock-Lava-Halo-Proof
+          path: .generated/b29-labs2b-proof/
           if-no-files-found: error
 
       - uses: actions/upload-artifact@v4
