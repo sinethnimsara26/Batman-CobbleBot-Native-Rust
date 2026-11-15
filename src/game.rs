@@ -578,6 +578,23 @@ impl Game{
         );
     }
 
+    fn restart_action(&mut self, state: PlayerState) {
+        self.player.state = state;
+        self.player.state_tick = 0;
+        self.player_attacking = matches!(
+            state,
+            PlayerState::Punch
+                | PlayerState::HighPunch
+                | PlayerState::LowPunch
+                | PlayerState::JumpPunch
+                | PlayerState::Kick
+                | PlayerState::HighKick
+                | PlayerState::LowKick
+                | PlayerState::JumpKick
+                | PlayerState::CapeSpin
+        );
+    }
+
     fn stop_intro_sound_once(&mut self){
         if !self.intro_sound_stopped {
             self.intro_sound_stopped=true;
@@ -969,26 +986,42 @@ impl Game{
     }
 
     fn apply_previous_motion_and_collision(&mut self,ground:&CollisionMask){
-        // Horizontal movement first, exactly as playerLogic.
-        if ground.check_wall_clear(self.player.x,self.player.y,PLAYER_H,self.player.dx){
+        let labs_stage = matches!(self.stage, StageId::Level2A | StageId::Level2B);
+        let labs_rising_jump = labs_stage && self.player.jumping && self.player.dy < 0.0;
+
+        // Horizontal movement first, exactly as playerLogic (Labs rising jumps pass thin slabs cleanly).
+        if ground.check_wall_clear(self.player.x,self.player.y,PLAYER_H,self.player.dx)
+            || (labs_rising_jump && ground.is_thin_platform(self.player.x+self.player.dx,self.player.y+PLAYER_H*0.5,76.0))
+        {
             self.player.x+=self.player.dx;
         }
 
         // Vertical movement uses a 50px ceiling probe in the original, while
         // floor and wall probes use playerHeight=75.
         if self.player.jumping{
-            if !ground.check_ceiling(
-                self.player.x,&mut self.player.y,CEILING_HEIGHT,&mut self.player.dy,0
-            ){
+            let hit_ceiling = if labs_stage {
+                ground.check_ceiling_allowing_thin(
+                    self.player.x,&mut self.player.y,CEILING_HEIGHT,&mut self.player.dy,76.0
+                )
+            } else {
+                ground.check_ceiling(
+                    self.player.x,&mut self.player.y,CEILING_HEIGHT,&mut self.player.dy,0
+                )
+            };
+            if !hit_ceiling {
                 self.player.y+=self.player.dy;
             }
         }else if !self.on_platform{
             self.player.y+=self.player.dy;
         }
 
-        let grounded=ground.check_ground(
-            self.player.x,&mut self.player.y,PLAYER_H,&mut self.player.dy,0
-        ) || self.on_platform;
+        let grounded = if labs_rising_jump {
+            self.on_platform
+        } else {
+            ground.check_ground(
+                self.player.x,&mut self.player.y,PLAYER_H,&mut self.player.dy,0
+            ) || self.on_platform
+        };
         self.player.on_ground=grounded;
 
         if !grounded{
@@ -1183,8 +1216,10 @@ impl Game{
         if spin_chord&&!self.player.jumping&&!self.player.state.blocks_new_attack(){
             if self.player.state != PlayerState::CapeSpin {
                 self.audio_events.push(AudioEvent::Swish);
+                self.restart_action(PlayerState::CapeSpin);
+            } else {
+                self.enter(PlayerState::CapeSpin);
             }
-            self.enter(PlayerState::CapeSpin);
             self.player.walk_count=0;
             self.player.walk_slowdown=INITIAL_WALK_SLOWDOWN;
             return;
@@ -1199,8 +1234,7 @@ impl Game{
                 else if input.held(VK_UP){PlayerState::HighKick}
                 else if input.held(VK_DOWN){PlayerState::LowKick}
                 else{PlayerState::Kick};
-                self.enter(state);
-                self.player_attacking=true;
+                self.restart_action(state);
                 self.audio_events.push(AudioEvent::Swish);
             }
             self.player.walk_count=0;
@@ -1213,8 +1247,7 @@ impl Game{
                 else if input.held(VK_UP){PlayerState::HighPunch}
                 else if input.held(VK_DOWN){PlayerState::LowPunch}
                 else{PlayerState::Punch};
-                self.enter(state);
-                self.player_attacking=true;
+                self.restart_action(state);
                 self.audio_events.push(AudioEvent::Swish);
             }
             self.player.walk_count=0;
@@ -1823,10 +1856,13 @@ impl Game{
 
     fn try_collect_batarang(&mut self, i: usize, px: f32, py: f32, x: f32, y: f32) {
         if i < self.pickups.len() && self.pickups[i] { return; }
-        // Native approximation of Flash movie-clip hitTest bounds. The
-        // art itself is original; exact alpha hit testing can replace this
-        // once the pickup registration box is extracted.
-        if (px - x).abs() < 48.0 && (py - y).abs() < 65.0 {
+        let (rx, dy_min, dy_max) = if self.stage == StageId::Level1A {
+            (48.0, -65.0, 65.0)
+        } else {
+            (54.0, -78.0, 84.0)
+        };
+        let dy = py - y;
+        if (px - x).abs() < rx && dy >= dy_min && dy <= dy_max {
             if i < self.pickups.len() {
                 self.pickups[i] = true;
             }
@@ -4653,5 +4689,340 @@ mod continuous_e2e_and_bugfix_regression_tests {
         assert_eq!(squad.goons[0].health, 65, "First goon must take 5 Batarang damage");
         assert_eq!(squad.goons[1].health, 70, "Second goon behind must NOT be pierced by the same Batarang");
         assert!(game.shots.is_empty());
+    }
+
+    #[test]
+    fn all_level1b_and_level2a_goons_approach_attack_and_take_all_batman_moves() {
+        use super::{VK_D, VK_DOWN, VK_LEFT, VK_RIGHT, VK_S, VK_SPACE, VK_UP};
+        use crate::bank_goons::GoonState;
+
+        // 1. Level 1B organic walk LEFT from spawn to goon[1]: goon approaches and damages Batman.
+        let g1b = CollisionMask::for_stage(StageId::Level1B);
+        let d1b = StageId::Level1B.descriptor();
+        let mut game = Game::new();
+        game.screen = AppScreen::Playing;
+        game.start_stage(StageId::Level1B);
+        let mut input = InputState::default();
+        for _ in 0..40 {
+            game.tick(&mut input, &g1b);
+        }
+        input.set(VK_LEFT, true);
+        for _ in 0..120 {
+            game.tick(&mut input, &g1b);
+            let px = game.player.x + d1b.level_origin_game_local.x;
+            let gx = game.bank_goons.as_ref().unwrap().goons[1].x;
+            if (gx - px).abs() < 260.0 {
+                break;
+            }
+        }
+        input.set(VK_LEFT, false);
+        let hp_before_1b = game.health;
+        for _ in 0..90 {
+            game.tick(&mut input, &g1b);
+        }
+        assert!(
+            game.health < hp_before_1b,
+            "Level 1B goon[1] should approach into range and land melee attacks"
+        );
+
+        // 2. All 9 Level 2A goons approach from 220px, enter Attack state, and damage Batman.
+        let g2a = CollisionMask::for_stage(StageId::Level2A);
+        let d2a = StageId::Level2A.descriptor();
+        for idx in 0..9 {
+            let mut gtest = Game::new();
+            gtest.screen = AppScreen::Playing;
+            gtest.start_stage(StageId::Level2A);
+            let mut inp = InputState::default();
+            for _ in 0..105 {
+                gtest.tick(&mut inp, &g2a);
+            }
+            let (gx, gy, gspd) = {
+                let g = &gtest.bank_goons.as_ref().unwrap().goons[idx];
+                (g.x, g.y, g.speed)
+            };
+            let w_l = crate::bank_goons::check_goon_wall_for_stage(StageId::Level2A, &g2a, gx, gy, -gspd);
+            let e_l = crate::bank_goons::check_goon_edge_for_stage(StageId::Level2A, &g2a, gx, gy, -50.0);
+            let side = if e_l && !w_l { -220.0 } else { 220.0 };
+            gtest.player.x = (gx + side) - d2a.level_origin_game_local.x;
+            gtest.player.y = (gy - 8.0 - 75.0) - d2a.level_origin_game_local.y;
+            gtest.player.dy = 0.0;
+            gtest.player.jumping = false;
+            let mut attacked = false;
+            let hp0 = gtest.health;
+            for _ in 0..90 {
+                gtest.tick(&mut inp, &g2a);
+                if gtest.bank_goons.as_ref().unwrap().goons[idx].state == GoonState::Attack {
+                    attacked = true;
+                }
+            }
+            assert!(attacked, "Level 2A goon[{idx}] never entered Attack from 220px");
+            assert!(gtest.health < hp0, "Level 2A goon[{idx}] never landed damage");
+        }
+
+        // 3. Batman combat moves (Punch, Kick, Low/High variants, repeated taps, JumpKick, CapeSpin multi-hit)
+        let mut gc = Game::new();
+        gc.screen = AppScreen::Playing;
+        gc.start_stage(StageId::Level2A);
+        let mut inp = InputState::default();
+        for _ in 0..105 {
+            gc.tick(&mut inp, &g2a);
+        }
+        {
+            let g0 = &mut gc.bank_goons.as_mut().unwrap().goons[0];
+            g0.health = 500;
+            gc.player.x = (g0.x - 78.0) - d2a.level_origin_game_local.x;
+            gc.player.y = (g0.y - 75.0) - d2a.level_origin_game_local.y;
+            gc.player.dy = 0.0;
+            gc.player.jumping = false;
+            gc.player.dir = 1;
+        }
+        // Consecutive Punch presses must restart cleanly and hit at ~78px.
+        for tap in 0..2 {
+            let hp_before = gc.bank_goons.as_ref().unwrap().goons[0].health;
+            inp.set(VK_S, true);
+            for _ in 0..7 {
+                gc.tick(&mut inp, &g2a);
+            }
+            inp.set(VK_S, false);
+            for _ in 0..2 {
+                gc.tick(&mut inp, &g2a);
+            }
+            assert!(
+                gc.bank_goons.as_ref().unwrap().goons[0].health < hp_before,
+                "Consecutive Punch tap {tap} missed goon at 78px"
+            );
+        }
+        // Verify every Batman melee move (Punch, Kick, Low/High variants, Jump variants) connects cleanly.
+        let gx_anchor = gc.bank_goons.as_ref().unwrap().goons[0].x;
+        let gy_anchor = gc.bank_goons.as_ref().unwrap().goons[0].y;
+        let moves = [
+            ("Punch", false, false, false, VK_S),
+            ("Kick", false, false, false, VK_D),
+            ("LowPunch", true, false, false, VK_S),
+            ("LowKick", true, false, false, VK_D),
+            ("HighPunch", false, true, false, VK_S),
+            ("HighKick", false, true, false, VK_D),
+            ("JumpPunch", false, false, true, VK_S),
+            ("JumpKick", false, false, true, VK_D),
+        ];
+        for (move_name, down, up, jump, atk) in moves {
+            {
+                let g0 = &mut gc.bank_goons.as_mut().unwrap().goons[0];
+                g0.x = gx_anchor;
+                g0.y = gy_anchor;
+                g0.health = 500;
+                g0.active = true;
+                g0.invincible = false;
+                g0.set_state(GoonState::Stand);
+            }
+            gc.player.x = (gx_anchor - 72.0) - d2a.level_origin_game_local.x;
+            gc.player.y = (gy_anchor - 75.0) - d2a.level_origin_game_local.y;
+            gc.player.dir = 1;
+            gc.player.state = PlayerState::Stand;
+            gc.player.state_tick = 0;
+            gc.player.jumping = false;
+            gc.player.dy = 0.0;
+            gc.health = 100;
+            let hp_before = gc.bank_goons.as_ref().unwrap().goons[0].health;
+            if jump {
+                inp.set(VK_SPACE, true);
+                gc.tick(&mut inp, &g2a);
+                inp.set(VK_SPACE, false);
+                gc.tick(&mut inp, &g2a);
+            }
+            inp.set(VK_DOWN, down);
+            inp.set(VK_UP, up);
+            inp.set(atk, true);
+            for _ in 0..8 {
+                gc.tick(&mut inp, &g2a);
+            }
+            inp.set(VK_DOWN, false);
+            inp.set(VK_UP, false);
+            inp.set(atk, false);
+            for _ in 0..20 {
+                gc.tick(&mut inp, &g2a);
+                if !gc.player.jumping {
+                    break;
+                }
+            }
+            assert!(
+                gc.bank_goons.as_ref().unwrap().goons[0].health < hp_before,
+                "Batman move {move_name} (down={down}, up={up}, jump={jump}) failed to damage goon"
+            );
+        }
+        // CapeSpin sweeps multiple surrounding goons in one swing.
+        {
+            let squad = gc.bank_goons.as_mut().unwrap();
+            let anchor_x = squad.goons[0].x;
+            let anchor_y = squad.goons[0].y;
+            squad.goons[0].health = 200;
+            squad.goons[0].invincible = false;
+            squad.goons[0].set_state(GoonState::Stand);
+            squad.goons[1].x = anchor_x - 65.0;
+            squad.goons[1].y = anchor_y;
+            squad.goons[1].health = 200;
+            squad.goons[1].active = true;
+            squad.goons[1].invincible = false;
+            squad.goons[1].set_state(GoonState::Stand);
+            gc.player.x = (anchor_x - 5.0) - d2a.level_origin_game_local.x;
+            gc.player.y = (anchor_y - 75.0) - d2a.level_origin_game_local.y;
+            gc.player.state = PlayerState::Stand;
+            gc.player.state_tick = 0;
+        }
+        let h0_before = gc.bank_goons.as_ref().unwrap().goons[0].health;
+        let h1_before = gc.bank_goons.as_ref().unwrap().goons[1].health;
+        inp.set(VK_S, true);
+        inp.set(VK_D, true);
+        for _ in 0..10 {
+            gc.tick(&mut inp, &g2a);
+        }
+        assert!(
+            gc.bank_goons.as_ref().unwrap().goons[0].health < h0_before
+                && gc.bank_goons.as_ref().unwrap().goons[1].health < h1_before,
+            "CapeSpin must hit goons on both sides simultaneously"
+        );
+        let _ = VK_RIGHT;
+    }
+
+    #[test]
+    fn level2b_all_pickups_are_above_walkable_floors_and_collectible() {
+        let g2b = CollisionMask::for_stage(StageId::Level2B);
+        let d2b = StageId::Level2B.descriptor();
+        for (i, p) in StageId::Level2B.labs_batarang_pickups().iter().enumerate() {
+            assert!(
+                !g2b.solid_level_pos(d2b.to_level_pos(crate::stage::GamePos::new(p.x, p.y))),
+                "Level 2B pickup[{i}] ({}) sits inside solid terrain",
+                p.name
+            );
+            if p.name == "item_br01" {
+                // item_br01 hangs in the final UP elevator shaft (`elevator_01_0000`, limit_y=0).
+                let e0 = crate::stage::labs2b::ELEVATORS[0];
+                assert!((p.x - e0.x).abs() < 35.0 && p.y <= e0.y && p.y >= e0.limit_y as f32);
+                let mut game = Game::new();
+                game.screen = AppScreen::Playing;
+                game.start_stage(StageId::Level2B);
+                game.labs_elevators[0].y = p.y + 80.0;
+                game.player.x = e0.x - d2b.level_origin_game_local.x;
+                game.player.y = (game.labs_elevators[0].y - 75.0) - d2b.level_origin_game_local.y;
+                game.player.dy = 0.0;
+                game.player.jumping = false;
+                let mut inp = InputState::default();
+                for _ in 0..25 {
+                    game.tick(&mut inp, &g2b);
+                }
+                assert!(game.pickups[i], "Riding elevator_01_0000 must collect item_br01");
+                continue;
+            }
+            let mut floor_below = None;
+            for dy in 0..300 {
+                let y = p.y + dy as f32;
+                if g2b.solid_level_pos(d2b.to_level_pos(crate::stage::GamePos::new(p.x, y))) {
+                    floor_below = Some(y);
+                    break;
+                }
+            }
+            let fy = floor_below.unwrap_or_else(|| {
+                panic!("Level 2B pickup[{i}] ({}) has no reachable floor within 300px below y={}", p.name, p.y)
+            });
+            let stand_diff = (fy - 75.0) - p.y;
+            assert!(
+                (-70.0..=80.0).contains(&stand_diff),
+                "Level 2B pickup[{i}] ({}) uncollectible height diff={stand_diff} (fy={fy}, py={})",
+                p.name,
+                p.y
+            );
+
+            // Simulate Batman standing/walking on the floor right under the pickup and verify collection.
+            let mut game = Game::new();
+            game.screen = AppScreen::Playing;
+            game.start_stage(StageId::Level2B);
+            game.player.x = p.x - d2b.level_origin_game_local.x;
+            game.player.y = (fy - 75.0) - d2b.level_origin_game_local.y;
+            game.player.dy = 0.0;
+            game.player.jumping = false;
+            let mut inp = InputState::default();
+            if stand_diff > 20.0 {
+                inp.set(super::VK_SPACE, true);
+            }
+            for _ in 0..8 {
+                game.tick(&mut inp, &g2b);
+            }
+            assert!(
+                game.pickups[i],
+                "Batman failed to collect Level 2B pickup[{i}] ({}) from stand floor (diff={stand_diff})",
+                p.name
+            );
+        }
+    }
+
+    #[test]
+    fn level2a_and_2b_jump_clears_thin_overhead_podium_while_blocking_real_ceilings() {
+        use super::{VK_LEFT, VK_SPACE};
+
+        // Level 2A screenshot room (gx=6100..6870): Batman jumps up-left from low_podium (y=3535)
+        // under thin overhead upper_podium (3248..3301) onto left_podium (gx=6100..6379, y=3426).
+        let g2a = CollisionMask::for_stage(StageId::Level2A);
+        let d2a = StageId::Level2A.descriptor();
+        let mut game = Game::new();
+        game.screen = AppScreen::Playing;
+        game.start_stage(StageId::Level2A);
+        let mut inp = InputState::default();
+        for _ in 0..105 {
+            game.tick(&mut inp, &g2a);
+        }
+        game.player.x = 6700.0 - d2a.level_origin_game_local.x;
+        game.player.y = (3535.0 - 75.0) - d2a.level_origin_game_local.y;
+        game.player.dy = 0.0;
+        game.player.jumping = false;
+        game.player.dir = -1;
+
+        let mut min_y = game.player.y + d2a.level_origin_game_local.y;
+        let mut reached_left_podium = false;
+        for t in 0..45 {
+            inp.set(VK_SPACE, t < 24);
+            inp.set(VK_LEFT, true);
+            game.tick(&mut inp, &g2a);
+            let gx = game.player.x + d2a.level_origin_game_local.x;
+            let gy = game.player.y + d2a.level_origin_game_local.y;
+            min_y = min_y.min(gy);
+            if gx <= 6370.0 && gy <= 3375.0 && !game.player.jumping {
+                reached_left_podium = true;
+                break;
+            }
+        }
+        assert!(
+            min_y < 3325.0,
+            "Batman should ascend past thin upper_podium (bottom 3301) instead of getting bonked at min_y={min_y}"
+        );
+        assert!(
+            reached_left_podium,
+            "Batman should clear the gap from low_podium to left_podium cleanly (final pos=({:.1},{:.1}))",
+            game.player.x + d2a.level_origin_game_local.x,
+            game.player.y + d2a.level_origin_game_local.y
+        );
+
+        // Real thick corridor ceilings in Level 2A (gx=600, hall floor=2648 under ceiling=0..2519) must STILL block upward jumps.
+        let mut ceil_game = Game::new();
+        ceil_game.screen = AppScreen::Playing;
+        ceil_game.start_stage(StageId::Level2A);
+        inp = InputState::default();
+        for _ in 0..105 {
+            ceil_game.tick(&mut inp, &g2a);
+        }
+        ceil_game.player.x = 600.0 - d2a.level_origin_game_local.x;
+        ceil_game.player.y = (2648.0 - 75.0) - d2a.level_origin_game_local.y;
+        ceil_game.player.dy = 0.0;
+        ceil_game.player.jumping = false;
+        let start_y = ceil_game.player.y + d2a.level_origin_game_local.y;
+        let mut ceil_min_y = start_y;
+        for t in 0..20 {
+            inp.set(VK_SPACE, t < 15);
+            ceil_game.tick(&mut inp, &g2a);
+            ceil_min_y = ceil_min_y.min(ceil_game.player.y + d2a.level_origin_game_local.y);
+        }
+        assert!(
+            ceil_min_y > 2519.0,
+            "Thick room ceiling (0..2519) must still block Batman (reached ceil_min_y={ceil_min_y})"
+        );
     }
 }

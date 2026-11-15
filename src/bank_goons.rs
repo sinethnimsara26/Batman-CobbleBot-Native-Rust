@@ -421,8 +421,9 @@ impl BankGoon {
     /// goon `self.y` is anchored at feet/floor while `player_y_game` is Batman's waist (~75px above feet).
     #[inline]
     fn same_combat_plane(&self, player_y_game: f32) -> bool {
-        let probe_y = self.y - 20.0;
-        probe_y >= player_y_game - 50.0 && probe_y <= player_y_game + 80.0
+        // Standing Batman waist sits ~75px above floor while goons span ~145px tall.
+        // Covers standing, crouching, and mid-air jump punches/kicks while isolating floors >= 396px apart.
+        player_y_game >= self.y - 165.0 && player_y_game <= self.y + 45.0
     }
 
     /// Check if a flying batarang segment hits this goon (prevents fast 50px/tick tunneling).
@@ -524,8 +525,12 @@ impl BankGoon {
             return true;
         }
 
-        // Standard attack reach (offset -20 in AVM1, dx <= 75.0)
-        if dx <= 75.0 {
+        // Standard attack reach (offset -20 in AVM1; expanded past AI stop spacing so kicks/punches connect cleanly)
+        let melee_reach = match player.state_name {
+            "kick" | "highkick" | "lowkick" | "jumpkick" | "capespin" => 96.0,
+            _ => 88.0,
+        };
+        if dx <= melee_reach {
             let (dmg, sound, new_state) = match player.state_name {
                 "lowkick" => (15, GoonCombatSound::Kick, GoonState::Fall),
                 "highpunch" => (15, GoonCombatSound::Punch2, GoonState::Fall),
@@ -616,15 +621,27 @@ impl BankGoon {
             return;
         }
 
-        // Attack state: strikes player once at frame 4 and returns to Stand
+        // Attack state: lunges slightly on wind-up so goons close into strike distance and hit at frame 4
         if self.state == GoonState::Attack {
             if self.frame <= 1 {
                 self.dir = if self.x > player.x_game { -1 } else { 1 };
             }
+            if self.frame <= 2 {
+                let range = (self.x - player.x_game).abs();
+                if range > 48.0 {
+                    let step = (4.0_f32).min(range - 48.0) * (self.dir as f32);
+                    if !check_goon_wall_for_stage(self.stage_id, collision, self.x, self.y, step)
+                        && check_goon_edge_for_stage(self.stage_id, collision, self.x, self.y, 50.0 * (self.dir as f32))
+                    {
+                        self.x += step;
+                    }
+                }
+            }
             let clip = self.family.child_clip(GoonState::Attack);
             if self.frame == 4 {
                 let range = (self.x - player.x_game).abs();
-                if range <= 80.0 && self.same_combat_plane(player.y_game) && !player.is_invincible && player.state_name != "hurt" {
+                let height_ok = player.y_game >= self.y - 140.0 && player.y_game <= self.y + 40.0;
+                if range <= 82.0 && height_ok && !player.is_invincible && player.state_name != "hurt" {
                     events.push(GoonCombatEvent::PlayerHurt { damage: self.strength });
                     events.push(GoonCombatEvent::Sound(GoonCombatSound::Metal(1)));
                 }
@@ -651,8 +668,8 @@ impl BankGoon {
                 self.set_state(GoonState::Attack);
                 return;
             }
-            // Trigger 2: close-range attack as soon as goon walks/stands into strike range
-            if range < 85.0 && self.attack_count >= 6.0 {
+            // Trigger 2: walk close into real strike distance (<= 74px) before swinging
+            if range <= 74.0 && self.attack_count >= 5.0 {
                 self.dir = if self.x >= player.x_game { -1 } else { 1 };
                 self.attack_count = 0.0;
                 self.set_state(GoonState::Attack);
@@ -726,12 +743,12 @@ impl BankGoon {
                 let clip = self.family.child_clip(GoonState::Stand);
                 self.frame = (self.frame + 1) % clip.frame_count().max(1);
 
-                if range < 85.0 && self.same_combat_plane(player_y) && self.attack_count >= 5.0 {
+                if range <= 74.0 && self.same_combat_plane(player_y) && self.attack_count >= 5.0 {
                     self.dir = if self.x >= player_x { -1 } else { 1 };
                     self.attack_count = 0.0;
                     self.set_state(GoonState::Attack);
-                } else if self.attack_count >= 8.0 || range > 180.0 {
-                    // Actively pursue Batman instead of idling/retreating away from combat.
+                } else if (range > 74.0 && self.attack_count >= 6.0) || range > 120.0 {
+                    // Actively pursue Batman instead of idling out of melee reach.
                     self.dir = if self.x >= player_x { -1 } else { 1 };
                     self.set_state(GoonState::Walk);
                 }
@@ -934,7 +951,9 @@ impl BankGoonSquad {
                     } else {
                         self.pending_combo_hits += 1;
                     }
-                    break;
+                    if player.state_name != "capespin" {
+                        break;
+                    }
                 }
             }
         }
