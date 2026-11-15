@@ -132,9 +132,10 @@ impl BankBiker {
         probe_y >= player_y - 45.0 && probe_y <= player_y + 75.0
     }
 
-    /// Tests and applies batarang collision. Returns true if hit connected.
-    pub fn apply_batarang_hit(
+    /// Tests and applies swept batarang segment collision `(prev_x, cur_x, y)`.
+    pub fn apply_batarang_segment_hit(
         &mut self,
+        bat_prev_x: f32,
         bat_x: f32,
         bat_y: f32,
         events: &mut Vec<BikerEvent>,
@@ -143,11 +144,11 @@ impl BankBiker {
             return false;
         }
 
-        // Batarang hitbox covering #1005/#981 sprite width/height: |dx| <= 45.0 (90px span >
-        // 74px/tick combined shot+biker closing speed so head-on throws never tunnel) and dy in [-135.0, 20.0].
-        let dx = (bat_x - self.x).abs();
         let dy = bat_y - self.y;
-        if dx <= 45.0 && dy >= -135.0 && dy <= 20.0 {
+        if crate::bank_goons::segment_overlaps_x(bat_prev_x, bat_x, self.x, 45.0)
+            && dy >= -135.0
+            && dy <= 20.0
+        {
             self.set_state(BikerState::Fall);
             events.push(BikerEvent::Score(100));
             events.push(BikerEvent::Sound(BikerSound::Bam));
@@ -155,6 +156,16 @@ impl BankBiker {
         }
 
         false
+    }
+
+    /// Tests and applies batarang collision. Returns true if hit connected.
+    pub fn apply_batarang_hit(
+        &mut self,
+        bat_x: f32,
+        bat_y: f32,
+        events: &mut Vec<BikerEvent>,
+    ) -> bool {
+        self.apply_batarang_segment_hit(bat_x, bat_x, bat_y, events)
     }
 
     /// Tests and applies Batman melee attack collision. Returns true if hit connected.
@@ -180,18 +191,19 @@ impl BankBiker {
         false
     }
 
-    /// Executes one tick of `bikerAI` matching Flash AVM1 bytecode.
-    pub fn tick(
+    /// Executes one tick of `bikerAI` with swept batarang segments `(prev_x, cur_x, y)`
+    /// and returns the index of the batarang consumed on hit, if any.
+    pub fn tick_swept(
         &mut self,
         player_x: f32,
         player_y: f32,
         player_attacking: bool,
         player_hurt: bool,
-        batarangs: &[(f32, f32, bool)],
+        batarang_segments: &[(f32, f32, f32)],
         events: &mut Vec<BikerEvent>,
-    ) {
+    ) -> Option<usize> {
         if !self.active {
-            return;
+            return None;
         }
 
         match self.state {
@@ -217,10 +229,10 @@ impl BankBiker {
                     events.push(BikerEvent::Sound(BikerSound::Bike));
                 }
 
-                // Check collision with batarangs
-                for &(bx, by, active) in batarangs {
-                    if active && self.apply_batarang_hit(bx, by, events) {
-                        return;
+                // Check collision with swept batarang trajectories
+                for (idx, &(prev_bx, bx, by)) in batarang_segments.iter().enumerate() {
+                    if self.apply_batarang_segment_hit(prev_bx, bx, by, events) {
+                        return Some(idx);
                     }
                 }
 
@@ -254,6 +266,24 @@ impl BankBiker {
                 }
             }
         }
+        None
+    }
+
+    /// Executes one tick of `bikerAI` matching Flash AVM1 bytecode.
+    pub fn tick(
+        &mut self,
+        player_x: f32,
+        player_y: f32,
+        player_attacking: bool,
+        player_hurt: bool,
+        batarangs: &[(f32, f32, bool)],
+        events: &mut Vec<BikerEvent>,
+    ) {
+        let segments: Vec<(f32, f32, f32)> = batarangs
+            .iter()
+            .filter_map(|&(bx, by, active)| active.then_some((bx, bx, by)))
+            .collect();
+        let _ = self.tick_swept(player_x, player_y, player_attacking, player_hurt, &segments, events);
     }
 }
 

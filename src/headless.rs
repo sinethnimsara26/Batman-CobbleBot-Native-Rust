@@ -238,11 +238,11 @@ fn render_smoke_mode(out:&str,hq:bool){
     object_game.camera_y=-PICKUPS[0].1+180.0;
     object_game.player.x=-LEVEL_X-object_game.camera_x-1000.0;
     object_game.player.y=-LEVEL_Y-object_game.camera_y-1000.0;
-    object_game.shots.push(crate::game::Shot{
-        x:PICKUPS[0].0+160.0,
-        y:PICKUPS[0].1,
-        dir:1,
-    });
+    object_game.shots.push(crate::game::Shot::new(
+        PICKUPS[0].0+160.0,
+        PICKUPS[0].1,
+        1,
+    ));
     snapshot(hq,&out,"13_world_objects.png",&mut object_game,&assets);
 
     // Audio/item regression gate from original itemLogic.
@@ -990,10 +990,13 @@ pub fn qa_full_campaign(out_dir:&str){
         biker.y=375.85;
         biker.dir=1.0;
     }
+    game.player.state=crate::game::PlayerState::Stand;
+    game.player_invincible_ticks=0;
     game.player.x=-1140.0-d1b.level_origin_game_local.x;
     game.player.y=323.25-d1b.level_origin_game_local.y;
     game.player.dir=-1;
     game.player.jumping=false;
+    game.player.dx=0.0;
     game.player.dy=0.0;
     let score_before_biker=game.score;
     input.set(VK_A,true);

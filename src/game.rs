@@ -195,8 +195,23 @@ impl PlayerState{
     fn airborne_attack(self)->bool{
         matches!(self,Self::JumpPunch|Self::JumpKick|Self::JumpBatarang)
     }
+    fn is_stunned_or_dead(self)->bool{
+        matches!(self,Self::Hurt|Self::Hurt2|Self::Electro|Self::Die)
+    }
     fn blocks_new_attack(self)->bool{
-        matches!(self,Self::Batarang|Self::JumpBatarang|Self::Grappling|Self::Glide)
+        matches!(
+            self,
+            Self::Batarang
+                | Self::JumpBatarang
+                | Self::DuckBatarang
+                | Self::CapeSpin
+                | Self::Grappling
+                | Self::Glide
+                | Self::Hurt
+                | Self::Hurt2
+                | Self::Electro
+                | Self::Die
+        )
     }
 }
 
@@ -229,7 +244,11 @@ pub struct Player{
     run_right:i16,
 }
 
-pub struct Shot{pub x:f32,pub y:f32,pub dir:i32}
+pub struct Shot{pub prev_x:f32,pub x:f32,pub y:f32,pub dir:i32}
+impl Shot{
+    #[inline]
+    pub const fn new(x:f32,y:f32,dir:i32)->Self{Self{prev_x:x,x,y,dir}}
+}
 
 pub struct Game{
     // B04: real runtime remains 1A; the next scene is only a pending intent.
@@ -254,6 +273,7 @@ pub struct Game{
     pub score:i32,
     pub lives:i32,
     pub health:i32,
+    pub player_invincible_ticks:u8,
     pub player_attacking:bool,
     pub overlay_frame:usize,
     overlay_playing:bool,
@@ -347,7 +367,7 @@ impl Game{
             current_platform_x:0.0,
             current_platform_idx:None,
             gravity:GLOBAL_GRAVITY,
-            batarangs:0,score:0,lives:5,health:100,player_attacking:false,
+            batarangs:0,score:0,lives:5,health:100,player_invincible_ticks:0,player_attacking:false,
             overlay_frame:OVERLAY_BLANK,overlay_playing:false,overlay_active_start:None,overlay_hold_ticks:0,level1b_fight_prompt_shown:false,level2a_find_lab_shown:false,walk_checkpoint_started_tick:None,hit_count:0,combo_ticks:0,level1a_exit_reached:false,fadeout_tick:None,level1a_complete:false,
             level1b_exit_reached:false,level1b_complete:false,
             level1c_exit_reached:false,level1c_complete:false,
@@ -393,6 +413,7 @@ impl Game{
         self.player.run_left=0;
         self.player.run_right=0;
         self.health=100;
+        self.player_invincible_ticks=0;
         self.player_attacking=false;
         self.hit_count=0;
         self.combo_ticks=0;
@@ -861,6 +882,9 @@ impl Game{
         if self.level1a_complete{input.clear_pressed();return;}
         if self.level1b_complete{input.clear_pressed();return;}
         if self.level1c_complete{input.clear_pressed();return;}
+        if self.player_invincible_ticks>0{
+            self.player_invincible_ticks-=1;
+        }
         self.advance_tutorial_overlay();
         let state_at_tick_start=self.player.state;
 
@@ -922,7 +946,7 @@ impl Game{
         // return to stand, and clear playerAttacking. Holding S lets the
         // remaining punch frames play through to the normal frame-10 exit.
         if state==PlayerState::Punch
-            && self.player.state_tick==4
+            && self.player.state_tick>=4
             && !input.held(VK_S)
         {
             self.player_attacking=false;
@@ -936,7 +960,8 @@ impl Game{
 
         if matches!(state,
             PlayerState::Punch|PlayerState::HighPunch|PlayerState::LowPunch|PlayerState::JumpPunch|
-            PlayerState::Kick|PlayerState::HighKick|PlayerState::LowKick|PlayerState::JumpKick)
+            PlayerState::Kick|PlayerState::HighKick|PlayerState::LowKick|PlayerState::JumpKick|
+            PlayerState::CapeSpin)
         {
             self.player_attacking=false;
         }
@@ -1029,6 +1054,7 @@ impl Game{
     }
 
     fn process_look(&mut self,input:&InputState){
+        if self.player.state.is_stunned_or_dead() || self.health<=0{return;}
         let look_blocked = self.player.jumping
             || self.player.state.melee_ground_lock()
             || matches!(
@@ -1060,6 +1086,7 @@ impl Game{
     }
 
     fn process_horizontal(&mut self,input:&InputState){
+        if self.player.state.is_stunned_or_dead() || self.health<=0{return;}
         let left=input.held(VK_LEFT)&&!input.held(VK_RIGHT);
         let right=input.held(VK_RIGHT)&&!input.held(VK_LEFT);
 
@@ -1093,9 +1120,21 @@ impl Game{
     }
 
     fn horizontal_direction(&mut self,dir:i32){
-        // The original blocks ground melee locomotion but still permits
-        // airborne punch/kick movement.
-        if self.player.state.melee_ground_lock(){return;}
+        // The original blocks ground melee locomotion (and active CapeSpin / DuckBatarang)
+        // while still permitting airborne punch/kick movement.
+        if self.player.state.melee_ground_lock()
+            || matches!(
+                self.player.state,
+                PlayerState::CapeSpin
+                    | PlayerState::DuckBatarang
+                    | PlayerState::Hurt
+                    | PlayerState::Hurt2
+                    | PlayerState::Electro
+                    | PlayerState::Die
+            )
+        {
+            return;
+        }
 
         if !self.player.jumping
             && self.player.state!=PlayerState::Batarang
@@ -1133,8 +1172,15 @@ impl Game{
     }
 
     fn process_combat(&mut self,input:&InputState){
-        let both=input.pressed(VK_D)&&input.pressed(VK_S);
-        if both&&!self.player.jumping&&!self.player.state.blocks_new_attack(){
+        if self.player.state.is_stunned_or_dead() || self.health<=0{return;}
+        let spin_chord=(input.pressed(VK_D)&&input.pressed(VK_S))
+            || (input.pressed(VK_D)
+                && matches!(self.player.state,PlayerState::Punch|PlayerState::HighPunch|PlayerState::LowPunch)
+                && self.player.state_tick<=2)
+            || (input.pressed(VK_S)
+                && matches!(self.player.state,PlayerState::Kick|PlayerState::HighKick|PlayerState::LowKick)
+                && self.player.state_tick<=2);
+        if spin_chord&&!self.player.jumping&&!self.player.state.blocks_new_attack(){
             if self.player.state != PlayerState::CapeSpin {
                 self.audio_events.push(AudioEvent::Swish);
             }
@@ -1144,9 +1190,11 @@ impl Game{
             return;
         }
 
+        let melee_busy = self.player.state.melee_ground_lock() && self.player.state_tick < 4;
+
         if input.pressed(VK_D){
             self.player.walk_slowdown=INITIAL_WALK_SLOWDOWN;
-            if !self.player.state.blocks_new_attack(){
+            if !self.player.state.blocks_new_attack() && !melee_busy{
                 let state=if self.player.jumping{PlayerState::JumpKick}
                 else if input.held(VK_UP){PlayerState::HighKick}
                 else if input.held(VK_DOWN){PlayerState::LowKick}
@@ -1160,7 +1208,7 @@ impl Game{
 
         if input.pressed(VK_S){
             self.player.walk_slowdown=INITIAL_WALK_SLOWDOWN;
-            if !self.player.state.blocks_new_attack(){
+            if !self.player.state.blocks_new_attack() && !melee_busy{
                 let state=if self.player.jumping{PlayerState::JumpPunch}
                 else if input.held(VK_UP){PlayerState::HighPunch}
                 else if input.held(VK_DOWN){PlayerState::LowPunch}
@@ -1174,9 +1222,18 @@ impl Game{
     }
 
     fn process_gadget(&mut self,input:&InputState){
+        if self.player.state.is_stunned_or_dead() || self.health<=0{return;}
         if !input.pressed(VK_A){return;}
         self.player.walk_slowdown=INITIAL_WALK_SLOWDOWN;
-        if self.player.state.blocks_new_attack()||self.batarangs<=0{
+        let throw_blocked = matches!(
+            self.player.state,
+            PlayerState::Batarang
+                | PlayerState::JumpBatarang
+                | PlayerState::DuckBatarang
+                | PlayerState::CapeSpin
+                | PlayerState::Grappling
+        ) || (self.player.state.melee_ground_lock() && self.player.state_tick < 4);
+        if throw_blocked||self.batarangs<=0{
             self.player.walk_count=0;
             return;
         }
@@ -1191,7 +1248,7 @@ impl Game{
             (PlayerState::Batarang,game_y-20.0)
         };
 
-        self.shots.push(Shot{x:game_x,y:shot_y,dir:self.player.dir});
+        self.shots.push(Shot::new(game_x,shot_y,self.player.dir));
         self.batarangs-=1;
         self.enter(state);
         self.audio_events.push(AudioEvent::Swish);
@@ -1200,6 +1257,7 @@ impl Game{
     }
 
     fn process_jump_and_glide(&mut self,input:&InputState){
+        if self.player.state.is_stunned_or_dead() || self.health<=0{return;}
         if input.pressed(VK_SPACE){
             if !self.player.jumping{
                 self.player.jumping=true;
@@ -1364,24 +1422,46 @@ impl Game{
         }
     }
 
+    fn remove_shot_indices(&mut self, mut indices: Vec<usize>) {
+        if indices.is_empty() {
+            return;
+        }
+        indices.sort_unstable();
+        indices.dedup();
+        for index in indices.into_iter().rev() {
+            if index < self.shots.len() {
+                self.shots.remove(index);
+            }
+        }
+    }
+
     fn tick_stage_enemies(&mut self, ground: &CollisionMask) {
         let player_x_game = self.player.x + self.level_origin_x();
         let player_y_game = self.player.y + self.level_origin_y();
-        let is_hurt = matches!(self.player.state, PlayerState::Hurt | PlayerState::Hurt2) || self.fadeout_tick.is_some();
+        let is_hurt = self.player.state.is_stunned_or_dead()
+            || self.player_invincible_ticks > 0
+            || self.fadeout_tick.is_some();
         let state_name = self.player_combat_state_name();
         let player_ctx = PlayerCombatContext {
             x_game: player_x_game,
             y_game: player_y_game,
             dir: self.player.dir,
             is_attacking: self.player_attacking,
-            is_invincible: is_hurt || self.player.state == PlayerState::Die,
+            is_invincible: is_hurt,
             state_name,
         };
 
-        let batarangs: Vec<(f32, f32)> = self.shots.iter().map(|s| (s.x, s.y)).collect();
+        let batarang_segments: Vec<(f32, f32, f32)> =
+            self.shots.iter().map(|s| (s.prev_x, s.x, s.y)).collect();
+        let mut hidden_indices = Vec::new();
         let mut goon_events = Vec::new();
         if let Some(squad) = &mut self.bank_goons {
-            squad.tick_combat(&player_ctx, &batarangs, ground, &mut goon_events);
+            hidden_indices.extend(squad.tick_combat_swept(
+                &player_ctx,
+                &batarang_segments,
+                ground,
+                &mut goon_events,
+            ));
             let (combo_hits, kill_resets, dx_blocked) = squad.take_combat_modifiers();
             if dx_blocked {
                 self.player.dx = 0.0;
@@ -1397,14 +1477,28 @@ impl Game{
 
         let mut biker_events = Vec::new();
         if let Some(biker) = &mut self.bank_biker {
-            let biker_bats: Vec<(f32, f32, bool)> = batarangs.iter().map(|&(x, y)| (x, y, true)).collect();
-            biker.tick(player_x_game, player_y_game, self.player_attacking, is_hurt, &biker_bats, &mut biker_events);
+            if let Some(hit_idx) = biker.tick_swept(
+                player_x_game,
+                player_y_game,
+                self.player_attacking,
+                is_hurt,
+                &batarang_segments,
+                &mut biker_events,
+            ) {
+                hidden_indices.push(hit_idx);
+            }
         }
 
         let mut bird_events = Vec::new();
         for eagle in &mut self.labs_eagles {
-            eagle.tick(&player_ctx, &batarangs, &mut self.labs_bird_rng, &mut bird_events);
+            hidden_indices.extend(eagle.tick_swept(
+                &player_ctx,
+                &batarang_segments,
+                &mut self.labs_bird_rng,
+                &mut bird_events,
+            ));
         }
+        self.remove_shot_indices(hidden_indices);
 
         for ev in goon_events {
             match ev {
@@ -1462,7 +1556,9 @@ impl Game{
     fn tick_level1c_boss(&mut self, ground: &CollisionMask) {
         let player_x_game = self.player.x + self.level_origin_x();
         let player_y_game = self.player.y + self.level_origin_y();
-        let is_hurt = matches!(self.player.state, PlayerState::Hurt | PlayerState::Hurt2) || self.fadeout_tick.is_some();
+        let is_hurt = self.player.state.is_stunned_or_dead()
+            || self.player_invincible_ticks > 0
+            || self.fadeout_tick.is_some();
         let state_name = self.player_combat_state_name();
         let player_ctx = PenguinPlayerContext {
             x_game: player_x_game,
@@ -1471,14 +1567,21 @@ impl Game{
             dir: self.player.dir.clamp(-1, 1) as i8,
             width: PLAYER_W,
             attacking: self.player_attacking,
-            invincible: is_hurt || self.player.state == PlayerState::Die,
+            invincible: is_hurt,
             state_name,
         };
 
         let mut boss_events = Vec::new();
         if let Some(boss) = &mut self.penguin_boss {
-            let batarangs: Vec<(f32, f32)> = self.shots.iter().map(|s| (s.x, s.y)).collect();
-            boss.tick_combat(&player_ctx, &batarangs, ground, &mut self.penguin_rng, &mut boss_events);
+            let batarang_segments: Vec<(f32, f32, f32)> =
+                self.shots.iter().map(|s| (s.prev_x, s.x, s.y)).collect();
+            boss.tick_combat_swept(
+                &player_ctx,
+                &batarang_segments,
+                ground,
+                &mut self.penguin_rng,
+                &mut boss_events,
+            );
         }
 
         let mut hidden_indices = Vec::new();
@@ -1517,28 +1620,34 @@ impl Game{
                 PenguinCombatEvent::ComboHit { .. } => {}
             }
         }
-        if !hidden_indices.is_empty() {
-            hidden_indices.sort_unstable();
-            hidden_indices.dedup();
-            for index in hidden_indices.into_iter().rev() {
-                if index < self.shots.len() {
-                    self.shots.remove(index);
-                }
-            }
-        }
+        self.remove_shot_indices(hidden_indices);
     }
 
     fn apply_player_damage(&mut self, damage: i32) {
-        self.apply_player_damage_with_state(damage, PlayerState::Hurt);
+        self.apply_player_damage_with_options(damage, PlayerState::Hurt, true);
     }
 
     fn apply_player_damage_with_state(&mut self, damage: i32, hurt_state: PlayerState) {
-        if self.fadeout_tick.is_some() || self.player.state == PlayerState::Die {
+        self.apply_player_damage_with_options(damage, hurt_state, true);
+    }
+
+    fn apply_player_damage_with_options(
+        &mut self,
+        damage: i32,
+        hurt_state: PlayerState,
+        respect_invincibility: bool,
+    ) {
+        if self.fadeout_tick.is_some()
+            || self.player.state == PlayerState::Die
+            || (respect_invincibility
+                && (self.player.state.is_stunned_or_dead() || self.player_invincible_ticks > 0))
+        {
             return;
         }
         self.health = self.health.saturating_sub(damage);
         if self.health <= 0 {
             self.health = 0;
+            self.player_invincible_ticks = 0;
             self.enter(PlayerState::Die);
             if self.lives > 0 {
                 self.lives -= 1;
@@ -1550,6 +1659,9 @@ impl Game{
             self.player.dx = 0.0;
             self.player.dy = 0.0;
         } else {
+            if respect_invincibility {
+                self.player_invincible_ticks = 35;
+            }
             self.enter(hurt_state);
             self.player.walk_count = 0;
             self.player.walk_slowdown = INITIAL_WALK_SLOWDOWN;
@@ -1714,7 +1826,7 @@ impl Game{
         // Native approximation of Flash movie-clip hitTest bounds. The
         // art itself is original; exact alpha hit testing can replace this
         // once the pickup registration box is extracted.
-        if (px - x).abs() < 45.0 && (py - y).abs() < 55.0 {
+        if (px - x).abs() < 48.0 && (py - y).abs() < 65.0 {
             if i < self.pickups.len() {
                 self.pickups[i] = true;
             }
@@ -1749,7 +1861,7 @@ impl Game{
                 }
                 if !self.labs_health_collected {
                     if let Some(&h) = self.stage.labs_health_pickups().first() {
-                        if (px - h.x).abs() < 55.0 && (py - h.y).abs() < 55.0 {
+                        if (px - h.x).abs() < 55.0 && (py - h.y).abs() < 65.0 {
                             self.labs_health_collected = true;
                             self.health = 100;
                             self.score += 50;
@@ -1763,7 +1875,10 @@ impl Game{
 
     fn update_shots(&mut self){
         let px=self.player.x+self.level_origin_x();
-        for shot in &mut self.shots{shot.x+=shot.dir as f32*50.0;}
+        for shot in &mut self.shots{
+            shot.prev_x=shot.x;
+            shot.x+=shot.dir as f32*50.0;
+        }
         self.shots.retain(|shot|(shot.x-px).abs()<500.0);
     }
 
@@ -1944,7 +2059,7 @@ impl Game{
             if !self.lava_done{
                 self.lava_done=true;
                 self.audio_events.push(AudioEvent::Punch2);
-                self.apply_player_damage_with_state(10,PlayerState::Hurt);
+                self.apply_player_damage_with_options(10,PlayerState::Hurt,false);
             }
         }else{
             self.lava_done=false;
@@ -2538,11 +2653,11 @@ mod b18_penguin_escape_card_tests {
         game.penguin_boss = Some(boss2);
         let bx = game.penguin_boss.as_ref().unwrap().x;
         let by = game.penguin_boss.as_ref().unwrap().y;
-        game.shots.push(Shot {
-            x: bx + 5.0,
-            y: by - 35.0,
-            dir: -1,
-        });
+        game.shots.push(Shot::new(
+            bx + 5.0,
+            by - 35.0,
+            -1,
+        ));
         // Seed until EvaluateBatarang returns Blocked (deterministic RNG trial).
         game.penguin_rng = super::PenguinRng::new(7);
         game.tick(&mut input, &ground);
@@ -3117,7 +3232,7 @@ mod b24_labs2a_enemies_tests {
             let g0 = game.bank_goons.as_ref().unwrap().goons[0].clone();
             game.bank_goons.as_mut().unwrap().goons[0].set_state(GoonState::Stand);
             game.shots.clear();
-            game.shots.push(Shot { x: g0.x, y: g0.y - 30.0, dir: 1 });
+            game.shots.push(Shot::new(g0.x, g0.y - 30.0, 1));
             game.tick(&mut neutral, &ground);
         }
         let g0_after = &game.bank_goons.as_ref().unwrap().goons[0];
@@ -4416,5 +4531,127 @@ mod continuous_e2e_and_bugfix_regression_tests {
         input.set(super::VK_RIGHT, false);
         assert_eq!(game.hit_count, 0);
         assert_eq!(game.score, base_score + 10);
+    }
+
+    #[test]
+    fn boss_invincibility_prevents_melt_and_all_combat_moves_damage_penguin() {
+        let ground = CollisionMask::for_stage(StageId::Level1C);
+        let d1c = StageId::Level1C.descriptor();
+        let mut game = Game::new();
+        game.screen = AppScreen::Playing;
+        game.start_stage(StageId::Level1C);
+        game.batarangs = 10;
+        let mut input = InputState::default();
+
+        // Settle onto Level 1C floor.
+        for _ in 0..25 {
+            game.tick(&mut input, &ground);
+        }
+
+        // Standing right next to Penguin holding VK_RIGHT must trigger at most ONE hit during 15 ticks
+        // (35-tick invincibility + stun guard stops rapid multi-tick melt).
+        let (bx, _) = {
+            let b = game.penguin_boss.as_ref().unwrap();
+            (b.x, b.y)
+        };
+        game.player.x = (bx - 50.0) - d1c.level_origin_game_local.x;
+        game.player.dir = 1;
+        game.penguin_boss.as_mut().unwrap().set_state(crate::penguin::PenguinState::Attack);
+        input.set(super::VK_RIGHT, true);
+        for _ in 0..15 {
+            game.tick(&mut input, &ground);
+        }
+        input.set(super::VK_RIGHT, false);
+        assert!(game.health >= 95, "invincibility must cap Penguin contact damage over 15 ticks, got {}", game.health);
+        assert!(game.player_invincible_ticks > 0);
+
+        // Wait out invincibility, then verify HighPunch, HighKick, CapeSpin (even while VK_RIGHT held), and Batarang all hit.
+        for _ in 0..36 {
+            game.tick(&mut input, &ground);
+        }
+        let boss = game.penguin_boss.as_mut().unwrap();
+        boss.health = 200;
+        boss.set_state(crate::penguin::PenguinState::Attack); // Must be punishable even during Attack!
+        let boss_x = boss.x;
+        game.player.x = (boss_x - 45.0) - d1c.level_origin_game_local.x;
+        game.player.dir = 1;
+        game.player.jumping = false;
+
+        // CapeSpin chord (S then D 1 tick later) even with VK_RIGHT held!
+        input.set(super::VK_RIGHT, true);
+        input.set(super::VK_S, true);
+        game.tick(&mut input, &ground);
+        input.set(super::VK_S, false);
+        input.set(super::VK_D, true);
+        game.tick(&mut input, &ground);
+        input.set(super::VK_D, false);
+        input.set(super::VK_RIGHT, false);
+        assert_eq!(game.player.state, PlayerState::CapeSpin);
+        let hp_after_spin = game.penguin_boss.as_ref().unwrap().health;
+        assert!(hp_after_spin < 200, "CapeSpin must damage Penguin cleanly even during Attack, hp={hp_after_spin}");
+
+        // Wait out CapeSpin & boss Hurt/Fall, test VK_A Batarang consumes shot immediately on hit/block.
+        for _ in 0..20 {
+            game.tick(&mut input, &ground);
+        }
+        let bx2 = game.penguin_boss.as_ref().unwrap().x;
+        game.penguin_boss.as_mut().unwrap().set_state(crate::penguin::PenguinState::Stand);
+        game.player.x = (bx2 - 140.0) - d1c.level_origin_game_local.x;
+        game.player.dir = 1;
+        let b_before = game.batarangs;
+        input.set(super::VK_A, true);
+        game.tick(&mut input, &ground);
+        input.set(super::VK_A, false);
+        assert_eq!(game.batarangs, b_before - 1);
+        for _ in 0..5 {
+            game.tick(&mut input, &ground);
+        }
+        assert!(game.shots.is_empty(), "Batarang must despawn cleanly upon hitting/blocking Penguin");
+    }
+
+    #[test]
+    fn level2a_health01_collect_and_batarang_stops_on_first_goon() {
+        let ground = CollisionMask::for_stage(StageId::Level2A);
+        let d2a = StageId::Level2A.descriptor();
+        let mut game = Game::new();
+        game.screen = AppScreen::Playing;
+        game.start_stage(StageId::Level2A);
+        game.health = 60;
+        game.batarangs = 5;
+        let mut input = InputState::default();
+
+        // Walk Batman at standing waist height directly over labs2a HEALTH_PICKUPS[0] (57.55px above floor).
+        let hp_pos = crate::stage::labs2a::HEALTH_PICKUPS[0];
+        game.player.x = hp_pos.x - d2a.level_origin_game_local.x;
+        game.player.y = 4937.25 - d2a.level_origin_game_local.y;
+        game.player.jumping = false;
+        game.tick(&mut input, &ground);
+        assert!(game.labs_health_collected);
+        assert_eq!(game.health, 100);
+
+        // Two lined-up goons: throwing 1 VK_A Batarang damages ONLY the first and despawns immediately.
+        {
+            let squad = game.bank_goons.as_mut().unwrap();
+            squad.goons[0].x = 1800.0;
+            squad.goons[0].y = 2656.35;
+            squad.goons[0].set_state(crate::bank_goons::GoonState::Stand);
+            squad.goons[1].x = 1920.0;
+            squad.goons[1].y = 2656.35;
+            squad.goons[1].set_state(crate::bank_goons::GoonState::Stand);
+        }
+        game.player.x = 1660.0 - d2a.level_origin_game_local.x;
+        game.player.y = 2573.25 - d2a.level_origin_game_local.y;
+        game.player.dir = 1;
+        game.player.state = PlayerState::Stand;
+        input.set(super::VK_A, true);
+        game.tick(&mut input, &ground);
+        input.set(super::VK_A, false);
+        for _ in 0..8 {
+            game.tick(&mut input, &ground);
+        }
+        let squad = game.bank_goons.as_ref().unwrap();
+        assert_eq!(squad.goons[0].health, 65, "First goon must take 5 Batarang damage");
+        assert_eq!(squad.goons[1].health, 70, "Second goon behind must NOT be pierced by the same Batarang");
+        assert!(game.shots.is_empty());
     }
 }

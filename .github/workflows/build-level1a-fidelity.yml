@@ -62,7 +62,7 @@ jobs:
           $tools = "reverse-engineering/tools"
           $work = ".generated"
           $swf = "$work/cobblebot.swf"
-          New-Item -ItemType Directory -Force -Path "$work/reports","$work/bitmaps","$work/sounds","$work/batman-frames","$work/batman-frames-hq","$work/pickup-frames","$work/pickup-frames-hq-super","$work/pickup-frames-hq","$work/batarang-frames","$work/batarang-frames-hq-super","$work/batarang-frames-hq","$work/level-title","$work/level-title-hq-super","$work/level-title-hq","$work/fadein","$work/fadein-hq-super","$work/fadein-hq","$work/fadeout","$work/fadeout-hq-super","$work/fadeout-hq","$work/tutorial-overlay","$work/tutorial-overlay-hq-super","$work/tutorial-overlay-hq","$work/hud","$work/hud-hq-super","$work/hud-hq-final","$work/level1a-tiles","$work/level1a-tiles-hq-base","$work/level1a-detail-tiles-1x","$work/level1a-detail-tiles-hq","$work/scenery-probes","$work/root-moon-hq-super","$work/root-moon-hq","$work/intro","assets","reverse-engineering/generated/collision_masks" | Out-Null
+          New-Item -ItemType Directory -Force -Path "$work/reports","$work/bitmaps","$work/sounds","$work/batman-frames","$work/batman-frames-hq","$work/pickup-frames","$work/pickup-frames-hq-super","$work/pickup-frames-hq","$work/batarang-frames","$work/batarang-frames-hq-super","$work/batarang-frames-hq","$work/level-title","$work/level-title-hq-super","$work/level-title-hq","$work/level2a-title-frames-hq-super","$work/level2a-title-frames-hq","$work/fadein","$work/fadein-hq-super","$work/fadein-hq","$work/fadeout","$work/fadeout-hq-super","$work/fadeout-hq","$work/tutorial-overlay","$work/tutorial-overlay-hq-super","$work/tutorial-overlay-hq","$work/hud","$work/hud-hq-super","$work/hud-hq-final","$work/level1a-tiles","$work/level1a-tiles-hq-base","$work/level1a-detail-tiles-1x","$work/level1a-detail-tiles-hq","$work/scenery-probes","$work/root-moon-hq-super","$work/root-moon-hq","$work/intro","assets","reverse-engineering/generated/collision_masks" | Out-Null
 
           python "$tools/swf_re.py" "$swf" "$work/reports"
           # HUD-REAL-06B source-only probe: recover actual child placements
@@ -330,6 +330,9 @@ jobs:
           python "$tools/b25_bake_labs_pickups.py" "$swf" "$work/reports/symbols.json" "$work/reports/actions.json" "$work/sounds/manifest.json" "$work/labs-pickups-frames" "$work/level2a-title-frames" --bitmaps "$work/bitmaps" --proof ".generated/b25-labs2a-proof/labs_pickups_proof.png" --report ".generated/b25-labs2a-proof/labs-pickups-report.json"
           python "$tools/pack_sprite_frames.py" "$work/labs-pickups-frames" "assets/labs_pickups_frames.bin" --format-version 2 --logical-pixel-scale 1.0
           python "$tools/pack_sprite_frames.py" "$work/level2a-title-frames" "assets/level2a_title_frames.bin" --format-version 2 --logical-pixel-scale 1.0
+          python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/level2a-title-frames-hq-super" --bitmaps "$work/bitmaps" --symbol 1408 --scale 6.0 --all-frames --clip-stage-width 600 --clip-stage-height 400 --place-x 318.7 --place-y 76.75
+          python "$tools/finalize_hq_timeline.py" "$work/level2a-title-frames-hq-super" "$work/level2a-title-frames-hq" --output-scale 3 --supersample 2
+          python "$tools/pack_sprite_frames.py" "$work/level2a-title-frames-hq" "assets/level2a_title_frames_hq.bin" --format-version 2 --logical-pixel-scale 3.0
 
           # Level 2B Labs (#1485 145-tile 1x pack, #1484 8781x10060 mask, #1496 objects & multi-floor HQ3x proof) (B27).
           python "$tools/bake_level_tiles.py" "$swf" "$work/reports/symbols.json" "$work/level2b-tiles" --bitmaps "$work/bitmaps" --symbol 1485 --place-x 1210.1 --place-y 238.25 --exclude-symbol 1484 --include-source-static-text

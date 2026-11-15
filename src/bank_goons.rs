@@ -11,6 +11,13 @@
 use crate::collision::CollisionMask;
 use crate::stage::{GameDepth, GamePos, LevelPos, StageId};
 
+/// Checks 1D swept segment overlap `[prev_x.min(cur_x) - half_w, prev_x.max(cur_x) + half_w]`.
+#[inline]
+pub(crate) fn segment_overlaps_x(prev_x: f32, cur_x: f32, target_x: f32, half_w: f32) -> bool {
+    let (lo, hi) = if prev_x <= cur_x { (prev_x, cur_x) } else { (cur_x, prev_x) };
+    target_x >= lo - half_w && target_x <= hi + half_w
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct SourceGoonLabel {
     pub name: &'static str,
@@ -418,10 +425,10 @@ impl BankGoon {
         probe_y >= player_y_game - 50.0 && probe_y <= player_y_game + 80.0
     }
 
-    /// Check if a flying batarang hits this goon.
-    /// In Flash AVM1: checkBatarang(char) -> batarang.hitTest(char) bounding-box overlap.
-    pub fn apply_batarang_hit(
+    /// Check if a flying batarang segment hits this goon (prevents fast 50px/tick tunneling).
+    pub fn apply_batarang_segment_hit(
         &mut self,
+        bat_prev_x: f32,
         bat_x: f32,
         bat_y: f32,
         events: &mut Vec<GoonCombatEvent>,
@@ -432,7 +439,7 @@ impl BankGoon {
         if self.state == GoonState::Hurt || self.state == GoonState::Fall || self.state == GoonState::Die {
             return false;
         }
-        let hit_x = (bat_x - self.x).abs() <= 30.0;
+        let hit_x = segment_overlaps_x(bat_prev_x, bat_x, self.x, 40.0);
         let (min_y, max_y) = self.batarang_y_bounds();
         let hit_y = bat_y >= min_y && bat_y <= max_y;
         if hit_x && hit_y {
@@ -450,6 +457,17 @@ impl BankGoon {
             return true;
         }
         false
+    }
+
+    /// Check if a flying batarang hits this goon.
+    /// In Flash AVM1: checkBatarang(char) -> batarang.hitTest(char) bounding-box overlap.
+    pub fn apply_batarang_hit(
+        &mut self,
+        bat_x: f32,
+        bat_y: f32,
+        events: &mut Vec<GoonCombatEvent>,
+    ) -> bool {
+        self.apply_batarang_segment_hit(bat_x, bat_x, bat_y, events)
     }
 
     /// Check if Batman attacks this goon.
@@ -606,7 +624,7 @@ impl BankGoon {
             let clip = self.family.child_clip(GoonState::Attack);
             if self.frame == 4 {
                 let range = (self.x - player.x_game).abs();
-                if range <= 70.0 && self.same_combat_plane(player.y_game) && !player.is_invincible && player.state_name != "hurt" {
+                if range <= 80.0 && self.same_combat_plane(player.y_game) && !player.is_invincible && player.state_name != "hurt" {
                     events.push(GoonCombatEvent::PlayerHurt { damage: self.strength });
                     events.push(GoonCombatEvent::Sound(GoonCombatSound::Metal(1)));
                 }
@@ -633,8 +651,8 @@ impl BankGoon {
                 self.set_state(GoonState::Attack);
                 return;
             }
-            // Trigger 2: close-range attack from Stand, Walk, or Retreat before Retreat overrides
-            if range < 80.0 && self.attack_count > 10.0 {
+            // Trigger 2: close-range attack as soon as goon walks/stands into strike range
+            if range < 85.0 && self.attack_count >= 6.0 {
                 self.dir = if self.x >= player.x_game { -1 } else { 1 };
                 self.attack_count = 0.0;
                 self.set_state(GoonState::Attack);
@@ -664,7 +682,7 @@ impl BankGoon {
         // 1. Direction / facing adjustment + close-range trigger
         if rangey < 400.0
             && (range > 180.0
-                || matches!(self.state, GoonState::Idle | GoonState::Stand)
+                || matches!(self.state, GoonState::Idle | GoonState::Stand | GoonState::Retreat)
                 || (self.state == GoonState::Walk && range > 55.0))
         {
             if self.x > player_x {
@@ -674,15 +692,13 @@ impl BankGoon {
             }
         }
         if range < 50.0 && rangey < 400.0 {
-            if self.attack_count > 6.0 && self.same_combat_plane(player_y) && !matches!(self.state, GoonState::Idle | GoonState::Intro) {
+            if self.attack_count > 5.0 && self.same_combat_plane(player_y) && !matches!(self.state, GoonState::Idle | GoonState::Intro) {
                 self.dir = if self.x >= player_x { -1 } else { 1 };
                 self.attack_count = 0.0;
                 self.set_state(GoonState::Attack);
                 return;
-            } else if self.state != GoonState::Attack
-                && self.state != GoonState::Hurt
-                && self.state != GoonState::Fall
-            {
+            } else if self.state == GoonState::Stand && self.attack_count < 3.0 {
+                self.dir = if self.x >= player_x { -1 } else { 1 };
                 self.set_state(GoonState::Retreat);
             }
         }
@@ -690,8 +706,10 @@ impl BankGoon {
         // 2. State-specific behavior
         match self.state {
             GoonState::Idle => {
-                // Flash AVM1 line 60: if range < 400 && rangey < 400 -> stand
+                // Flash AVM1 line 60: if range < 400 && rangey < 400 -> stand & face Batman
                 if range < 400.0 && rangey < 400.0 {
+                    self.dir = if self.x >= player_x { -1 } else { 1 };
+                    self.attack_count = self.attack_count.max(5.0);
                     self.set_state(GoonState::Stand);
                 }
             }
@@ -708,23 +726,13 @@ impl BankGoon {
                 let clip = self.family.child_clip(GoonState::Stand);
                 self.frame = (self.frame + 1) % clip.frame_count().max(1);
 
-                // Flash AVM1 lines 78-95:
-                if range < 100.0 && self.same_combat_plane(player_y) && self.attack_count > 5.0 && (rng.next_f32() - rng.next_f32()) > 0.7 {
+                if range < 85.0 && self.same_combat_plane(player_y) && self.attack_count >= 5.0 {
                     self.dir = if self.x >= player_x { -1 } else { 1 };
                     self.attack_count = 0.0;
                     self.set_state(GoonState::Attack);
-                } else if range < 150.0 && self.attack_count < 8.0 {
-                    let rand = rng.next_f32() - rng.next_f32();
-                    if rand > 0.0 {
-                        self.set_state(GoonState::Retreat);
-                        self.attack_count = -rng.next_f32() * 10.0;
-                        if rand > 0.5 {
-                            self.dir = -self.dir;
-                        }
-                    } else {
-                        self.set_state(GoonState::Walk);
-                    }
-                } else if self.attack_count > (rng.next_f32() * 20.0 + 25.0) || range > 300.0 {
+                } else if self.attack_count >= 8.0 || range > 180.0 {
+                    // Actively pursue Batman instead of idling/retreating away from combat.
+                    self.dir = if self.x >= player_x { -1 } else { 1 };
                     self.set_state(GoonState::Walk);
                 }
             }
@@ -755,8 +763,10 @@ impl BankGoon {
                     let clip = self.family.child_clip(GoonState::Retreat);
                     self.frame = (self.frame + 1) % clip.frame_count().max(1);
 
-                    // Recover back into Walk/approach so goons never retreat indefinitely to far edges
-                    if (self.attack_count > 5.0 && range > (rng.next_f32() * 80.0 + 160.0)) || range > 240.0 {
+                    // Recover back into Walk/approach quickly so goons keep engaging Batman.
+                    if self.attack_count > 5.0 || range > 150.0 {
+                        self.dir = if self.x >= player_x { -1 } else { 1 };
+                        let _ = rng.next_f32();
                         self.set_state(GoonState::Walk);
                     }
                 } else {
@@ -778,11 +788,12 @@ pub fn check_goon_wall_for_stage(stage_id: StageId, collision: &CollisionMask, x
 }
 
 /// Checks ground ahead of goon using the given stage ground mask.
-/// Flash AVM1 checkEdge: hitTest at (goon.x + dx, goon.y + 4.0).
+/// Probes down through +4..+48px so goons stay mobile on stepped Labs/Bank slabs while still stopping at drops.
 pub fn check_goon_edge_for_stage(stage_id: StageId, collision: &CollisionMask, x_game: f32, y_game: f32, dx: f32) -> bool {
     let stage = stage_id.descriptor();
-    let test_pos = stage.to_level_pos(GamePos::new(x_game + dx, y_game + 4.0));
-    collision.solid_level_pos(test_pos)
+    [4.0_f32, 24.0, 48.0]
+        .iter()
+        .any(|&dy| collision.solid_level_pos(stage.to_level_pos(GamePos::new(x_game + dx, y_game + dy))))
 }
 
 /// Checks wall ahead of goon using Level 1B ground mask.
@@ -891,22 +902,24 @@ impl BankGoonSquad {
         }
     }
 
-    /// Full squad combat tick with batarangs, player melee attacks,
-    /// goon attacks, and second wave activation (`respawn2`).
-    pub fn tick_combat(
+    /// Full squad combat tick with swept batarang segments `(prev_x, cur_x, y)`,
+    /// returning indices of consumed batarangs so each shot stops on first hit.
+    pub fn tick_combat_swept(
         &mut self,
         player: &PlayerCombatContext,
-        batarangs: &[(f32, f32)],
+        batarang_segments: &[(f32, f32, f32)],
         collision: &CollisionMask,
         events: &mut Vec<GoonCombatEvent>,
-    ) {
-        // 1. Check batarangs against alive goons
-        for &(bat_x, bat_y) in batarangs {
+    ) -> Vec<usize> {
+        let mut hit_shots = Vec::new();
+        // 1. Check batarangs against alive goons (each shot hits at most one goon)
+        for (shot_idx, &(bat_prev_x, bat_x, bat_y)) in batarang_segments.iter().enumerate() {
             for goon in &mut self.goons {
-                if goon.apply_batarang_hit(bat_x, bat_y, events) {
+                if goon.apply_batarang_segment_hit(bat_prev_x, bat_x, bat_y, events) {
                     if goon.health <= 0 {
                         self.pending_kill_resets += 1;
                     }
+                    hit_shots.push(shot_idx);
                     break;
                 }
             }
@@ -983,6 +996,21 @@ impl BankGoonSquad {
         if self.enable_wave2_respawn && self.respawned > 0 && self.e_kills >= 8 {
             events.push(GoonCombatEvent::StageComplete);
         }
+
+        hit_shots
+    }
+
+    /// Full squad combat tick with batarangs, player melee attacks,
+    /// goon attacks, and second wave activation (`respawn2`).
+    pub fn tick_combat(
+        &mut self,
+        player: &PlayerCombatContext,
+        batarangs: &[(f32, f32)],
+        collision: &CollisionMask,
+        events: &mut Vec<GoonCombatEvent>,
+    ) {
+        let segments: Vec<(f32, f32, f32)> = batarangs.iter().map(|&(x, y)| (x, x, y)).collect();
+        let _ = self.tick_combat_swept(player, &segments, collision, events);
     }
 }
 
@@ -1537,5 +1565,36 @@ mod tests {
         };
         attacker.tick_combat(&near_player, &ground, &mut rng, &mut events);
         assert_eq!(attacker.state, GoonState::Attack);
+    }
+
+    #[test]
+    fn labs2a_and_bank_goons_actively_approach_and_attack_without_stalling() {
+        let ground_2a = CollisionMask::for_stage(StageId::Level2A);
+        let mut squad_2a = BankGoonSquad::new_labs2a();
+        let mut events = Vec::new();
+        for goon in &mut squad_2a.goons {
+            // Position player 190px left of each Labs goon on the same plane and step 20 ticks.
+            let p_x = goon.x - 190.0;
+            let p_y = goon.y - 83.0;
+            let ctx = PlayerCombatContext {
+                x_game: p_x,
+                y_game: p_y,
+                dir: 1,
+                is_attacking: false,
+                is_invincible: true,
+                state_name: "stand",
+            };
+            let start_x = goon.x;
+            let mut saw_walk_or_attack = false;
+            for _ in 0..25 {
+                goon.tick_combat(&ctx, &ground_2a, &mut squad_2a.rng, &mut events);
+                if matches!(goon.state, GoonState::Walk | GoonState::Attack) {
+                    saw_walk_or_attack = true;
+                }
+            }
+            assert!(saw_walk_or_attack, "Labs goon {} stayed stalled in {:?}", goon.name, goon.state);
+            assert!(goon.x < start_x, "Labs goon {} did not move toward Batman ({} -> {})", goon.name, start_x, goon.x);
+            assert_eq!(goon.dir, -1, "Labs goon {} did not face Batman", goon.name);
+        }
     }
 }
