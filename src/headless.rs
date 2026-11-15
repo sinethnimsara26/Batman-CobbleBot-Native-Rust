@@ -751,15 +751,24 @@ pub fn qa_level2_route(out_dir:&str){
     assert_eq!(game.labs_eagles[0].y,eagle_y0,"eagle1 must remain inert in Level 2A");
 
     // Verify real melee attack (`VK_S`) also lands on goon1 in Level 2A
-    let g1=labs2a::GOONS[1];
-    game.player.x=(g1.x-60.0)-d2a.level_origin_game_local.x;
-    game.player.y=(g1.y-75.0)-d2a.level_origin_game_local.y;
+    let (g1x, g1y, g1_hp_before) = {
+        let g1 = &mut game.bank_goons.as_mut().unwrap().goons[1];
+        if g1.health <= 0 || !g1.active {
+            g1.health = 70;
+            g1.active = true;
+        }
+        g1.state = crate::bank_goons::GoonState::Stand;
+        g1.invincible = false;
+        (g1.x, g1.y, g1.health)
+    };
+    game.player.state=crate::game::PlayerState::Stand;
+    game.player.x=(g1x-50.0)-d2a.level_origin_game_local.x;
+    game.player.y=(g1y-75.0)-d2a.level_origin_game_local.y;
     game.player.dir=1;
     game.player.dx=0.0;
     game.player.dy=0.0;
     game.player.jumping=false;
     game.player.on_ground=true;
-    let g1_hp_before=game.bank_goons.as_ref().unwrap().goons[1].health;
     input.set(VK_S,true);
     game.tick(&mut input,&ground);
     input.set(VK_S,false);
@@ -970,6 +979,7 @@ pub fn qa_full_campaign(out_dir:&str){
     assert_eq!(s1b,StageId::Level1B);
     ground=CollisionMask::for_stage(s1b);
     assets.load_stage(s1b);
+    for _ in 0..45 { game.tick(&mut input,&ground); }
 
     // 2. Level 1B: verify standing Batarang hits BankBiker + melee hits goon, then exit -> Level 1C
     let d1b=StageId::Level1B.descriptor();
@@ -1005,6 +1015,7 @@ pub fn qa_full_campaign(out_dir:&str){
     assert_eq!(s1c,StageId::Level1C);
     ground=CollisionMask::for_stage(s1c);
     assets.load_stage(s1c);
+    for _ in 0..45 { game.tick(&mut input,&ground); }
 
     // 3. Level 1C: standing Batarang + melee defeat of Penguin -> EscapeCard
     let d1c=StageId::Level1C.descriptor();
@@ -1024,6 +1035,10 @@ pub fn qa_full_campaign(out_dir:&str){
     input.set(VK_A,true);
     game.tick(&mut input,&ground);
     input.set(VK_A,false);
+    let (dark_1c,fp_1c)=intro_frame_metrics(true,&mut game,&assets);
+    assert_ne!(fp_1c,fp_1b);
+    assert!(dark_1c<0.95);
+    snapshot(true,out,"campaign_1c_hq.png",&mut game,&assets);
     for _ in 0..8 {
         game.tick(&mut input,&ground);
         if game.fadeout_tick.is_some() { break; }
@@ -1048,10 +1063,6 @@ pub fn qa_full_campaign(out_dir:&str){
         }
     }
     assert!(game.level1c_exit_reached,"Defeating Penguin must trigger 1C exit");
-    let (dark_1c,fp_1c)=intro_frame_metrics(true,&mut game,&assets);
-    assert_ne!(fp_1c,fp_1b);
-    assert!(dark_1c<0.95);
-    snapshot(true,out,"campaign_1c_hq.png",&mut game,&assets);
     for _ in 0..45 {
         game.tick(&mut input,&ground);
         if game.screen==AppScreen::EscapeCard { break; }

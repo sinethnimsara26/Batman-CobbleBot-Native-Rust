@@ -257,7 +257,13 @@ pub struct Game{
     pub player_attacking:bool,
     pub overlay_frame:usize,
     overlay_playing:bool,
+    overlay_active_start:Option<usize>,
+    overlay_hold_ticks:u16,
+    level1b_fight_prompt_shown:bool,
+    level2a_find_lab_shown:bool,
     walk_checkpoint_started_tick:Option<u64>,
+    pub hit_count:u32,
+    combo_ticks:u16,
     pub level1a_exit_reached:bool,
     pub fadeout_tick:Option<u16>,
     pub level1a_complete:bool,
@@ -342,7 +348,7 @@ impl Game{
             current_platform_idx:None,
             gravity:GLOBAL_GRAVITY,
             batarangs:0,score:0,lives:5,health:100,player_attacking:false,
-            overlay_frame:OVERLAY_BLANK,overlay_playing:false,walk_checkpoint_started_tick:None,level1a_exit_reached:false,fadeout_tick:None,level1a_complete:false,
+            overlay_frame:OVERLAY_BLANK,overlay_playing:false,overlay_active_start:None,overlay_hold_ticks:0,level1b_fight_prompt_shown:false,level2a_find_lab_shown:false,walk_checkpoint_started_tick:None,hit_count:0,combo_ticks:0,level1a_exit_reached:false,fadeout_tick:None,level1a_complete:false,
             level1b_exit_reached:false,level1b_complete:false,
             level1c_exit_reached:false,level1c_complete:false,
             escape_card_tick:0,escape_card_fadeout_tick:None,escape_card_sound_stopped:false,escape_card_complete:false,
@@ -387,6 +393,9 @@ impl Game{
         self.player.run_left=0;
         self.player.run_right=0;
         self.health=100;
+        self.player_attacking=false;
+        self.hit_count=0;
+        self.combo_ticks=0;
         self.fadeout_tick=None;
         self.camera_x=GAME_ROOT_X;
         self.camera_y=GAME_ROOT_Y;
@@ -398,6 +407,10 @@ impl Game{
         self.current_platform_x=0.0;
         self.overlay_frame=OVERLAY_BLANK;
         self.overlay_playing=false;
+        self.overlay_active_start=None;
+        self.overlay_hold_ticks=0;
+        self.level1b_fight_prompt_shown=false;
+        self.level2a_find_lab_shown=false;
         self.walk_checkpoint_started_tick=None;
         self.pit_done=false;
         self.respawn_after_fade=false;
@@ -529,10 +542,19 @@ impl Game{
         if self.player.state!=state{
             self.player.state=state;
             self.player.state_tick=0;
-            if matches!(state, PlayerState::Hurt | PlayerState::Hurt2 | PlayerState::Die) {
-                self.player_attacking = false;
-            }
         }
+        self.player_attacking = matches!(
+            state,
+            PlayerState::Punch
+                | PlayerState::HighPunch
+                | PlayerState::LowPunch
+                | PlayerState::JumpPunch
+                | PlayerState::Kick
+                | PlayerState::HighKick
+                | PlayerState::LowKick
+                | PlayerState::JumpKick
+                | PlayerState::CapeSpin
+        );
     }
 
     fn stop_intro_sound_once(&mut self){
@@ -869,6 +891,7 @@ impl Game{
             StageId::Level1C => self.tick_level1c_boss(ground),
             _ => {}
         }
+        self.tick_combo_counter();
 
         self.collect_pickups();
         self.update_shots();
@@ -948,8 +971,10 @@ impl Game{
 
             // The original lets Batman drift off a ledge for several frames
             // before playerJumping flips once downward speed exceeds 24.
-            if matches!(self.player.state,PlayerState::Run|PlayerState::Walk|PlayerState::Stand)
+            if !self.player.jumping
                 && self.player.dy>24.0
+                && !self.player.state.airborne_attack()
+                && self.player.state!=PlayerState::Grappling
             {
                 self.player.jumping=true;
                 self.enter(PlayerState::Fall);
@@ -973,6 +998,17 @@ impl Game{
             self.player.dx=0.0;
             self.player.dy=0.0;
             self.gravity=GLOBAL_GRAVITY;
+        }else if matches!(
+            self.player.state,
+            PlayerState::Fall
+                | PlayerState::Glide
+                | PlayerState::Jump
+                | PlayerState::JumpPunch
+                | PlayerState::JumpKick
+                | PlayerState::JumpBatarang
+        ){
+            self.gravity=GLOBAL_GRAVITY;
+            self.enter(PlayerState::Stand);
         }
     }
 
@@ -993,13 +1029,21 @@ impl Game{
     }
 
     fn process_look(&mut self,input:&InputState){
+        let look_blocked = self.player.jumping
+            || self.player.state.melee_ground_lock()
+            || matches!(
+                self.player.state,
+                PlayerState::CapeSpin
+                    | PlayerState::Batarang
+                    | PlayerState::JumpBatarang
+                    | PlayerState::DuckBatarang
+                    | PlayerState::Hurt
+                    | PlayerState::Hurt2
+                    | PlayerState::Electro
+                    | PlayerState::Die
+            );
         if input.held(VK_UP){
-            if self.player.state!=PlayerState::Batarang
-                && self.player.state!=PlayerState::JumpBatarang
-                && !self.player.jumping
-                && self.player.state!=PlayerState::HighKick
-                && self.player.state!=PlayerState::HighPunch
-            {
+            if !look_blocked {
                 self.enter(PlayerState::Up);
             }
         }else if self.player.state==PlayerState::Up{
@@ -1007,13 +1051,7 @@ impl Game{
         }
 
         if input.held(VK_DOWN){
-            if !self.player.jumping
-                && self.player.state!=PlayerState::Batarang
-                && self.player.state!=PlayerState::JumpBatarang
-                && self.player.state!=PlayerState::DuckBatarang
-                && self.player.state!=PlayerState::LowKick
-                && self.player.state!=PlayerState::LowPunch
-            {
+            if !look_blocked {
                 self.enter(PlayerState::Duck);
             }
         }else if self.player.state==PlayerState::Duck{
@@ -1085,6 +1123,11 @@ impl Game{
                 self.player.dx=dir as f32*PLAYER_SPEED;
                 self.player.walk_slowdown=INITIAL_WALK_SLOWDOWN;
             }
+        }
+        if self.player.dir!=dir && self.hit_count>0 {
+            self.score+=(self.hit_count as i32)*10;
+            self.hit_count=0;
+            self.combo_ticks=0;
         }
         self.player.dir=dir;
     }
@@ -1173,6 +1216,9 @@ impl Game{
             self.enter(PlayerState::Glide);
             self.player.dy*=0.5;
             self.gravity=GLIDE_GRAVITY;
+        }else if !self.player.jumping && self.player.state==PlayerState::Glide {
+            self.enter(PlayerState::Stand);
+            self.gravity=GLOBAL_GRAVITY;
         }
     }
 
@@ -1260,18 +1306,37 @@ impl Game{
     fn overlay_goto_and_play(&mut self,frame:usize){
         self.overlay_frame=frame;
         self.overlay_playing=true;
+        if self.stage!=StageId::Level1A {
+            self.overlay_active_start=Some(frame);
+            self.overlay_hold_ticks=75;
+        }
     }
 
     fn advance_tutorial_overlay(&mut self){
         if !self.overlay_playing{return;}
+        if self.stage!=StageId::Level1A && self.overlay_hold_ticks>0 {
+            self.overlay_hold_ticks-=1;
+            return;
+        }
         // Frame scripts on the last frame of each original tutorial segment
         // jump back to label "blank". The game-over segment is not used in
         // Level 1A and is therefore deliberately left out of this list.
         if matches!(self.overlay_frame,9|19|29|38|47|65|74|83|92|101|139|148){
             self.overlay_frame=OVERLAY_BLANK;
             self.overlay_playing=false;
+            self.overlay_active_start=None;
         }else{
             self.overlay_frame=(self.overlay_frame+1).min(148);
+        }
+    }
+
+    fn tick_combo_counter(&mut self){
+        if self.combo_ticks>0 {
+            self.combo_ticks-=1;
+            if self.combo_ticks==0 && self.hit_count>0 {
+                self.score+=(self.hit_count as i32)*10;
+                self.hit_count=0;
+            }
         }
     }
 
@@ -1317,6 +1382,17 @@ impl Game{
         let mut goon_events = Vec::new();
         if let Some(squad) = &mut self.bank_goons {
             squad.tick_combat(&player_ctx, &batarangs, ground, &mut goon_events);
+            let (combo_hits, kill_resets, dx_blocked) = squad.take_combat_modifiers();
+            if dx_blocked {
+                self.player.dx = 0.0;
+            }
+            if kill_resets > 0 {
+                self.hit_count = 0;
+                self.combo_ticks = 0;
+            } else if combo_hits > 0 {
+                self.hit_count += combo_hits;
+                self.combo_ticks = 40;
+            }
         }
 
         let mut biker_events = Vec::new();
@@ -1552,23 +1628,52 @@ impl Game{
                 }
             }
             StageId::Level1B => {
-                if CHECKPOINT_1B_01.hits_player(x,y){
+                if CHECKPOINT_1B_01.hits_player(x, y) {
+                    self.level1b_fight_prompt_shown = true;
                     self.overlay_goto_and_play(OVERLAY_FIGHT_BTNS);
-                }
-                if CHECKPOINT_1B_02.hits_player(x,y){
-                    self.overlay_goto_and_play(OVERLAY_GO_LEFT);
-                }
-                if CHECKPOINT_1B_03.hits_player(x,y){
+                } else if !self.level1b_fight_prompt_shown
+                    && self.level_title_finished()
+                    && (-1100.0..=600.0).contains(&x)
+                {
+                    self.level1b_fight_prompt_shown = true;
+                    self.overlay_goto_and_play(OVERLAY_FIGHT_BTNS);
+                } else if CHECKPOINT_1B_02.hits_player(x, y) {
+                    if !(self.level_title_finished() && self.overlay_active_start == Some(OVERLAY_FIGHT_BTNS)) {
+                        self.overlay_goto_and_play(OVERLAY_GO_LEFT);
+                    }
+                } else if CHECKPOINT_1B_03.hits_player(x, y)
+                    || (x <= -6350.0 && self.bank_goons.as_ref().is_some_and(|s| s.alive_count() > 0))
+                {
                     self.overlay_goto_and_play(OVERLAY_GO_RIGHT);
                 }
             }
             StageId::Level2A | StageId::Level2B => {
+                if self.stage == StageId::Level2A
+                    && x < 650.0
+                    && y > 250.0
+                    && y < 1440.0
+                    && self.player.state == PlayerState::Fall
+                    && self.player.dy > 15.0
+                {
+                    self.overlay_goto_and_play(OVERLAY_GLIDE_DOWN);
+                    return;
+                }
                 // Root frame 23 (`level2a`) gates `checkpoint_2a_01` on `levelTitle` finish; root frame 25 (`level2b`) omits `levelTitle`.
                 let title_done = self.stage != StageId::Level2A || self.level_title_finished();
+                if self.stage == StageId::Level2A
+                    && title_done
+                    && !self.level2a_find_lab_shown
+                    && x <= 950.0
+                    && y >= 1400.0
+                {
+                    self.level2a_find_lab_shown = true;
+                    self.overlay_goto_and_play(OVERLAY_FIND_LAB);
+                }
                 for &cp in self.stage.labs_checkpoints() {
                     if !cp.hits_player(x, y) { continue; }
                     match cp.name {
                         "checkpoint_2a_01" if title_done => {
+                            self.level2a_find_lab_shown = true;
                             self.overlay_goto_and_play(OVERLAY_FIND_LAB);
                         }
                         "checkpoint_2a_02" | "checkpoint_2b_03" => {
@@ -4157,5 +4262,159 @@ mod continuous_e2e_and_bugfix_regression_tests {
         }
         input.set(VK_LEFT, false);
         assert!(!game.on_platform);
+    }
+
+    #[test]
+    fn player_attacking_clears_on_non_attack_transitions_and_glide_recovers_attacks() {
+        let ground = CollisionMask::for_stage(StageId::Level1B);
+        let mut game = Game::new();
+        game.screen = AppScreen::Playing;
+        game.start_stage(StageId::Level1B);
+        let mut input = InputState::default();
+
+        // Settle onto floor cleanly.
+        for _ in 0..35 {
+            game.tick(&mut input, &ground);
+        }
+        assert!(!game.player.jumping);
+
+        // CapeSpin sets player_attacking=true, then Stand clears it cleanly.
+        input.set(super::VK_S, true);
+        input.set(super::VK_D, true);
+        game.tick(&mut input, &ground);
+        assert_eq!(game.player.state, PlayerState::CapeSpin);
+        assert!(game.player_attacking);
+        input.set(super::VK_S, false);
+        input.set(super::VK_D, false);
+        for _ in 0..12 {
+            game.tick(&mut input, &ground);
+        }
+        assert_eq!(game.player.state, PlayerState::Stand);
+        assert!(!game.player_attacking);
+
+        // Holding UP while punching must NOT cancel Punch into Up!
+        input.set(super::VK_S, true);
+        game.tick(&mut input, &ground);
+        assert_eq!(game.player.state, PlayerState::Punch);
+        input.set(super::VK_S, false);
+        input.set(super::VK_UP, true);
+        game.tick(&mut input, &ground);
+        assert_eq!(game.player.state, PlayerState::Punch);
+        input.set(super::VK_UP, false);
+
+        // Let Punch finish, jump, glide with low dy <= 5.0, then release SPACE -> must return to Fall, not stay stuck in Glide!
+        for _ in 0..10 {
+            game.tick(&mut input, &ground);
+        }
+        game.player.jumping = true;
+        game.player.state = PlayerState::Glide;
+        game.player.dy = 2.0;
+        game.tick(&mut input, &ground);
+        assert_ne!(game.player.state, PlayerState::Glide);
+
+        // If grounded while in Glide, Batman must recover to Stand and accept S/D attacks immediately.
+        game.player.jumping = false;
+        game.player.state = PlayerState::Glide;
+        game.player.dy = 0.0;
+        game.tick(&mut input, &ground);
+        assert!(!game.player.jumping);
+        assert_eq!(game.player.state, PlayerState::Stand);
+        input.set(super::VK_S, true);
+        game.tick(&mut input, &ground);
+        input.set(super::VK_S, false);
+        assert_eq!(game.player.state, PlayerState::Punch);
+        assert!(game.player_attacking);
+    }
+
+    #[test]
+    fn tutorial_overlays_hold_cleanly_in_1b_and_trigger_in_2a_shaft() {
+        let ground_1b = CollisionMask::for_stage(StageId::Level1B);
+        let d1b = StageId::Level1B.descriptor();
+        let mut game = Game::new();
+        game.screen = AppScreen::Playing;
+        game.start_stage(StageId::Level1B);
+        let mut input = InputState::default();
+
+        // Advance past title_finished threshold (99 ticks) in Level 1B -> fight prompt holds >= 30 ticks.
+        for _ in 0..100 {
+            game.tick(&mut input, &ground_1b);
+        }
+        assert!(
+            (super::OVERLAY_FIGHT_BTNS..=83).contains(&game.overlay_frame),
+            "Expected OVERLAY_FIGHT_BTNS segment after tick 99, got {}",
+            game.overlay_frame
+        );
+        for _ in 0..30 {
+            game.tick(&mut input, &ground_1b);
+        }
+        assert!(
+            (super::OVERLAY_FIGHT_BTNS..=83).contains(&game.overlay_frame),
+            "OVERLAY_FIGHT_BTNS must remain readable after 30 ticks, got {}",
+            game.overlay_frame
+        );
+
+        // Near left street wall with goons still alive triggers GO_RIGHT prompt.
+        game.player.x = -6400.0 - d1b.level_origin_game_local.x;
+        game.player.y = 323.25 - d1b.level_origin_game_local.y;
+        game.tick(&mut input, &ground_1b);
+        assert_eq!(game.overlay_frame, super::OVERLAY_GO_RIGHT);
+
+        // Level 2A free-fall in shaft triggers GLIDE_DOWN, and post-99 triggers FIND_LAB cleanly.
+        let ground_2a = CollisionMask::for_stage(StageId::Level2A);
+        let mut g2a = Game::new();
+        g2a.screen = AppScreen::Playing;
+        g2a.start_stage(StageId::Level2A);
+        let mut saw_glide_down = false;
+        for _ in 0..40 {
+            g2a.tick(&mut input, &ground_2a);
+            if g2a.overlay_frame == super::OVERLAY_GLIDE_DOWN {
+                saw_glide_down = true;
+            }
+        }
+        assert!(saw_glide_down, "Falling down Level 2A shaft must show OVERLAY_GLIDE_DOWN");
+        for _ in 0..65 {
+            g2a.tick(&mut input, &ground_2a);
+        }
+        assert!(
+            (super::OVERLAY_FIND_LAB..=74).contains(&g2a.overlay_frame),
+            "After title card in Level 2A, OVERLAY_FIND_LAB must appear even if shaft fall already finished, got {}",
+            g2a.overlay_frame
+        );
+    }
+
+    #[test]
+    fn combo_hit_count_cashes_out_on_turn_or_timeout_and_resets_on_kill() {
+        let ground = CollisionMask::for_stage(StageId::Level1B);
+        let d1b = StageId::Level1B.descriptor();
+        let mut game = Game::new();
+        game.screen = AppScreen::Playing;
+        game.start_stage(StageId::Level1B);
+        let mut input = InputState::default();
+        for _ in 0..35 {
+            game.tick(&mut input, &ground);
+        }
+
+        let gx = game.bank_goons.as_ref().unwrap().goons[1].x;
+        let gy = game.bank_goons.as_ref().unwrap().goons[1].y;
+        game.player.x = (gx + 60.0) - d1b.level_origin_game_local.x;
+        game.player.y = (gy - 75.0) - d1b.level_origin_game_local.y;
+        game.player.dir = -1;
+        game.player.jumping = false;
+        let base_score = game.score;
+
+        input.set(super::VK_S, true);
+        game.tick(&mut input, &ground);
+        input.set(super::VK_S, false);
+        assert_eq!(game.hit_count, 1);
+
+        // Let Punch finish before reversing direction, then turning cashes out hit_count * 10.
+        for _ in 0..8 {
+            game.tick(&mut input, &ground);
+        }
+        input.set(super::VK_RIGHT, true);
+        game.tick(&mut input, &ground);
+        input.set(super::VK_RIGHT, false);
+        assert_eq!(game.hit_count, 0);
+        assert_eq!(game.score, base_score + 10);
     }
 }

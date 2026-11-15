@@ -934,6 +934,40 @@ fn draw_hud_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
         game.lives.max(0),hud_hq_layout::LIVES_MAX_WIDTH*s,
         hud_hq_layout::LIVES_DIGIT_ADVANCE*s
     );
+    apply_hud_health_bat_mask(fb,game.health,HQ_SCALE);
+}
+
+fn apply_hud_health_bat_mask(fb:&mut RenderSurface,health:i32,scale:usize){
+    if health>=100 || fb.w==0 || fb.h==0{return;}
+    let frac=(health.clamp(0,100) as f32)/100.0;
+    let (cx,cy,half_w,half_h)=if scale==HQ_SCALE{
+        (899.5_f32,100.5_f32,100.5_f32,50.5_f32)
+    }else{
+        (302.0_f32,36.5_f32,35.0_f32,17.5_f32)
+    };
+    let y0=(16*scale).min(fb.h.saturating_sub(1));
+    let y1=(55*scale).min(fb.h.saturating_sub(1));
+    let x0=(265*scale).min(fb.w.saturating_sub(1));
+    let x1=(338*scale).min(fb.w.saturating_sub(1));
+    for y in y0..=y1{
+        let row=y*fb.w;
+        for x in x0..=x1{
+            let px=fb.pixels[row+x];
+            let r=((px>>16)&0xff) as u8;
+            let g=((px>>8)&0xff) as u8;
+            let b=(px&0xff) as u8;
+            if r>150 && g>110 && b<95{
+                let nx=((x as f32)-cx).abs()/half_w;
+                let ny=((y as f32)-cy).abs()/half_h;
+                if nx>frac || ny>frac{
+                    let nr=((r as u32*38)>>8) as u8;
+                    let ng=((g as u32*36)>>8) as u8;
+                    let nb=((b as u32*28)>>8) as u8;
+                    fb.pixels[row+x]=(px&0xff00_0000)|((nr as u32)<<16)|((ng as u32)<<8)|(nb as u32);
+                }
+            }
+        }
+    }
 }
 
 // Return full 1:1 glyph-cell span with an independently chosen digit pitch.
@@ -1100,6 +1134,7 @@ fn draw_hud(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     draw_number_centered(fb,&assets.hud_digits_small,x+53,y+68,game.batarangs.max(0));
     draw_number_centered(fb,&assets.hud_digits_large,x+228,y+47,game.score.max(0));
     draw_number_centered(fb,&assets.hud_digits_small,x+155,y+69,game.lives.max(0));
+    apply_hud_health_bat_mask(fb,game.health,1);
 }
 
 fn draw_number_centered(fb:&mut RenderSurface,atlas:&Image,cx:i32,cy:i32,value:i32){
@@ -1876,5 +1911,60 @@ mod tests{
         game.kabuki_card_fadeout_tick = Some(20);
         render_high_quality(&mut hq_scratch, &mut hq_faded, &game, &assets);
         assert_ne!(hq_out.pixels, hq_faded.pixels);
+    }
+
+    #[test]
+    fn hud_yellow_health_bat_shrinks_as_health_declines_in_1x_and_hq3x() {
+        use super::{render, render_high_quality, HQ_H, LOGICAL_H};
+        use crate::assets::Assets;
+        use crate::game::{AppScreen, Game};
+
+        let mut assets = Assets::load();
+        assets.load_stage(crate::stage::StageId::Level1B);
+        let mut game = Game::new();
+        game.start_stage(crate::stage::StageId::Level1B);
+        game.screen = AppScreen::Playing;
+        game.ticks = 45;
+
+        let count_yellow = |fb: &RenderSurface, scale: usize| -> usize {
+            let mut n = 0;
+            for y in (16 * scale)..=(55 * scale) {
+                for x in (265 * scale)..=(338 * scale) {
+                    let px = fb.pixels[y * fb.w + x];
+                    let r = ((px >> 16) & 0xff) as u8;
+                    let g = ((px >> 8) & 0xff) as u8;
+                    let b = (px & 0xff) as u8;
+                    if r > 150 && g > 110 && b < 95 {
+                        n += 1;
+                    }
+                }
+            }
+            n
+        };
+
+        let mut fb1x = RenderSurface::new(LOGICAL_W, LOGICAL_H);
+        let mut scratch = RenderSurface::new(LOGICAL_W, LOGICAL_H);
+        let mut fbhq = RenderSurface::new(HQ_W, HQ_H);
+
+        game.health = 100;
+        render(&mut fb1x, &game, &assets);
+        render_high_quality(&mut scratch, &mut fbhq, &game, &assets);
+        let y1x_100 = count_yellow(&fb1x, 1);
+        let yhq_100 = count_yellow(&fbhq, HQ_SCALE);
+
+        game.health = 50;
+        render(&mut fb1x, &game, &assets);
+        render_high_quality(&mut scratch, &mut fbhq, &game, &assets);
+        let y1x_50 = count_yellow(&fb1x, 1);
+        let yhq_50 = count_yellow(&fbhq, HQ_SCALE);
+
+        game.health = 0;
+        render(&mut fb1x, &game, &assets);
+        render_high_quality(&mut scratch, &mut fbhq, &game, &assets);
+        let y1x_0 = count_yellow(&fb1x, 1);
+        let yhq_0 = count_yellow(&fbhq, HQ_SCALE);
+
+        assert!(y1x_100 > y1x_50 && y1x_50 > y1x_0 && y1x_0 == 0, "1x bat yellow count: 100={y1x_100}, 50={y1x_50}, 0={y1x_0}");
+        assert!(yhq_100 > yhq_50 && yhq_50 > yhq_0 && yhq_0 == 0, "HQ bat yellow count: 100={yhq_100}, 50={yhq_50}, 0={yhq_0}");
     }
 }

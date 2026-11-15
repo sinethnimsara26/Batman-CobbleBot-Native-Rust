@@ -477,6 +477,17 @@ impl BankGoon {
             return false;
         }
 
+        let signed_dx = self.x - player.x_game;
+        let facing_ok = player.state_name == "capespin"
+            || (player.dir >= 0 && signed_dx >= -15.0)
+            || (player.dir < 0 && signed_dx <= 15.0);
+        if !facing_ok {
+            return false;
+        }
+
+        // Orient goon toward Batman on hit so knockback (-6*dir / -10*dir) pushes away.
+        self.dir = if self.x >= player.x_game { -1 } else { 1 };
+
         // Close-quarters knockdown (offset -120 in AVM1, dx <= 45.0)
         if dx <= 45.0 {
             self.health -= 20;
@@ -495,12 +506,13 @@ impl BankGoon {
             return true;
         }
 
-        // Standard attack reach (offset -20 in AVM1, dx <= 90.0)
-        if dx <= 90.0 {
+        // Standard attack reach (offset -20 in AVM1, dx <= 75.0)
+        if dx <= 75.0 {
             let (dmg, sound, new_state) = match player.state_name {
                 "lowkick" => (15, GoonCombatSound::Kick, GoonState::Fall),
                 "highpunch" => (15, GoonCombatSound::Punch2, GoonState::Fall),
                 "highkick" => (15, GoonCombatSound::Kick, GoonState::Fall),
+                "capespin" => (15, GoonCombatSound::Punch2, GoonState::Fall),
                 _ => (10, GoonCombatSound::Punch, GoonState::Hurt),
             };
             self.health -= dmg;
@@ -586,11 +598,13 @@ impl BankGoon {
             return;
         }
 
-        // Attack state: strikes player and returns to Stand
+        // Attack state: strikes player once at frame 4 and returns to Stand
         if self.state == GoonState::Attack {
+            if self.frame <= 1 {
+                self.dir = if self.x > player.x_game { -1 } else { 1 };
+            }
             let clip = self.family.child_clip(GoonState::Attack);
-            // Strike window at frames 4..6
-            if self.frame >= 4 && self.frame <= 6 {
+            if self.frame == 4 {
                 let range = (self.x - player.x_game).abs();
                 if range <= 70.0 && self.same_combat_plane(player.y_game) && !player.is_invincible && player.state_name != "hurt" {
                     events.push(GoonCombatEvent::PlayerHurt { damage: self.strength });
@@ -605,12 +619,25 @@ impl BankGoon {
             return;
         }
 
-        // In Stand: check if goon decides to attack player
-        if self.state == GoonState::Stand {
+        // Active attack triggers across Stand, Walk, and Retreat matching AVM1 goonAI
+        if !matches!(self.state, GoonState::Idle | GoonState::Intro) && self.same_combat_plane(player.y_game) {
             let range = (self.x - player.x_game).abs();
-            if range < 70.0 && self.same_combat_plane(player.y_game) && self.attack_count > 10.0 {
-                self.set_state(GoonState::Attack);
+            // Trigger 1: back-turned goon turns and counter-attacks if Batman swings behind it
+            if range < 180.0
+                && player.is_attacking
+                && ((self.dir == 1 && player.dir == 1 && self.x > player.x_game)
+                    || (self.dir == -1 && player.dir == -1 && self.x < player.x_game))
+            {
+                self.dir = -self.dir;
                 self.attack_count = 0.0;
+                self.set_state(GoonState::Attack);
+                return;
+            }
+            // Trigger 2: close-range attack from Stand, Walk, or Retreat before Retreat overrides
+            if range < 80.0 && self.attack_count > 10.0 {
+                self.dir = if self.x >= player.x_game { -1 } else { 1 };
+                self.attack_count = 0.0;
+                self.set_state(GoonState::Attack);
                 return;
             }
         }
@@ -634,15 +661,25 @@ impl BankGoon {
         let range = (self.x - player_x).abs();
         let rangey = (self.y - player_y).abs();
 
-        // 1. Direction / facing adjustment (from AVM1 lines 40-78)
-        if range > 180.0 && rangey < 400.0 {
+        // 1. Direction / facing adjustment + close-range trigger
+        if rangey < 400.0
+            && (range > 180.0
+                || matches!(self.state, GoonState::Idle | GoonState::Stand)
+                || (self.state == GoonState::Walk && range > 55.0))
+        {
             if self.x > player_x {
                 self.dir = -1;
             } else if self.x < player_x {
                 self.dir = 1;
             }
-        } else if range < 50.0 && rangey < 400.0 {
-            if self.state != GoonState::Attack
+        }
+        if range < 50.0 && rangey < 400.0 {
+            if self.attack_count > 6.0 && self.same_combat_plane(player_y) && !matches!(self.state, GoonState::Idle | GoonState::Intro) {
+                self.dir = if self.x >= player_x { -1 } else { 1 };
+                self.attack_count = 0.0;
+                self.set_state(GoonState::Attack);
+                return;
+            } else if self.state != GoonState::Attack
                 && self.state != GoonState::Hurt
                 && self.state != GoonState::Fall
             {
@@ -672,7 +709,11 @@ impl BankGoon {
                 self.frame = (self.frame + 1) % clip.frame_count().max(1);
 
                 // Flash AVM1 lines 78-95:
-                if range < 150.0 && self.attack_count < 8.0 {
+                if range < 100.0 && self.same_combat_plane(player_y) && self.attack_count > 5.0 && (rng.next_f32() - rng.next_f32()) > 0.7 {
+                    self.dir = if self.x >= player_x { -1 } else { 1 };
+                    self.attack_count = 0.0;
+                    self.set_state(GoonState::Attack);
+                } else if range < 150.0 && self.attack_count < 8.0 {
                     let rand = rng.next_f32() - rng.next_f32();
                     if rand > 0.0 {
                         self.set_state(GoonState::Retreat);
@@ -683,10 +724,8 @@ impl BankGoon {
                     } else {
                         self.set_state(GoonState::Walk);
                     }
-                } else if self.attack_count > (rng.next_f32() * 20.0 + 25.0) {
-                    if range > 300.0 {
-                        self.set_state(GoonState::Walk);
-                    }
+                } else if self.attack_count > (rng.next_f32() * 20.0 + 25.0) || range > 300.0 {
+                    self.set_state(GoonState::Walk);
                 }
             }
             GoonState::Walk => {
@@ -716,14 +755,9 @@ impl BankGoon {
                     let clip = self.family.child_clip(GoonState::Retreat);
                     self.frame = (self.frame + 1) % clip.frame_count().max(1);
 
-                    // Flash AVM1 lines 111-120:
-                    if self.attack_count > 5.0 && range > (rng.next_f32() * 100.0 + 250.0) {
-                        let rand = rng.next_f32() - rng.next_f32();
-                        if rand > 0.5 {
-                            self.set_state(GoonState::Walk);
-                        } else {
-                            self.set_state(GoonState::Stand);
-                        }
+                    // Recover back into Walk/approach so goons never retreat indefinitely to far edges
+                    if (self.attack_count > 5.0 && range > (rng.next_f32() * 80.0 + 160.0)) || range > 240.0 {
+                        self.set_state(GoonState::Walk);
                     }
                 } else {
                     // Flash AVM1: stopped by wall or edge in retreat
@@ -768,6 +802,9 @@ pub struct BankGoonSquad {
     pub e_kills: usize,
     pub respawned: u32,
     pub enable_wave2_respawn: bool,
+    pub pending_combo_hits: u32,
+    pub pending_kill_resets: u32,
+    pub player_dx_blocked: bool,
 }
 
 impl BankGoonSquad {
@@ -784,6 +821,9 @@ impl BankGoonSquad {
             e_kills: 0,
             respawned: 0,
             enable_wave2_respawn: true,
+            pending_combo_hits: 0,
+            pending_kill_resets: 0,
+            player_dx_blocked: false,
         }
     }
 
@@ -801,7 +841,23 @@ impl BankGoonSquad {
             e_kills: 0,
             respawned: 0,
             enable_wave2_respawn: false,
+            pending_combo_hits: 0,
+            pending_kill_resets: 0,
+            player_dx_blocked: false,
         }
+    }
+
+    #[inline]
+    pub fn take_combat_modifiers(&mut self) -> (u32, u32, bool) {
+        let out = (
+            self.pending_combo_hits,
+            self.pending_kill_resets,
+            self.player_dx_blocked,
+        );
+        self.pending_combo_hits = 0;
+        self.pending_kill_resets = 0;
+        self.player_dx_blocked = false;
+        out
     }
 
     #[inline]
@@ -848,6 +904,9 @@ impl BankGoonSquad {
         for &(bat_x, bat_y) in batarangs {
             for goon in &mut self.goons {
                 if goon.apply_batarang_hit(bat_x, bat_y, events) {
+                    if goon.health <= 0 {
+                        self.pending_kill_resets += 1;
+                    }
                     break;
                 }
             }
@@ -857,6 +916,11 @@ impl BankGoonSquad {
         if player.is_attacking {
             for goon in &mut self.goons {
                 if goon.apply_player_attack(player, events) {
+                    if goon.health <= 0 {
+                        self.pending_kill_resets += 1;
+                    } else {
+                        self.pending_combo_hits += 1;
+                    }
                     break;
                 }
             }
@@ -868,6 +932,16 @@ impl BankGoonSquad {
             goon.tick_combat(player, collision, &mut self.rng, events);
             if was_active && !goon.active {
                 self.e_kills += 1;
+            }
+            if goon.active
+                && goon.health > 0
+                && !matches!(goon.state, GoonState::Hurt | GoonState::Fall | GoonState::Die)
+                && goon.same_combat_plane(player.y_game)
+                && (goon.x - player.x_game).abs() <= 35.0
+                && ((player.dir > 0 && goon.x >= player.x_game)
+                    || (player.dir < 0 && goon.x <= player.x_game))
+            {
+                self.player_dx_blocked = true;
             }
         }
 
@@ -1421,5 +1495,47 @@ mod tests {
             ..standing_2a
         };
         assert!(!g2a_melee.same_combat_plane(lower_floor.y_game));
+    }
+
+    #[test]
+    fn goon_does_not_get_hit_from_behind_or_deadlock_in_stand_and_attacks_when_in_range() {
+        let ground = CollisionMask::level1b();
+        let mut rng = GoonRng::new(777);
+        let mut events = Vec::new();
+
+        // 1. Batman facing away (-1 while goon is at +60 right of Batman) must NOT hit goon.
+        let mut goon = BankGoon::from_spawn(BANK_GOON_SPAWNS[0]);
+        let wrong_way = PlayerCombatContext {
+            x_game: goon.x - 60.0,
+            y_game: goon.y,
+            dir: -1,
+            is_attacking: true,
+            is_invincible: false,
+            state_name: "punch",
+        };
+        assert!(!goon.apply_player_attack(&wrong_way, &mut events));
+        assert_eq!(goon.health, 32);
+
+        // 2. Goon in Stand with range <= 300 and high attack_count must transition to Walk (not deadlock!).
+        let mut stuck_check = BankGoon::from_spawn(BANK_GOON_SPAWNS[0]);
+        stuck_check.state = GoonState::Stand;
+        stuck_check.attack_count = 60.0;
+        stuck_check.tick_noncombat(stuck_check.x - 200.0, stuck_check.y, &ground, &mut rng);
+        assert_eq!(stuck_check.state, GoonState::Walk);
+
+        // 3. Goon in Walk within range < 80 and attack_count > 10 must Attack instead of retreating forever.
+        let mut attacker = BankGoon::from_spawn(BANK_GOON_SPAWNS[0]);
+        attacker.state = GoonState::Walk;
+        attacker.attack_count = 15.0;
+        let near_player = PlayerCombatContext {
+            x_game: attacker.x - 65.0,
+            y_game: attacker.y,
+            dir: 1,
+            is_attacking: false,
+            is_invincible: false,
+            state_name: "stand",
+        };
+        attacker.tick_combat(&near_player, &ground, &mut rng, &mut events);
+        assert_eq!(attacker.state, GoonState::Attack);
     }
 }
