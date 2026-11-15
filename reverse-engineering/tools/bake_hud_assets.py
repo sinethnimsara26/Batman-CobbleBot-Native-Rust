@@ -323,6 +323,32 @@ def generate_rust_hq_layout(path:Path,cfg:dict):
     path.write_text("\n".join(lines)+"\n",encoding="utf-8")
 
 
+def emit_penguin_boss_label(outdir:Path,font_path:Path,output_scale:int,supersample:int,downsample:str):
+    """Bake game-matched Impact 'PENGUIN' label bitmaps at HQ 3x and 1x scales."""
+    temp_scale=float(output_scale*supersample)
+    size=max(1,round(12.0*temp_scale))
+    font=ImageFont.truetype(str(font_path),size=size)
+    canvas=Image.new("RGBA",(round(90*temp_scale),round(28*temp_scale)),(0,0,0,0))
+    draw=ImageDraw.Draw(canvas)
+    outline=max(2,round(0.90*temp_scale))
+    x0,y0=outline+2,outline+2
+    shadow=(x0+0.62*temp_scale,y0+0.62*temp_scale)
+    draw.text(shadow,"PENGUIN",font=font,fill=(5,5,8,255),anchor="lt",
+              stroke_width=outline+max(1,round(0.24*temp_scale)),stroke_fill=(5,5,8,255))
+    draw.text((x0,y0),"PENGUIN",font=font,fill=(255,235,80,255),anchor="lt",
+              stroke_width=outline,stroke_fill=(2,2,5,255))
+    bbox=canvas.getchannel("A").getbbox()
+    if bbox is None:
+        raise ValueError("Failed to rasterize PENGUIN boss label")
+    cropped=canvas.crop(bbox)
+    hq_size=(max(1,round(cropped.width/supersample)),max(1,round(cropped.height/supersample)))
+    hq_img=resize_premultiplied(cropped,hq_size,downsample)
+    lo_size=(max(1,round(hq_img.width/output_scale)),max(1,round(hq_img.height/output_scale)))
+    lo_img=resize_premultiplied(hq_img,lo_size,downsample)
+    hq_img.save(outdir/"penguin_boss_label_hq.png")
+    lo_img.save(outdir/"penguin_boss_label.png")
+
+
 def main():
     ap=argparse.ArgumentParser()
     ap.add_argument("swf",type=Path)
@@ -520,6 +546,8 @@ def main():
     large_image.save(ns.outdir/large_name)
     if batarang_image is not None:
         batarang_image.save(ns.outdir/f"hud_digits_batarang{ns.suffix}.png")
+    if ns.style=="themed":
+        emit_penguin_boss_label(ns.outdir,ns.font,ns.output_scale,ns.supersample,ns.downsample)
 
     meta={
         "hud_size":list(image.size),

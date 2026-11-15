@@ -5,6 +5,7 @@ use crate::game::AudioEvent;
 use crate::collision::CollisionMask;
 use crate::game::{AppScreen,Game,InputState,FIXED_STEP,LOGICAL_H,LOGICAL_W,VK_A,VK_D,VK_DOWN,VK_ENTER,VK_ESCAPE,VK_I,VK_LEFT,VK_RIGHT,VK_S,VK_SPACE,VK_UP};
 use crate::render;
+use crate::stage::StageId;
 use crate::surface::RenderSurface;
 use std::cell::RefCell;
 use std::collections::VecDeque;
@@ -111,9 +112,19 @@ impl AudioFocusQaLog{
  }
 }
 
-struct App{qa_audio_focus:Option<AudioFocusQaLog>,fullscreen_windowed:Option<WindowedState>,fullscreen_hotkeys:FullscreenHotkeys,fullscreen_escape_consumed:bool,base_fb:RenderSurface,fb:RenderSurface,assets:Assets,audio:Audio,ground:CollisionMask,game:Game,input:InputState,last:Instant,acc:f32,active:bool,intro_skip_armed:bool,qa_navigation:bool,qa_keys_were_down:[bool;4],qa_hud_next:usize,title_start_gate:TitleStartGate}
+struct App{qa_audio_focus:Option<AudioFocusQaLog>,fullscreen_windowed:Option<WindowedState>,fullscreen_hotkeys:FullscreenHotkeys,fullscreen_escape_consumed:bool,base_fb:RenderSurface,fb:RenderSurface,assets:Assets,audio:Audio,ground:CollisionMask,loaded_stage:StageId,game:Game,input:InputState,last:Instant,acc:f32,active:bool,intro_skip_armed:bool,qa_navigation:bool,qa_keys_were_down:[bool;4],qa_hud_next:usize,title_start_gate:TitleStartGate}
 impl App{
- fn new(qa_navigation:bool)->Self{Self{qa_audio_focus:AudioFocusQaLog::from_env(),fullscreen_windowed:None,fullscreen_hotkeys:FullscreenHotkeys::default(),fullscreen_escape_consumed:false,base_fb:RenderSurface::new(LOGICAL_W,LOGICAL_H),fb:RenderSurface::new(render::HQ_W,render::HQ_H),assets:Assets::load(),audio:Audio::new(),ground:CollisionMask::level1a(),game:Game::new(),input:InputState::default(),last:Instant::now(),acc:0.0,active:true,intro_skip_armed:false,qa_navigation,qa_keys_were_down:[false;4],qa_hud_next:0,title_start_gate:TitleStartGate::default()}}
+ fn new(qa_navigation:bool)->Self{Self{qa_audio_focus:AudioFocusQaLog::from_env(),fullscreen_windowed:None,fullscreen_hotkeys:FullscreenHotkeys::default(),fullscreen_escape_consumed:false,base_fb:RenderSurface::new(LOGICAL_W,LOGICAL_H),fb:RenderSurface::new(render::HQ_W,render::HQ_H),assets:Assets::load(),audio:Audio::new(),ground:CollisionMask::level1a(),loaded_stage:StageId::Level1A,game:Game::new(),input:InputState::default(),last:Instant::now(),acc:0.0,active:true,intro_skip_armed:false,qa_navigation,qa_keys_were_down:[false;4],qa_hud_next:0,title_start_gate:TitleStartGate::default()}}
+ fn sync_loaded_stage(&mut self,target:StageId){
+  if self.loaded_stage!=target {
+   self.ground=CollisionMask::for_stage(target);
+   self.assets.load_stage(target);
+   self.loaded_stage=target;
+  }
+  if self.game.screen==AppScreen::Title {
+   self.title_start_gate.reset();
+  }
+ }
  // Record actual OS MCI device position next to game intro ticks.
  // Queries are never run without explicit external CI opt-in.
  fn trace_qa_audio(&mut self,reason:&str){
@@ -266,6 +277,7 @@ impl App{
      if scene!=3 {self.qa_hud_next=0;}
      if scene==0 {self.title_start_gate.reset();}
      self.game=Game::new();
+     self.sync_loaded_stage(StageId::Level1A);
      self.input.release_all();
      self.intro_skip_armed=false;
      self.acc=0.0;
@@ -274,6 +286,7 @@ impl App{
      // aliases: Audio owns the MCI devices for the whole application lifetime.
      self.audio.handle(AudioEvent::IntroStop);
      self.audio.handle(AudioEvent::MusicStop);
+     self.audio.handle(AudioEvent::StageTrack(StageId::Level1A));
      match scene {
        0=>{}, // F5: reset to title
        1=>{  // F6: intro at its original first frame
@@ -311,8 +324,10 @@ impl App{
    while self.acc>=FIXED_STEP{
      self.game.tick(&mut self.input,&self.ground);
      if let Some(next_stage)=self.game.consume_pending_stage_entry(){
-       self.ground=CollisionMask::for_stage(next_stage);
-       self.assets.load_stage(next_stage);
+       self.sync_loaded_stage(next_stage);
+     }else if self.game.active_stage()!=self.loaded_stage{
+       // Keep ground/assets/title-gate synced on Game Over or KabukiCard completion back to Title.
+       self.sync_loaded_stage(self.game.active_stage());
      }
      for event in self.game.take_audio_events(){self.audio.handle(event);}
      self.acc-=FIXED_STEP;
@@ -442,6 +457,7 @@ fn active_card_skip_rect(game:&Game)->Option<(i32,i32,i32,i32)>{
         AppScreen::EscapeCard if game.escape_card_fadeout_tick.is_none() && !game.escape_card_complete =>Some(ESCAPE_CARD_SKIP_RECT),
         AppScreen::TvCard if game.tv_card_fadeout_tick.is_none() && !game.tv_card_complete =>Some(TV_CARD_SKIP_RECT),
         AppScreen::KabukiCard if game.kabuki_card_fadeout_tick.is_none() && !game.kabuki_card_complete =>Some(KABUKI_CARD_SKIP_RECT),
+        AppScreen::KabukiCard if game.kabuki_card_complete =>Some((0,0,LOGICAL_W as i32,LOGICAL_H as i32)),
         _=>None,
     }
 }
@@ -528,6 +544,14 @@ unsafe extern "system" fn wndproc(hwnd:HWND,msg:u32,w:WPARAM,l:LPARAM)->LRESULT 
      AppScreen::Intro=>app.game.skip_intro(),
      AppScreen::EscapeCard=>app.game.skip_escape_card(),
      AppScreen::TvCard=>app.game.skip_tv_card(),
+     AppScreen::KabukiCard if app.game.kabuki_card_complete=>{
+      let dismissed=app.game.dismiss_completed_kabuki_card();
+      if dismissed {
+       app.sync_loaded_stage(app.game.active_stage());
+       for event in app.game.take_audio_events(){app.audio.handle(event);}
+      }
+      dismissed
+     },
      AppScreen::KabukiCard=>app.game.skip_kabuki_card(),
      _=>false,
     }

@@ -833,6 +833,21 @@ impl PenguinBoss {
             )
     }
 
+    #[inline]
+    fn batman_melee_reaches_boss(&self, player: &PenguinPlayerContext<'_>) -> bool {
+        if self.check_player_point(player, 0.0) {
+            return true;
+        }
+        let dx = self.x - player.x_game;
+        let facing_ok = player.state_name == "capespin"
+            || (player.dir > 0 && dx >= -25.0)
+            || (player.dir < 0 && dx <= 25.0);
+        facing_ok
+            && dx.abs() <= 90.0
+            && player.y_game >= self.y - 95.0
+            && player.y_game <= self.y + 50.0
+    }
+
     /// Source `checkPlayer(this, dir, offset)`: tests `(this._x + playerWidth * dir + playerDx, this._y + offset)`
     /// against Batman's hit area.
     #[inline]
@@ -985,17 +1000,19 @@ impl PenguinBoss {
         }
     }
 
-    fn evaluate_batarang_indexed(
+    fn evaluate_batarang_segment_indexed(
         &mut self,
         player_x: f32,
-        batarangs: &[(f32, f32)],
+        batarang_segments: &[(f32, f32, f32)],
         rng: &mut PenguinRng,
     ) -> (PenguinBatarangOutcome, Option<usize>) {
         if self.health <= 0 {
             return (PenguinBatarangOutcome::None, None);
         }
-        let hit_idx = batarangs.iter().position(|&(bx, by)| {
-            (bx - self.x).abs() <= 25.0 && by >= self.y - 75.0 && by <= self.y + 10.0
+        let hit_idx = batarang_segments.iter().position(|&(prev_bx, bx, by)| {
+            crate::bank_goons::segment_overlaps_x(prev_bx, bx, self.x, 40.0)
+                && by >= self.y - 80.0
+                && by <= self.y + 15.0
         });
         let Some(idx) = hit_idx else {
             return (PenguinBatarangOutcome::None, None);
@@ -1014,6 +1031,16 @@ impl PenguinBoss {
         } else {
             (PenguinBatarangOutcome::Hurt, Some(idx))
         }
+    }
+
+    fn evaluate_batarang_indexed(
+        &mut self,
+        player_x: f32,
+        batarangs: &[(f32, f32)],
+        rng: &mut PenguinRng,
+    ) -> (PenguinBatarangOutcome, Option<usize>) {
+        let segments: Vec<(f32, f32, f32)> = batarangs.iter().map(|&(bx, by)| (bx, bx, by)).collect();
+        self.evaluate_batarang_segment_indexed(player_x, &segments, rng)
     }
 
     /// Evaluates batarang overlap during `penguinAI`: blocks if `rng * 5.0 > 2.0` (`60%`),
@@ -1048,13 +1075,12 @@ impl PenguinBoss {
         bat_outcome
     }
 
-    /// Executes full `penguinAI` tick including active `#1192` laser damage (`"electro"`),
-    /// batarang `-5` HP & `+500` score, `checkPlayer(dir)` (`lowkick`/`punch`/`kick` & close attack),
-    /// `checkPlayer(dir, -120)` (`-20` knockdown slam & `+100` score), approach `Walk`, and defeat trigger.
-    pub fn tick_combat(
+    /// Executes full `penguinAI` tick with swept batarang segments `(prev_x, cur_x, y)`,
+    /// despawning batarangs on both block and direct hit, and supporting all Batman combat moves.
+    pub fn tick_combat_swept(
         &mut self,
         player: &PenguinPlayerContext<'_>,
-        batarangs: &[(f32, f32)],
+        batarang_segments: &[(f32, f32, f32)],
         collision: &CollisionMask,
         rng: &mut PenguinRng,
         events: &mut Vec<PenguinCombatEvent>,
@@ -1096,8 +1122,8 @@ impl PenguinBoss {
             }
         }
 
-        // Batarang check: 60% Block + hide batarang, 40% -5 HP + Hurt (+500 kill)
-        let (bat_outcome, bat_idx) = self.evaluate_batarang_indexed(player.x_game, batarangs, rng);
+        // Batarang check: 60% Block + hide batarang, 40% -5 HP + Hurt + hide batarang (+500 kill)
+        let (bat_outcome, bat_idx) = self.evaluate_batarang_segment_indexed(player.x_game, batarang_segments, rng);
         match bat_outcome {
             PenguinBatarangOutcome::Blocked => {
                 if let Some(index) = bat_idx {
@@ -1105,6 +1131,9 @@ impl PenguinBoss {
                 }
             }
             PenguinBatarangOutcome::Hurt => {
+                if let Some(index) = bat_idx {
+                    events.push(PenguinCombatEvent::HideBatarang { index });
+                }
                 self.health -= 5;
                 self.set_state(PenguinState::Hurt);
                 self.apply_kill_with_score(PENGUIN_KILL_SCORE, events);
@@ -1112,59 +1141,15 @@ impl PenguinBoss {
             PenguinBatarangOutcome::None => {}
         }
 
-        // Combat player contact branches (`checkPlayer(dir)` / `checkPlayer(dir, -120)` / approach `Walk`)
+        // Combat player contact branches: overhead -120 slam vs waist/close melee vs Penguin Attack
         if self.health > 0 {
-            if self.check_player_point(player, 0.0) {
+            let overhead_hit = !self.check_player_point(player, 0.0) && self.check_player_point(player, -120.0);
+            if overhead_hit {
                 events.push(PenguinCombatEvent::ZeroPlayerDx);
                 if player.attacking
                     && !matches!(
                         self.state,
-                        PenguinState::Hurt | PenguinState::Fall | PenguinState::Attack
-                    )
-                {
-                    if player.state_name == "lowkick" {
-                        self.health -= 15;
-                        self.set_state(PenguinState::Fall);
-                        self.fall_count = 0;
-                        events.push(PenguinCombatEvent::Sound(PenguinSound::Kick));
-                        events.push(PenguinCombatEvent::ComboHit { combo_count: 50 });
-                    } else if matches!(player.state_name, "punch" | "lowpunch" | "kick") {
-                        self.health -= 10;
-                        self.set_state(PenguinState::Hurt);
-                        events.push(PenguinCombatEvent::Sound(PenguinSound::Punch));
-                        events.push(PenguinCombatEvent::ComboHit { combo_count: 50 });
-                    }
-                    self.apply_kill_with_score(PENGUIN_KILL_SCORE, events);
-                } else if matches!(self.state, PenguinState::Attack | PenguinState::Attack2)
-                    && player.state_name != "hurt"
-                    && player.state_name != "fall"
-                    && !player.invincible
-                {
-                    events.push(PenguinCombatEvent::PlayerHit {
-                        damage: self.stength,
-                        kind: PenguinPlayerHurtKind::MeleeHurt,
-                    });
-                } else if !matches!(
-                    self.state,
-                    PenguinState::Dodge
-                        | PenguinState::Attack
-                        | PenguinState::Attack2
-                        | PenguinState::Hurt
-                        | PenguinState::Fall
-                ) {
-                    self.set_state(PenguinState::Attack);
-                    self.fall_count = 0;
-                }
-            } else if self.check_player_point(player, -120.0) {
-                events.push(PenguinCombatEvent::ZeroPlayerDx);
-                if player.attacking
-                    && !matches!(
-                        self.state,
-                        PenguinState::Hurt
-                            | PenguinState::Fall
-                            | PenguinState::Dodge
-                            | PenguinState::Attack
-                            | PenguinState::Attack2
+                        PenguinState::Hurt | PenguinState::Fall | PenguinState::Dodge | PenguinState::Die
                     )
                 {
                     events.push(PenguinCombatEvent::Sound(PenguinSound::Punch2));
@@ -1175,12 +1160,78 @@ impl PenguinBoss {
                     self.apply_kill_with_score(100, events);
                     events.push(PenguinCombatEvent::ComboHit { combo_count: 20 });
                 }
+            } else if self.batman_melee_reaches_boss(player) {
+                events.push(PenguinCombatEvent::ZeroPlayerDx);
+                if player.attacking
+                    && !matches!(self.state, PenguinState::Hurt | PenguinState::Fall | PenguinState::Die)
+                {
+                    self.face_x(player.x_game);
+                    match player.state_name {
+                        "lowkick" | "highkick" | "highpunch" | "capespin" => {
+                            let sound = if matches!(player.state_name, "lowkick" | "highkick") {
+                                PenguinSound::Kick
+                            } else {
+                                PenguinSound::Punch2
+                            };
+                            self.health -= 15;
+                            self.set_state(PenguinState::Fall);
+                            self.fall_count = 0;
+                            events.push(PenguinCombatEvent::Sound(sound));
+                            events.push(PenguinCombatEvent::ComboHit { combo_count: 50 });
+                        }
+                        "punch" | "lowpunch" | "kick" | "jumppunch" | "jumpkick" => {
+                            self.health -= 10;
+                            self.set_state(PenguinState::Hurt);
+                            events.push(PenguinCombatEvent::Sound(PenguinSound::Punch));
+                            events.push(PenguinCombatEvent::ComboHit { combo_count: 50 });
+                        }
+                        _ => {}
+                    }
+                    self.apply_kill_with_score(PENGUIN_KILL_SCORE, events);
+                } else if self.check_player_point(player, 0.0)
+                    && matches!(self.state, PenguinState::Attack | PenguinState::Attack2)
+                    && player.state_name != "hurt"
+                    && player.state_name != "fall"
+                    && !player.invincible
+                {
+                    events.push(PenguinCombatEvent::PlayerHit {
+                        damage: self.stength,
+                        kind: PenguinPlayerHurtKind::MeleeHurt,
+                    });
+                } else if self.check_player_point(player, 0.0)
+                    && !matches!(
+                        self.state,
+                        PenguinState::Dodge
+                            | PenguinState::Attack
+                            | PenguinState::Attack2
+                            | PenguinState::Hurt
+                            | PenguinState::Fall
+                    )
+                {
+                    self.set_state(PenguinState::Attack);
+                    self.fall_count = 0;
+                }
             } else {
                 self.maybe_enter_walk(collision);
             }
         }
 
         self.step_child_frame(player.state_name, rng);
+    }
+
+    /// Executes full `penguinAI` tick including active `#1192` laser damage (`"electro"`),
+    /// batarang `-5` HP & `+500` score, `checkPlayer(dir)` (`lowkick`/`punch`/`kick` & close attack),
+    /// `checkPlayer(dir, -120)` (`-20` knockdown slam & `+100` score), approach `Walk`, and defeat trigger.
+    pub fn tick_combat(
+        &mut self,
+        player: &PenguinPlayerContext<'_>,
+        batarangs: &[(f32, f32)],
+        collision: &CollisionMask,
+        rng: &mut PenguinRng,
+        events: &mut Vec<PenguinCombatEvent>,
+    ) {
+        let segments: Vec<(f32, f32, f32)> = batarangs.iter().map(|&(bx, by)| (bx, bx, by)).collect();
+        self.tick_combat_swept(player, &segments, collision, rng, events);
     }
 }
 

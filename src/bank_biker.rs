@@ -123,9 +123,19 @@ impl BankBiker {
         }
     }
 
-    /// Tests and applies batarang collision. Returns true if hit connected.
-    pub fn apply_batarang_hit(
+    /// Source `checkPlayer(this, dir, -40)` vertical alignment: biker `self.y`
+    /// sits at `375.85` (wheels/floor) while `player_y` is Batman's waist
+    /// (`323.25` when standing on the `398.25` street floor, hitbox `[player_y - 45, player_y + 75]`).
+    #[inline]
+    fn hits_player_y(&self, player_y: f32) -> bool {
+        let probe_y = self.y - 40.0;
+        probe_y >= player_y - 45.0 && probe_y <= player_y + 75.0
+    }
+
+    /// Tests and applies swept batarang segment collision `(prev_x, cur_x, y)`.
+    pub fn apply_batarang_segment_hit(
         &mut self,
+        bat_prev_x: f32,
         bat_x: f32,
         bat_y: f32,
         events: &mut Vec<BikerEvent>,
@@ -134,10 +144,11 @@ impl BankBiker {
             return false;
         }
 
-        // Batarang hitbox: |dx| <= 35.0, dy in [-60.0, 20.0]
-        let dx = (bat_x - self.x).abs();
         let dy = bat_y - self.y;
-        if dx <= 35.0 && dy >= -60.0 && dy <= 20.0 {
+        if crate::bank_goons::segment_overlaps_x(bat_prev_x, bat_x, self.x, 45.0)
+            && dy >= -135.0
+            && dy <= 20.0
+        {
             self.set_state(BikerState::Fall);
             events.push(BikerEvent::Score(100));
             events.push(BikerEvent::Sound(BikerSound::Bam));
@@ -145,6 +156,16 @@ impl BankBiker {
         }
 
         false
+    }
+
+    /// Tests and applies batarang collision. Returns true if hit connected.
+    pub fn apply_batarang_hit(
+        &mut self,
+        bat_x: f32,
+        bat_y: f32,
+        events: &mut Vec<BikerEvent>,
+    ) -> bool {
+        self.apply_batarang_segment_hit(bat_x, bat_x, bat_y, events)
     }
 
     /// Tests and applies Batman melee attack collision. Returns true if hit connected.
@@ -160,8 +181,7 @@ impl BankBiker {
         }
 
         let dx = (player_x - self.x).abs();
-        let dy = (player_y - self.y).abs();
-        if dx <= 50.0 && dy <= 50.0 {
+        if dx <= 50.0 && self.hits_player_y(player_y) {
             self.set_state(BikerState::Fall);
             events.push(BikerEvent::Score(100));
             events.push(BikerEvent::Sound(BikerSound::Bam));
@@ -171,18 +191,19 @@ impl BankBiker {
         false
     }
 
-    /// Executes one tick of `bikerAI` matching Flash AVM1 bytecode.
-    pub fn tick(
+    /// Executes one tick of `bikerAI` with swept batarang segments `(prev_x, cur_x, y)`
+    /// and returns the index of the batarang consumed on hit, if any.
+    pub fn tick_swept(
         &mut self,
         player_x: f32,
         player_y: f32,
         player_attacking: bool,
         player_hurt: bool,
-        batarangs: &[(f32, f32, bool)],
+        batarang_segments: &[(f32, f32, f32)],
         events: &mut Vec<BikerEvent>,
-    ) {
+    ) -> Option<usize> {
         if !self.active {
-            return;
+            return None;
         }
 
         match self.state {
@@ -208,17 +229,16 @@ impl BankBiker {
                     events.push(BikerEvent::Sound(BikerSound::Bike));
                 }
 
-                // Check collision with batarangs
-                for &(bx, by, active) in batarangs {
-                    if active && self.apply_batarang_hit(bx, by, events) {
-                        return;
+                // Check collision with swept batarang trajectories
+                for (idx, &(prev_bx, bx, by)) in batarang_segments.iter().enumerate() {
+                    if self.apply_batarang_segment_hit(prev_bx, bx, by, events) {
+                        return Some(idx);
                     }
                 }
 
                 // Check collision with player
                 let dx = (player_x - self.x).abs();
-                let dy = (player_y - self.y).abs();
-                if dx <= 45.0 && dy <= 45.0 {
+                if dx <= 45.0 && self.hits_player_y(player_y) {
                     if player_attacking {
                         self.set_state(BikerState::Fall);
                         events.push(BikerEvent::Score(100));
@@ -246,6 +266,24 @@ impl BankBiker {
                 }
             }
         }
+        None
+    }
+
+    /// Executes one tick of `bikerAI` matching Flash AVM1 bytecode.
+    pub fn tick(
+        &mut self,
+        player_x: f32,
+        player_y: f32,
+        player_attacking: bool,
+        player_hurt: bool,
+        batarangs: &[(f32, f32, bool)],
+        events: &mut Vec<BikerEvent>,
+    ) {
+        let segments: Vec<(f32, f32, f32)> = batarangs
+            .iter()
+            .filter_map(|&(bx, by, active)| active.then_some((bx, bx, by)))
+            .collect();
+        let _ = self.tick_swept(player_x, player_y, player_attacking, player_hurt, &segments, events);
     }
 }
 
@@ -412,5 +450,50 @@ mod tests {
         );
         assert_eq!(biker.state, BikerState::Fall);
         assert!(!biker.alive);
+    }
+
+    #[test]
+    fn standing_batman_on_bank_street_floor_interacts_with_biker_melee_contact_and_batarang() {
+        // Level 1B street floor sits at y_game = 398.25 -> standing Batman player.y_game = 323.25
+        // and standing batarang shot sits at 303.25 (323.25 - 20.0).
+        const STANDING_Y: f32 = 323.25;
+        const STANDING_BATARANG_Y: f32 = 303.25;
+
+        // 1. Standing contact damages Batman when not attacking
+        let mut biker = BankBiker::new();
+        let mut events = Vec::new();
+        biker.x = 6.0; // advances +24 -> 30.0 (within 45px of player at 0.0)
+        biker.tick(0.0, STANDING_Y, false, false, &[], &mut events);
+        assert_eq!(
+            events,
+            vec![
+                BikerEvent::Sound(BikerSound::Kick),
+                BikerEvent::PlayerHurt { damage: 10 },
+            ]
+        );
+
+        // 2. Standing melee defeats biker
+        let mut biker2 = BankBiker::new();
+        events.clear();
+        biker2.x = 6.0;
+        biker2.tick(0.0, STANDING_Y, true, false, &[], &mut events);
+        assert_eq!(biker2.state, BikerState::Fall);
+        assert!(events.contains(&BikerEvent::Score(100)));
+
+        // 3. Standing batarang defeats biker
+        let mut biker3 = BankBiker::new();
+        events.clear();
+        biker3.x = 476.0; // advances +24 -> 500.0
+        biker3.tick(0.0, STANDING_Y, false, false, &[(505.0, STANDING_BATARANG_Y, true)], &mut events);
+        assert_eq!(biker3.state, BikerState::Fall);
+        assert!(events.contains(&BikerEvent::Score(100)));
+
+        // 4. Jumping well above biker avoids contact
+        let mut biker4 = BankBiker::new();
+        events.clear();
+        biker4.x = 6.0;
+        biker4.tick(0.0, 220.0, false, false, &[], &mut events);
+        assert!(events.is_empty());
+        assert_eq!(biker4.state, BikerState::Drive);
     }
 }

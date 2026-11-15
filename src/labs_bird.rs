@@ -94,14 +94,16 @@ impl LabsEagle {
         start + self.frame.min(count.saturating_sub(1))
     }
 
-    /// Advances either inert clip animation (when `!ai_attached`) or exact `_global.birdAI`.
-    pub fn tick(
+    /// Advances either inert clip animation (when `!ai_attached`) or exact `_global.birdAI`
+    /// with swept batarang segments `(prev_x, cur_x, y)`, returning hit shot indices.
+    pub fn tick_swept(
         &mut self,
         player: &PlayerCombatContext,
-        batarangs: &[(f32, f32)],
+        batarang_segments: &[(f32, f32, f32)],
         rng: &mut GoonRng,
         events: &mut Vec<BirdEvent>,
-    ) {
+    ) -> Vec<usize> {
+        let mut hit_shots = Vec::new();
         let (_, count, loops) = self.state.clip_range();
         if loops {
             self.frame = (self.frame + 1) % count.max(1);
@@ -112,7 +114,7 @@ impl LabsEagle {
         }
 
         if !self.ai_attached {
-            return;
+            return hit_shots;
         }
 
         let range = (self.x - player.x_game).abs();
@@ -216,13 +218,29 @@ impl LabsEagle {
             }
         }
 
-        // AVM1 `checkBatarang(this)`
-        let hit_bat = batarangs
-            .iter()
-            .any(|&(bx, by)| (self.x - bx).abs() <= 40.0 && (self.y - by).abs() <= 45.0);
-        if hit_bat && self.state != BirdState::Hurt && self.state != BirdState::Die {
-            self.take_damage(10, events);
+        // AVM1 `checkBatarang(this)` with swept X segment
+        if self.state != BirdState::Hurt && self.state != BirdState::Die {
+            if let Some(idx) = batarang_segments.iter().position(|&(prev_bx, bx, by)| {
+                crate::bank_goons::segment_overlaps_x(prev_bx, bx, self.x, 42.0)
+                    && (self.y - by).abs() <= 45.0
+            }) {
+                self.take_damage(10, events);
+                hit_shots.push(idx);
+            }
         }
+        hit_shots
+    }
+
+    /// Advances either inert clip animation (when `!ai_attached`) or exact `_global.birdAI`.
+    pub fn tick(
+        &mut self,
+        player: &PlayerCombatContext,
+        batarangs: &[(f32, f32)],
+        rng: &mut GoonRng,
+        events: &mut Vec<BirdEvent>,
+    ) {
+        let segments: Vec<(f32, f32, f32)> = batarangs.iter().map(|&(bx, by)| (bx, bx, by)).collect();
+        let _ = self.tick_swept(player, &segments, rng, events);
     }
 
     fn take_damage(&mut self, amount: i32, events: &mut Vec<BirdEvent>) {

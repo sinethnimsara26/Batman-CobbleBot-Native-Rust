@@ -119,6 +119,12 @@ pub struct CommonAssets {
     pub labs_pickups_frames: LazySpriteSet,
     /// 100 Level 2A `LEVEL 2` title banner (`#1408`) frames, loaded lazily.
     pub level2a_title_frames: LazySpriteSet,
+    /// 100 Level 2A `LEVEL 2` title banner (`#1408`) frames at 3x HQ, loaded lazily.
+    pub level2a_title_frames_hq: LazySpriteSet,
+    /// Stylized game-font `"PENGUIN"` label for 1x boss health bar.
+    pub penguin_boss_label: Image,
+    /// Stylized game-font `"PENGUIN"` label for 3x HQ boss health bar.
+    pub penguin_boss_label_hq: Image,
     /// 20 Level 2B animated lava pit (`#1486` `lava1`) frames at world scale, loaded lazily.
     pub lava_frames: LazySpriteSet,
     /// 9 Level 2B explosion plume (`#1495` `"fire"` frames `21..=29` excl. `#1488`) frames, loaded lazily.
@@ -172,6 +178,9 @@ impl CommonAssets {
             eagle_frames: decode_sprite_frames_lazy_expected(include_bytes!("../assets/eagle_frames.bin"),1.0,"eagle_frames"),
             labs_pickups_frames: decode_sprite_frames_lazy_expected(include_bytes!("../assets/labs_pickups_frames.bin"),1.0,"labs_pickups_frames"),
             level2a_title_frames: decode_sprite_frames_lazy_expected(include_bytes!("../assets/level2a_title_frames.bin"),1.0,"level2a_title_frames"),
+            level2a_title_frames_hq: decode_sprite_frames_lazy_expected(include_bytes!("../assets/level2a_title_frames_hq.bin"),3.0,"level2a_title_frames_hq"),
+            penguin_boss_label: decode_png(include_bytes!("../assets/penguin_boss_label.png")),
+            penguin_boss_label_hq: decode_png(include_bytes!("../assets/penguin_boss_label_hq.png")),
             lava_frames: decode_sprite_frames_lazy_expected(include_bytes!("../assets/lava_frames.bin"),1.0,"lava_frames"),
             halo_fire_frames: decode_sprite_frames_lazy_expected(include_bytes!("../assets/halo_fire_frames.bin"),1.0,"halo_fire_frames"),
             clock_frames: decode_sprite_frames_lazy_expected(include_bytes!("../assets/clock_frames.bin"),1.0,"clock_frames"),
@@ -638,6 +647,8 @@ mod tests{
         assert_eq!(assets.stage.tiles.index.len(),177);
         assert_eq!(assets.labs_pickups_frames.len(),2);
         assert_eq!(assets.level2a_title_frames.len(),100);
+        assert_eq!(assets.level2a_title_frames_hq.len(),100);
+        assert!(assets.penguin_boss_label.w > 0 && assets.penguin_boss_label_hq.w > 0);
     }
 
     #[test]

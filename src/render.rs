@@ -478,7 +478,12 @@ fn draw_world_objects_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     }
 }
 
+fn player_is_blink_hidden(game:&Game)->bool{
+    game.player_invincible_ticks>0 && (game.player_invincible_ticks%4)>=2
+}
+
 fn draw_batman_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
+    if player_is_blink_hidden(game){return;}
     let sx=(game.player.x+game.level_origin_x()+game.camera_x).round() as i32;
     let sy=(game.player.y+game.level_origin_y()+game.camera_y).round() as i32;
     let frame=&assets.batman_frames[game.animation_frame()];
@@ -492,6 +497,7 @@ fn draw_batman_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
 }
 
 fn draw_batman_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
+    if player_is_blink_hidden(game){return;}
     debug_assert!((assets.batman_frames_hq.logical_pixel_scale-HQ_SCALE as f32).abs()<0.001);
     let sx=(game.player.x+game.level_origin_x()+game.camera_x).round() as i32*HQ_SCALE as i32;
     let sy=(game.player.y+game.level_origin_y()+game.camera_y).round() as i32*HQ_SCALE as i32;
@@ -752,18 +758,116 @@ fn draw_stage_enemies_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     draw_stage_enemies_scaled(fb,game,assets,HQ_SCALE as i32);
 }
 
+const L2B_PANEL_Y:i32=4;
+const L2B_PANEL_H:i32=78;
+const L2B_PANEL_R:i32=7;
+const L2B_CLOCK_X:i32=8;
+const L2B_CLOCK_W:i32=142;
+const L2B_HUD_X:i32=158;
+const L2B_HUD_W:i32=280;
+const L2B_HUD_DY:i32=8;
+
+fn draw_translucent_hud_panel(fb:&mut RenderSurface,lx:i32,ly:i32,lw:i32,lh:i32,radius:i32,scale:i32){
+    let s=scale.max(1);
+    let x0=(lx*s).max(0);
+    let y0=(ly*s).max(0);
+    let w=lw*s;
+    let h=lh*s;
+    if w<=0||h<=0{return;}
+    let x1=(lx*s+w).min(fb.w as i32);
+    let y1=(ly*s+h).min(fb.h as i32);
+    if x0>=x1||y0>=y1{return;}
+
+    let r=(radius as f32*s as f32).min((w.min(h) as f32)*0.5);
+    let cx=(lx*s) as f32+(w as f32)*0.5;
+    let cy=(ly*s) as f32+(h as f32)*0.5;
+    let hx=(w as f32)*0.5-r;
+    let hy=(h as f32)*0.5-r;
+    let outer_b=if s>1{2.2_f32}else{1.0_f32};
+    let inner_b=outer_b+if s>1{1.6_f32}else{1.0_f32};
+
+    for py in y0..y1{
+        let row=(py as usize)*fb.w;
+        let dy=((py as f32+0.5)-cy).abs()-hy;
+        for px in x0..x1{
+            let dx=((px as f32+0.5)-cx).abs()-hx;
+            let dist=dx.max(0.0).hypot(dy.max(0.0))+dx.max(dy).min(0.0)-r;
+            if dist>=0.5{continue;}
+            let src=if dist>=-outer_b{
+                let cov=(0.5-dist).clamp(0.0,1.0);
+                let a=(236.0*cov).round() as u32;
+                (a<<24)|0x08_0b10
+            }else if dist>=-inner_b{
+                0x62_8296ac
+            }else{
+                0xb8_121820
+            };
+            blend(&mut fb.pixels[row+px as usize],src);
+        }
+    }
+}
+
+#[inline]
+fn is_hud_shell_backdrop_px(src:u32,ox:i32,oy:i32,w:i32,h:i32,scale:i32)->bool{
+    let a=(src>>24)&255;
+    if a==0{return true;}
+    let s=scale.max(1);
+    if ox<8*s||ox>=w-8*s||oy<12*s||oy>=h-2*s{
+        return true;
+    }
+    let r=((src>>16)&255) as i32;
+    let g=((src>>8)&255) as i32;
+    let b=(src&255) as i32;
+    let is_slate_fill=a<=190
+        &&(50..=150).contains(&r)
+        &&(70..=170).contains(&g)
+        &&(75..=175).contains(&b)
+        &&(g-b).abs()<=15
+        &&(8..=40).contains(&(b-r));
+    let is_slate_rim=(55..=130).contains(&r)
+        &&(80..=145).contains(&g)
+        &&(85..=150).contains(&b)
+        &&(g-b).abs()<=10
+        &&(15..=36).contains(&(g-r));
+    let is_tiny_aa=a<=35&&r.max(g).max(b)<=140;
+    is_slate_fill||is_slate_rim||is_tiny_aa
+}
+
+fn blit_hud_foreground_only(dst:&mut RenderSurface,src:&Image,x:i32,y:i32,scale:i32){
+    let rw=src.w as i32;
+    let rh=src.h as i32;
+    if rw<=0||rh<=0{return;}
+    let oy_start=(-y).max(0);
+    let oy_end=(dst.h as i32-y).min(rh);
+    let ox_start=(-x).max(0);
+    let ox_end=(dst.w as i32-x).min(rw);
+    if oy_start>=oy_end||ox_start>=ox_end{return;}
+    for oy in oy_start..oy_end{
+        let dy=(y+oy) as usize;
+        let src_row=(oy as usize)*src.w;
+        let dst_row=dy*dst.w;
+        for ox in ox_start..ox_end{
+            let sp=src.pixels[src_row+ox as usize];
+            if is_hud_shell_backdrop_px(sp,ox,oy,rw,rh,scale){continue;}
+            blend(&mut dst.pixels[dst_row+(x+ox) as usize],sp);
+        }
+    }
+}
+
 fn draw_level2b_clock_scaled(fb:&mut RenderSurface,game:&Game,assets:&Assets,pixel_scale:i32){
     if game.active_stage()!=crate::stage::StageId::Level2B{return;}
     let pack=if pixel_scale==HQ_SCALE as i32{&assets.clock_frames_hq}else{&assets.clock_frames};
     if pack.len()<12{return;}
-    const CLOCK_ROOT_X:f32=-83.0;
-    const CLOCK_ROOT_Y:f32=-11.0;
+    draw_translucent_hud_panel(fb,L2B_CLOCK_X,L2B_PANEL_Y,L2B_CLOCK_W,L2B_PANEL_H,L2B_PANEL_R,pixel_scale);
+    const CLOCK_ORIGIN_X:f32=7.0;
+    const CLOCK_ORIGIN_Y:f32=6.0;
+    const CLOCK_DIGITS_DX:i32=9;
     let scale=pixel_scale as f32;
     let shell=pack.frame(0);
     blit(
         fb,&shell.image,
-        (CLOCK_ROOT_X*scale-shell.anchor_x).round() as i32,
-        (CLOCK_ROOT_Y*scale-shell.anchor_y).round() as i32,
+        (CLOCK_ORIGIN_X*scale-shell.anchor_x).round() as i32,
+        (CLOCK_ORIGIN_Y*scale-shell.anchor_y).round() as i32,
         shell.image.w as i32,shell.image.h as i32,false,
     );
     // Stack-only formatting matching AVM1 clockTimer (`SS :MM` or `"00 :00"`).
@@ -783,7 +887,7 @@ fn draw_level2b_clock_scaled(fb:&mut RenderSurface,game:&Game,assets:&Assets,pix
     }else{
         slots[4]=Some(ms as usize + 1);
     }
-    let mut slot_x=0i32;
+    let mut slot_x=CLOCK_DIGITS_DX*pixel_scale;
     for slot in slots{
         match slot{
             None=>{slot_x+=5*pixel_scale;}
@@ -791,8 +895,8 @@ fn draw_level2b_clock_scaled(fb:&mut RenderSurface,game:&Game,assets:&Assets,pix
                 let f=pack.frame(11);
                 blit(
                     fb,&f.image,
-                    (CLOCK_ROOT_X*scale-f.anchor_x).round() as i32 + slot_x,
-                    (CLOCK_ROOT_Y*scale-f.anchor_y).round() as i32,
+                    (CLOCK_ORIGIN_X*scale-f.anchor_x).round() as i32 + slot_x,
+                    (CLOCK_ORIGIN_Y*scale-f.anchor_y).round() as i32,
                     f.image.w as i32,f.image.h as i32,false,
                 );
                 slot_x+=5*pixel_scale;
@@ -801,8 +905,8 @@ fn draw_level2b_clock_scaled(fb:&mut RenderSurface,game:&Game,assets:&Assets,pix
                 let f=pack.frame(frame_idx);
                 blit(
                     fb,&f.image,
-                    (CLOCK_ROOT_X*scale-f.anchor_x).round() as i32 + slot_x,
-                    (CLOCK_ROOT_Y*scale-f.anchor_y).round() as i32,
+                    (CLOCK_ORIGIN_X*scale-f.anchor_x).round() as i32 + slot_x,
+                    (CLOCK_ORIGIN_Y*scale-f.anchor_y).round() as i32,
                     f.image.w as i32,f.image.h as i32,false,
                 );
                 slot_x+=17*pixel_scale;
@@ -814,6 +918,7 @@ fn draw_level2b_clock_scaled(fb:&mut RenderSurface,game:&Game,assets:&Assets,pix
 fn draw_foreground_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     draw_hud(fb,game,assets);
     draw_level2b_clock_scaled(fb,game,assets,1);
+    draw_penguin_boss_health_bar(fb,game,assets,1);
 
     if !assets.tutorial_overlay_frames.is_empty(){
         let i=game.overlay_frame.min(assets.tutorial_overlay_frames.len()-1);
@@ -844,6 +949,7 @@ fn draw_foreground_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
 fn draw_foreground_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     draw_hud_hq(fb,game,assets);
     draw_level2b_clock_scaled(fb,game,assets,HQ_SCALE as i32);
+    draw_penguin_boss_health_bar(fb,game,assets,HQ_SCALE);
 
     // Round 7 foreground timelines are already true 3x assets. Their SWF
     // display lists, embedded DefineText glyphs, masks and CXFORMWITHALPHA were
@@ -866,7 +972,7 @@ fn draw_foreground_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
             draw_root_timeline_hq_lazy(fb,&assets.level_title_frames_hq,game.ticks,318.7,76.75);
         }
         crate::stage::StageId::Level2A => {
-            draw_root_timeline_lazy_scaled(fb,&assets.level2a_title_frames,game.ticks,318.7,76.75,HQ_SCALE as i32);
+            draw_root_timeline_hq_lazy(fb,&assets.level2a_title_frames_hq,game.ticks,318.7,76.75);
         }
         _ => {}
     }
@@ -877,26 +983,33 @@ fn draw_foreground_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
 }
 
 fn draw_hud_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
+    let is_2b=game.active_stage()==crate::stage::StageId::Level2B;
+    let dy_logical=if is_2b{L2B_HUD_DY}else{0};
     const ROOT_X:f32=159.0;
-    const ROOT_Y:f32=-11.0;
+    let root_y:f32=-11.0+dy_logical as f32;
     debug_assert!((assets.hud_shell_hq.logical_pixel_scale-HQ_SCALE as f32).abs()<0.001);
     debug_assert_eq!(assets.hud_shell_hq.len(),1);
     let shell=&assets.hud_shell_hq[0];
     let scale=assets.hud_shell_hq.logical_pixel_scale;
     let shell_x=(ROOT_X*scale-shell.anchor_x).round() as i32;
-    let shell_y=(ROOT_Y*scale-shell.anchor_y).round() as i32;
+    let shell_y=(root_y*scale-shell.anchor_y).round() as i32;
 
-    // Original sprite 716: icon art and rounded translucent backing remain.
-    // The unwanted separate full-width counter band must never return.
-    blit(fb,&shell.image,shell_x,shell_y,
-         shell.image.w as i32,shell.image.h as i32,false);
+    if is_2b{
+        draw_translucent_hud_panel(fb,L2B_HUD_X,L2B_PANEL_Y,L2B_HUD_W,L2B_PANEL_H,L2B_PANEL_R,HQ_SCALE as i32);
+        blit_hud_foreground_only(fb,&shell.image,shell_x,shell_y,HQ_SCALE as i32);
+    }else{
+        // Original sprite 716: icon art and rounded translucent backing remain.
+        // The unwanted separate full-width counter band must never return.
+        blit(fb,&shell.image,shell_x,shell_y,
+             shell.image.w as i32,shell.image.h as i32,false);
+    }
 
     // Themed labels and dynamic counters share one stage-space layout; 
     // source-authentic 1x Flash HUD and game state remain unchanged.
     let s=HQ_SCALE as i32;
     let (bx,by)=hud_hq_layout::BATARANG_CENTER;
     draw_number_centered_hq_1to1(
-        fb,&assets.hud_digits_batarang_hq,bx*s,by*s,game.batarangs.max(0),
+        fb,&assets.hud_digits_batarang_hq,bx*s,(by+dy_logical)*s,game.batarangs.max(0),
         hud_hq_layout::BATARANG_MAX_WIDTH*s,
         hud_hq_layout::BATARANG_DIGIT_ADVANCE*s
     );
@@ -922,7 +1035,7 @@ fn draw_hud_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
         hud_hq_layout::SCORE_LARGE_DIGIT_ADVANCE*s
     };
     draw_number_centered_hq_1to1(
-        fb,score_atlas,sx*s,sy*s,score,score_budget,score_advance
+        fb,score_atlas,sx*s,(sy+dy_logical)*s,score,score_budget,score_advance
     );
 
     // LIVES X is baked directly before this fixed value-left edge.
@@ -930,10 +1043,132 @@ fn draw_hud_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     draw_number_left_hq_1to1(
         fb,&assets.hud_digits_small_hq,
         hud_hq_layout::LIVES_VALUE_LEFT*s,
-        hud_hq_layout::LIVES_CENTER_Y*s,
+        (hud_hq_layout::LIVES_CENTER_Y+dy_logical)*s,
         game.lives.max(0),hud_hq_layout::LIVES_MAX_WIDTH*s,
         hud_hq_layout::LIVES_DIGIT_ADVANCE*s
     );
+    apply_hud_health_bat_mask_offset(fb,game.health,HQ_SCALE,dy_logical);
+}
+
+fn blend_rect_argb(fb:&mut RenderSurface,x:i32,y:i32,w:i32,h:i32,argb:u32){
+    if w<=0 || h<=0{return;}
+    let x0=x.max(0) as usize;
+    let y0=y.max(0) as usize;
+    let x1=(x+w).min(fb.w as i32).max(0) as usize;
+    let y1=(y+h).min(fb.h as i32).max(0) as usize;
+    for py in y0..y1{
+        let row=py*fb.w;
+        for px in x0..x1{
+            blend(&mut fb.pixels[row+px],argb);
+        }
+    }
+}
+
+/// Draws the Penguin boss health meter directly above Penguin's head during Level 1C, tracking him smoothly.
+fn draw_penguin_boss_health_bar(fb:&mut RenderSurface,game:&Game,assets:&Assets,scale:usize){
+    if game.screen!=AppScreen::Playing || game.active_stage()!=crate::stage::StageId::Level1C{
+        return;
+    }
+    let Some(boss)=&game.penguin_boss else{return;};
+    if !boss.active{return;}
+    let s=scale as i32;
+    let boss_sx=(boss.x+game.camera_x).round() as i32*s;
+    let boss_sy=(boss.y+game.camera_y).round() as i32*s;
+    let label=if scale==HQ_SCALE{&assets.penguin_boss_label_hq}else{&assets.penguin_boss_label};
+
+    let panel_w=label.w as i32+86*s;
+    let panel_h=18*s;
+    if boss_sx+panel_w/2<0 || boss_sx-panel_w/2>fb.w as i32{
+        return;
+    }
+    let panel_x=boss_sx-panel_w/2;
+    let panel_y=(boss_sy-80*s).clamp(4*s,fb.h as i32-panel_h-4*s);
+
+    blend_rect_argb(fb,panel_x,panel_y,panel_w,panel_h,0xdc_12161e);
+    // Outer black border + inner slate-steel highlight matching HUD casing.
+    blend_rect_argb(fb,panel_x,panel_y,panel_w,s,0xff_080a0e);
+    blend_rect_argb(fb,panel_x,panel_y+panel_h-s,panel_w,s,0xff_080a0e);
+    blend_rect_argb(fb,panel_x,panel_y,s,panel_h,0xff_080a0e);
+    blend_rect_argb(fb,panel_x+panel_w-s,panel_y,s,panel_h,0xff_080a0e);
+    blend_rect_argb(fb,panel_x+s,panel_y+s,panel_w-2*s,s,0xff_5c687a);
+    blend_rect_argb(fb,panel_x+s,panel_y+s,s,panel_h-2*s,0xff_5c687a);
+
+    let label_x=panel_x+5*s;
+    let label_y=panel_y+((panel_h-label.h as i32)/2);
+    blit(fb,label,label_x,label_y,label.w as i32,label.h as i32,false);
+
+    let bar_x=label_x+label.w as i32+5*s;
+    let bar_y=panel_y+4*s;
+    let bar_w=(panel_x+panel_w-5*s)-bar_x;
+    let bar_h=10*s;
+    if bar_w<=2*s || bar_h<=2*s{return;}
+
+    blend_rect_argb(fb,bar_x,bar_y,bar_w,bar_h,0xff_0a0b0e);
+    let inner_x=bar_x+s;
+    let inner_y=bar_y+s;
+    let inner_w=bar_w-2*s;
+    let inner_h=bar_h-2*s;
+    blend_rect_argb(fb,inner_x,inner_y,inner_w,inner_h,0xff_1c0e12);
+
+    let max_hp=boss.max_health.max(1);
+    let hp=boss.health.clamp(0,max_hp);
+    if hp>0{
+        let fill_w=(((inner_w as f32)*(hp as f32)/(max_hp as f32)).round() as i32).clamp(s,inner_w);
+        let top_h=(inner_h/3).max(1);
+        let mid_h=(inner_h/3).max(1);
+        let bot_h=(inner_h-top_h-mid_h).max(0);
+        blend_rect_argb(fb,inner_x,inner_y,fill_w,top_h,0xff_f06434);
+        blend_rect_argb(fb,inner_x,inner_y+top_h,fill_w,mid_h,0xff_d92622);
+        if bot_h>0{
+            blend_rect_argb(fb,inner_x,inner_y+top_h+mid_h,fill_w,bot_h,0xff_9c1414);
+        }
+        if fill_w<inner_w{
+            blend_rect_argb(fb,inner_x+fill_w-s,inner_y,s,inner_h,0xff_ffd24c);
+        }
+    }
+}
+
+#[allow(dead_code)]
+fn apply_hud_health_bat_mask(fb:&mut RenderSurface,health:i32,scale:usize){
+    apply_hud_health_bat_mask_offset(fb,health,scale,0);
+}
+
+fn apply_hud_health_bat_mask_offset(fb:&mut RenderSurface,health:i32,scale:usize,dy_logical:i32){
+    if health>=100 || fb.w==0 || fb.h==0{return;}
+    let frac=(health.clamp(0,100) as f32)/100.0;
+    let (cx,base_cy,max_r)=if scale==HQ_SCALE{
+        (901.0_f32,104.5_f32,107.5_f32)
+    }else{
+        (301.0_f32,35.0_f32,36.0_f32)
+    };
+    let cy=base_cy+(dy_logical*(scale as i32)) as f32;
+    let cutoff=max_r*frac;
+    let y0=((15+dy_logical).max(0) as usize*scale).min(fb.h.saturating_sub(1));
+    let y1=((55+dy_logical).max(0) as usize*scale).min(fb.h.saturating_sub(1));
+    let x0=(265*scale).min(fb.w.saturating_sub(1));
+    let x1=(338*scale).min(fb.w.saturating_sub(1));
+    for y in y0..=y1{
+        let row=y*fb.w;
+        let dy=(y as f32)-cy;
+        for x in x0..=x1{
+            let px=fb.pixels[row+x];
+            let r=((px>>16)&0xff) as u8;
+            let g=((px>>8)&0xff) as u8;
+            let b=(px&0xff) as u8;
+            // Peel concentric circular rings from the outside inward across both
+            // bright yellow and orange divider rings, preserving straight bat frame.
+            if r>120 && g>55 && b<95 && r>b.saturating_add(40){
+                let dx=(x as f32)-cx;
+                let dist=(dx*dx+dy*dy).sqrt();
+                if health<=0 || dist>cutoff{
+                    let nr=((r as u32*28)>>8) as u8;
+                    let ng=((g as u32*26)>>8) as u8;
+                    let nb=((b as u32*20)>>8) as u8;
+                    fb.pixels[row+x]=(px&0xff00_0000)|((nr as u32)<<16)|((ng as u32)<<8)|(nb as u32);
+                }
+            }
+        }
+    }
 }
 
 // Return full 1:1 glyph-cell span with an independently chosen digit pitch.
@@ -1082,24 +1317,32 @@ fn blit_region_hq3(
 }
 
 fn draw_hud(fb:&mut RenderSurface,game:&Game,assets:&Assets){
-    // Root frame 19 placement of symbol 716.
+    let is_2b=game.active_stage()==crate::stage::StageId::Level2B;
+    let dy_logical=if is_2b{L2B_HUD_DY}else{0};
+    // Root frame 19 placement of symbol 716 (shifted symmetrically inside aligned container in Level 2B).
     const ROOT_X:f32=159.0;
-    const ROOT_Y:f32=-11.0;
+    let root_y:f32=-11.0+dy_logical as f32;
     // Deterministic native-bounds anchor produced from symbol 716.
     const ANCHOR_X:f32=0.48106384;
     const ANCHOR_Y:f32=1.1601379;
     let x=(ROOT_X-ANCHOR_X).round() as i32;
-    let y=(ROOT_Y-ANCHOR_Y).round() as i32;
-    blit(
-        fb,&assets.hud_base,x,y,
-        assets.hud_base.w as i32,assets.hud_base.h as i32,false
-    );
+    let y=(root_y-ANCHOR_Y).round() as i32;
+    if is_2b{
+        draw_translucent_hud_panel(fb,L2B_HUD_X,L2B_PANEL_Y,L2B_HUD_W,L2B_PANEL_H,L2B_PANEL_R,1);
+        blit_hud_foreground_only(fb,&assets.hud_base,x,y,1);
+    }else{
+        blit(
+            fb,&assets.hud_base,x,y,
+            assets.hud_base.w as i32,assets.hud_base.h as i32,false
+        );
+    }
 
     // Dynamic DefineEditText fields from the original HUD:
     // 702 = _root.batarangs, 713 = _root.score, 714 = _root.lives.
     draw_number_centered(fb,&assets.hud_digits_small,x+53,y+68,game.batarangs.max(0));
     draw_number_centered(fb,&assets.hud_digits_large,x+228,y+47,game.score.max(0));
     draw_number_centered(fb,&assets.hud_digits_small,x+155,y+69,game.lives.max(0));
+    apply_hud_health_bat_mask_offset(fb,game.health,1,dy_logical);
 }
 
 fn draw_number_centered(fb:&mut RenderSurface,atlas:&Image,cx:i32,cy:i32,value:i32){
@@ -1347,9 +1590,11 @@ fn blit(dst:&mut RenderSurface,src:&Image,x:i32,y:i32,rw:i32,rh:i32,flip:bool){
 mod tests{
     use super::{
         blend,blend_rgba,blit,blit_tile_hq_1to1,digit_count,format_u32_digits,
-        hud_digit_step_width,hud_hq_layout,HQ_SCALE,HQ_W,LOGICAL_W,XMAP_600_TO_1800,
+        hud_digit_step_width,hud_hq_layout,render,render_high_quality,HQ_H,HQ_SCALE,HQ_W,
+        LOGICAL_H,LOGICAL_W,XMAP_600_TO_1800,
     };
-    use crate::assets::Image;
+    use crate::assets::{Assets, Image};
+    use crate::game::{AppScreen, Game};
     use crate::surface::RenderSurface;
 
     #[test]
@@ -1876,5 +2121,180 @@ mod tests{
         game.kabuki_card_fadeout_tick = Some(20);
         render_high_quality(&mut hq_scratch, &mut hq_faded, &game, &assets);
         assert_ne!(hq_out.pixels, hq_faded.pixels);
+    }
+
+    #[test]
+    fn hud_yellow_health_bat_shrinks_as_health_declines_in_1x_and_hq3x() {
+        let mut assets = Assets::load();
+        assets.load_stage(crate::stage::StageId::Level1B);
+        let mut game = Game::new();
+        game.start_stage(crate::stage::StageId::Level1B);
+        game.screen = AppScreen::Playing;
+        game.ticks = 45;
+
+        let count_yellow = |fb: &RenderSurface, scale: usize| -> usize {
+            let mut n = 0;
+            for y in (16 * scale)..=(55 * scale) {
+                for x in (265 * scale)..=(338 * scale) {
+                    let px = fb.pixels[y * fb.w + x];
+                    let r = ((px >> 16) & 0xff) as u8;
+                    let g = ((px >> 8) & 0xff) as u8;
+                    let b = (px & 0xff) as u8;
+                    if r > 150 && g > 110 && b < 95 {
+                        n += 1;
+                    }
+                }
+            }
+            n
+        };
+
+        let mut fb1x = RenderSurface::new(LOGICAL_W, LOGICAL_H);
+        let mut scratch = RenderSurface::new(LOGICAL_W, LOGICAL_H);
+        let mut fbhq = RenderSurface::new(HQ_W, HQ_H);
+
+        game.health = 100;
+        render(&mut fb1x, &game, &assets);
+        render_high_quality(&mut scratch, &mut fbhq, &game, &assets);
+        let y1x_100 = count_yellow(&fb1x, 1);
+        let yhq_100 = count_yellow(&fbhq, HQ_SCALE);
+
+        game.health = 50;
+        render(&mut fb1x, &game, &assets);
+        render_high_quality(&mut scratch, &mut fbhq, &game, &assets);
+        let y1x_50 = count_yellow(&fb1x, 1);
+        let yhq_50 = count_yellow(&fbhq, HQ_SCALE);
+
+        game.health = 0;
+        render(&mut fb1x, &game, &assets);
+        render_high_quality(&mut scratch, &mut fbhq, &game, &assets);
+        let y1x_0 = count_yellow(&fb1x, 1);
+        let yhq_0 = count_yellow(&fbhq, HQ_SCALE);
+
+        assert!(y1x_100 > y1x_50 && y1x_50 > y1x_0 && y1x_0 == 0, "1x bat yellow count: 100={y1x_100}, 50={y1x_50}, 0={y1x_0}");
+        assert!(yhq_100 > yhq_50 && yhq_50 > yhq_0 && yhq_0 == 0, "HQ bat yellow count: 100={yhq_100}, 50={yhq_50}, 0={yhq_0}");
+    }
+
+    #[test]
+    fn hud_yellow_bat_drains_concentric_circular_rings_and_preserves_health_label() {
+        let mut assets = Assets::load();
+        assets.load_stage(crate::stage::StageId::Level1B);
+        let mut game = Game::new();
+        game.start_stage(crate::stage::StageId::Level1B);
+        game.screen = AppScreen::Playing;
+        game.ticks = 45;
+
+        let mut fbhq_100 = RenderSurface::new(HQ_W, HQ_H);
+        let mut fbhq_60 = RenderSurface::new(HQ_W, HQ_H);
+        let mut scratch = RenderSurface::new(LOGICAL_W, LOGICAL_H);
+
+        game.health = 100;
+        render_high_quality(&mut scratch, &mut fbhq_100, &game, &assets);
+        game.health = 60;
+        render_high_quality(&mut scratch, &mut fbhq_60, &game, &assets);
+
+        // "HEALTH" label sits at y < 45 (15 * HQ_SCALE) and must stay bit-identical when health drops.
+        for y in 0..(15 * HQ_SCALE) {
+            for x in (265 * HQ_SCALE)..=(338 * HQ_SCALE) {
+                assert_eq!(fbhq_100.pixels[y * HQ_W + x], fbhq_60.pixels[y * HQ_W + x]);
+            }
+        }
+
+        // At 60 HP (cutoff = 64.5 HQ px around bullseye (901, 104.5)), outer wing ring (dx=+84)
+        // is darkened even near the center horizontal line, while inner concentric core (dx=+36) stays bright.
+        let inner_px = fbhq_60.pixels[104 * HQ_W + 937];
+        let outer_px = fbhq_60.pixels[104 * HQ_W + 985];
+        let inner_r = (inner_px >> 16) & 0xff;
+        let outer_r = (outer_px >> 16) & 0xff;
+        assert!(inner_r > 200 && outer_r < 80, "expected bright inner ring ({inner_r}) and darkened outer ring ({outer_r})");
+    }
+
+    #[test]
+    fn penguin_boss_health_bar_tracks_above_head_and_hq_level2_title_renders_cleanly() {
+        let mut assets = Assets::load();
+        assets.load_stage(crate::stage::StageId::Level1C);
+        let mut game = Game::new();
+        game.screen = AppScreen::Playing;
+        game.start_stage(crate::stage::StageId::Level1C);
+        game.ticks = 45;
+        // Center camera near Penguin so his sprite and overhead health bar are onscreen.
+        let boss_x = game.penguin_boss.as_ref().unwrap().x;
+        let boss_y = game.penguin_boss.as_ref().unwrap().y;
+        game.camera_x = 300.0 - boss_x;
+        game.camera_y = 316.2 - boss_y;
+
+        let mut fb1x = RenderSurface::new(LOGICAL_W, LOGICAL_H);
+        let mut fbhq = RenderSurface::new(HQ_W, HQ_H);
+        let mut scratch = RenderSurface::new(LOGICAL_W, LOGICAL_H);
+
+        let count_bar_crimson_in = |fb: &RenderSurface, scale: usize, lx0: usize, lx1: usize, ly0: usize, ly1: usize| -> usize {
+            let mut n = 0;
+            for y in (ly0 * scale)..=(ly1 * scale).min(fb.h.saturating_sub(1)) {
+                for x in (lx0 * scale)..=(lx1 * scale).min(fb.w.saturating_sub(1)) {
+                    let rgb = fb.pixels[y * fb.w + x] & 0x00ff_ffff;
+                    if rgb == 0x00d9_2622 || rgb == 0x00f0_6434 || rgb == 0x009c_1414 {
+                        n += 1;
+                    }
+                }
+            }
+            n
+        };
+
+        render(&mut fb1x, &game, &assets);
+        render_high_quality(&mut scratch, &mut fbhq, &game, &assets);
+        // Overhead bar sits right above Penguin at screen x ~ 300, y ~ 236..254; old bottom 366..386 must be clear.
+        let bar_1x_200 = count_bar_crimson_in(&fb1x, 1, 220, 380, 225, 265);
+        let bar_hq_200 = count_bar_crimson_in(&fbhq, HQ_SCALE, 220, 380, 225, 265);
+        assert_eq!(count_bar_crimson_in(&fbhq, HQ_SCALE, 160, 440, 366, 386), 0, "Old fixed bottom bar must be removed");
+
+        game.penguin_boss.as_mut().unwrap().health = 80;
+        render(&mut fb1x, &game, &assets);
+        render_high_quality(&mut scratch, &mut fbhq, &game, &assets);
+        let bar_1x_80 = count_bar_crimson_in(&fb1x, 1, 220, 380, 225, 265);
+        let bar_hq_80 = count_bar_crimson_in(&fbhq, HQ_SCALE, 220, 380, 225, 265);
+
+        assert!(bar_1x_200 > bar_1x_80 && bar_1x_80 > 0, "1x overhead bar: 200={bar_1x_200}, 80={bar_1x_80}");
+        assert!(bar_hq_200 > bar_hq_80 && bar_hq_80 > 0, "HQ overhead bar: 200={bar_hq_200}, 80={bar_hq_80}");
+
+        // Moving Penguin horizontally by -140 px moves the overhead health bar with him.
+        game.penguin_boss.as_mut().unwrap().x -= 140.0;
+        render(&mut fb1x, &game, &assets);
+        render_high_quality(&mut scratch, &mut fbhq, &game, &assets);
+        assert!(count_bar_crimson_in(&fbhq, HQ_SCALE, 100, 230, 225, 265) > 0, "Bar should track Penguin leftward");
+        assert_eq!(count_bar_crimson_in(&fbhq, HQ_SCALE, 270, 380, 225, 265), 0, "Old position should be empty after Penguin moves");
+        assert!((assets.level2a_title_frames_hq.logical_pixel_scale - 3.0).abs() < 0.001);
+        assert_eq!(assets.level2a_title_frames_hq.len(), 100);
+    }
+
+    #[test]
+    fn level2b_clock_and_hud_panels_are_aligned_with_clean_top_corners_and_gap() {
+        let mut assets = Assets::load();
+        assets.load_stage(crate::stage::StageId::Level2B);
+        let mut game = Game::new();
+        game.screen = AppScreen::Playing;
+        game.start_stage(crate::stage::StageId::Level2B);
+        game.ticks = 45;
+        game.halo_frame = 9; // Clear phase so top-bar background is pure black void.
+
+        let mut fbhq = RenderSurface::new(HQ_W, HQ_H);
+        let mut scratch = RenderSurface::new(LOGICAL_W, LOGICAL_H);
+        render_high_quality(&mut scratch, &mut fbhq, &game, &assets);
+
+        // Top margin y=0..2 (logical) and bottom gap y=84..90 (logical) must be pure black (corners unclipped inside viewport).
+        for y in 0..8 {
+            for x in 0..(460 * HQ_SCALE) {
+                assert_eq!(fbhq.pixels[y * HQ_W + x] & 0x00ff_ffff, 0, "Top margin clipped at ({x},{y})");
+            }
+        }
+        // Clean 8-logical-px gap between clock (8..150) and HUD (158..438) at x=151..157 must stay pure black!
+        for y in (4 * HQ_SCALE)..(82 * HQ_SCALE) {
+            for x in (152 * HQ_SCALE)..=(156 * HQ_SCALE) {
+                assert_eq!(fbhq.pixels[y * HQ_W + x] & 0x00ff_ffff, 0, "Clock/HUD panel gap contaminated at ({x},{y})");
+            }
+        }
+        // Both aligned panels must share exact matching interior fill at logical y=4..82 centerlines (e.g. y=80 HQ).
+        let clock_panel_px = fbhq.pixels[(10 * HQ_SCALE) * HQ_W + (12 * HQ_SCALE)];
+        let hud_panel_px = fbhq.pixels[(10 * HQ_SCALE) * HQ_W + (162 * HQ_SCALE)];
+        assert_eq!(clock_panel_px, hud_panel_px, "Clock and HUD translucent panels should share identical fill");
+        assert_ne!(clock_panel_px & 0x00ff_ffff, 0);
     }
 }
