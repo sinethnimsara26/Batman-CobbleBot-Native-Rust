@@ -119,10 +119,19 @@ impl LabsEagle {
 
         let range = (self.x - player.x_game).abs();
         let dir_i = self.dir as i32;
-        if range > 180.0 && range < 240.0 && self.state != BirdState::Die {
-            if self.turn_back {
+        if range <= 180.0 && self.state != BirdState::Die {
+            self.turn_back = true;
+        }
+        if range > 180.0
+            && range < 240.0
+            && matches!(self.state, BirdState::Fly | BirdState::Glide)
+        {
+            let flying_away = (self.x > player.x_game && self.dir > 0)
+                || (self.x < player.x_game && self.dir < 0);
+            if self.turn_back || flying_away {
                 self.turn_back = false;
                 self.set_state(BirdState::Fly);
+                self.fly_count = 0;
                 if self.x > player.x_game {
                     self.dir = -1;
                 } else if self.x < player.x_game {
@@ -141,8 +150,9 @@ impl LabsEagle {
             } else if self.x < player.x_game {
                 self.dir = 1;
             }
-        } else if range > 320.0 && self.state != BirdState::Die {
+        } else if range > 320.0 && self.state == BirdState::Fly && self.fly_count > 10 {
             self.set_state(BirdState::Glide);
+            self.fly_count = 0;
             self.attack_count = 0;
         }
 
@@ -168,6 +178,9 @@ impl LabsEagle {
                 let r3 = (rng.next_f32() * 3.0).floor();
                 self.y -= (self.y - player.y_game + 65.0) / 16.0 + r3;
                 self.fly_count += 1;
+                if self.fly_count > 10 {
+                    self.attack_count = 0;
+                }
                 if self.fly_count > 30 {
                     self.set_state(BirdState::Fly);
                     self.fly_count = 0;
@@ -184,13 +197,20 @@ impl LabsEagle {
                     self.set_state(BirdState::Glide);
                     self.fly_count = 0;
                     self.attack_count = 0;
+                    self.die_count = 0;
+                    self.dy = 0.0;
+                    self.turn_back = false;
                     self.bird_sfx = false;
                 }
             }
             BirdState::Attack | BirdState::Hurt => {}
         }
 
-        if (self.x < player.x_game + 700.0 || self.x > player.x_game - 700.0) && !self.bird_sfx {
+        if self.x < player.x_game + 700.0
+            && self.x > player.x_game - 700.0
+            && self.state != BirdState::Die
+            && !self.bird_sfx
+        {
             self.bird_sfx = true;
             events.push(BirdEvent::EagleSfx);
         }
@@ -208,7 +228,7 @@ impl LabsEagle {
                 && self.state != BirdState::Die
                 && self.attack_count == 0
             {
-                if self.state == BirdState::Fly {
+                if matches!(self.state, BirdState::Fly | BirdState::Glide) {
                     self.set_state(BirdState::Attack);
                     self.fly_count = 0;
                     events.push(BirdEvent::KickSfx);
@@ -297,7 +317,11 @@ mod tests {
         };
         active.tick(&far_player, &[], &mut rng, &mut events);
         assert_eq!(active.dir, -1);
-        assert!(events.contains(&BirdEvent::EagleSfx));
+        assert!(!events.contains(&BirdEvent::EagleSfx), "EagleSfx must not fire beyond 700px");
+
+        active.x = 1500.0;
+        active.tick(&far_player, &[], &mut rng, &mut events);
+        assert!(events.contains(&BirdEvent::EagleSfx), "EagleSfx must fire within 700px");
 
         // Batarang hits 3 times (30 HP -> die -> +100 score -> respawn after 200 ticks)
         events.clear();
@@ -314,5 +338,77 @@ mod tests {
         assert_eq!(active.state, BirdState::Glide);
         assert_eq!(active.health, 30);
         assert!((active.x - (far_player.x_game + 1000.0)).abs() < 150.0);
+    }
+
+    #[test]
+    fn eagle_turn_back_glide_attack_and_sfx_range_work_cleanly() {
+        let mut rng = GoonRng::new(77);
+        let mut events = Vec::new();
+        let player = PlayerCombatContext {
+            x_game: 1000.0,
+            y_game: 200.0,
+            dir: 1,
+            is_attacking: false,
+            is_invincible: false,
+            state_name: "stand",
+        };
+
+        // 1. L193 &&: no EagleSfx outside +-700px; fires once inside +-700px.
+        let mut eagle = LabsEagle::from_labs2a(labs2a::EAGLES[0], true);
+        eagle.x = 1850.0;
+        eagle.y = 200.0;
+        eagle.tick(&player, &[], &mut rng, &mut events);
+        assert!(!events.contains(&BirdEvent::EagleSfx));
+        eagle.x = 1650.0;
+        eagle.tick(&player, &[], &mut rng, &mut events);
+        assert_eq!(
+            events.iter().filter(|e| matches!(e, BirdEvent::EagleSfx)).count(),
+            1
+        );
+        eagle.tick(&player, &[], &mut rng, &mut events);
+        assert_eq!(
+            events.iter().filter(|e| matches!(e, BirdEvent::EagleSfx)).count(),
+            1
+        );
+
+        // 2. Glide -> Attack on player contact and Glide -> Fly after fly_count > 30 at 320..500 range.
+        events.clear();
+        let mut glider = LabsEagle::from_labs2a(labs2a::EAGLES[0], true);
+        glider.set_state(BirdState::Glide);
+        glider.x = player.x_game + 20.0;
+        glider.y = player.y_game;
+        glider.dir = -1;
+        glider.attack_count = 0;
+        glider.tick(&player, &[], &mut rng, &mut events);
+        assert_eq!(glider.state, BirdState::Attack);
+        assert!(events.contains(&BirdEvent::PlayerHurt { damage: 10 }));
+        assert!(events.contains(&BirdEvent::KickSfx));
+
+        let mut mid_glider = LabsEagle::from_labs2a(labs2a::EAGLES[0], true);
+        mid_glider.set_state(BirdState::Glide);
+        mid_glider.x = player.x_game + 360.0;
+        mid_glider.y = player.y_game;
+        mid_glider.dir = -1;
+        mid_glider.fly_count = 30;
+        mid_glider.tick(&player, &[], &mut rng, &mut events);
+        assert_eq!(mid_glider.state, BirdState::Fly);
+        assert_eq!(mid_glider.fly_count, 0);
+
+        // 3. turn_back arms inside <= 180 and reverses direction back toward player in (180, 240).
+        let mut swooper = LabsEagle::from_labs2a(labs2a::EAGLES[0], true);
+        swooper.x = player.x_game + 120.0;
+        swooper.y = player.y_game;
+        swooper.dir = -1;
+        swooper.tick(&player, &[], &mut rng, &mut events);
+        assert!(swooper.turn_back);
+
+        // Eagle has flown past Batman to the left into the 180..240 turnaround band.
+        swooper.x = player.x_game - 195.0;
+        swooper.dir = -1;
+        swooper.set_state(BirdState::Glide);
+        swooper.tick(&player, &[], &mut rng, &mut events);
+        assert!(!swooper.turn_back);
+        assert_eq!(swooper.dir, 1);
+        assert_eq!(swooper.state, BirdState::Fly);
     }
 }

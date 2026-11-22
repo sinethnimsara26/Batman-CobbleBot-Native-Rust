@@ -73,6 +73,7 @@ def bake_story_card(
     out_dir: Path,
     spec: StoryCardSpec,
     script_auditor: Callable[[bytes, dict, dict], dict],
+    fix_gradient_scale: bool = True,
 ) -> dict:
     """Bake a SWF root-frame story card composition with full script and button verification."""
     raw = swf_path.read_bytes()
@@ -124,7 +125,7 @@ def bake_story_card(
     }
 
     unsupported: set[str] = set()
-    shapes = load_shapes(swf_path, unsupported)
+    shapes = load_shapes(swf_path, unsupported, fix_gradient_scale=fix_gradient_scale)
     load_text_defs(swf_path)
 
     button_placement = next(p for p in source_scene if p.get("character_id") == spec.skip_button_id)
@@ -232,6 +233,7 @@ def bake_story_card(
         "recovered_button_up_state": button_report,
         "skip_button_stage_bounds": click_rect,
         "deferred_script_controlled_transition_ids": sorted(script_controlled_transitions),
+        "fix_gradient_scale": fix_gradient_scale,
         **script_report,
         "frames": manifest_frames,
     }

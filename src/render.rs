@@ -759,13 +759,65 @@ fn draw_stage_enemies_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
 }
 
 const L2B_PANEL_Y:i32=4;
-const L2B_PANEL_H:i32=78;
+const L2B_PANEL_H:i32=82;
 const L2B_PANEL_R:i32=7;
-const L2B_CLOCK_X:i32=8;
 const L2B_CLOCK_W:i32=142;
+const L2B_CLOCK_GAP:i32=8;
 const L2B_HUD_X:i32=158;
 const L2B_HUD_W:i32=280;
 const L2B_HUD_DY:i32=8;
+
+#[derive(Copy,Clone,Debug,PartialEq,Eq)]
+struct TopBarLayout{
+    hud_x:i32,
+    hud_y:i32,
+    clock_pos:Option<(i32,i32)>,
+}
+
+fn level2b_clock_visible(game:&Game,assets:&Assets,pixel_scale:i32)->bool{
+    if game.active_stage()!=crate::stage::StageId::Level2B{
+        return false;
+    }
+    let pack=if pixel_scale==HQ_SCALE as i32{&assets.clock_frames_hq}else{&assets.clock_frames};
+    pack.len()>=12
+}
+
+fn compute_top_bar_layout(cw:i32,use_panel:bool,clock_visible:bool)->TopBarLayout{
+    if !use_panel{
+        return TopBarLayout{
+            hud_x:L2B_HUD_X,
+            hud_y:L2B_PANEL_Y,
+            clock_pos:None,
+        };
+    }
+    if clock_visible{
+        let pair_w=L2B_CLOCK_W+L2B_CLOCK_GAP+L2B_HUD_W;
+        if cw>=pair_w+16{
+            let clock_x=(cw-pair_w)/2;
+            let hud_x=clock_x+L2B_CLOCK_W+L2B_CLOCK_GAP;
+            TopBarLayout{
+                hud_x,
+                hud_y:L2B_PANEL_Y,
+                clock_pos:Some((clock_x,L2B_PANEL_Y)),
+            }
+        }else{
+            let hud_x=(cw-L2B_HUD_W)/2;
+            let clock_x=(cw-L2B_CLOCK_W)/2;
+            let clock_y=L2B_PANEL_Y+L2B_PANEL_H+L2B_CLOCK_GAP;
+            TopBarLayout{
+                hud_x,
+                hud_y:L2B_PANEL_Y,
+                clock_pos:Some((clock_x,clock_y)),
+            }
+        }
+    }else{
+        TopBarLayout{
+            hud_x:(cw-L2B_HUD_W)/2,
+            hud_y:L2B_PANEL_Y,
+            clock_pos:None,
+        }
+    }
+}
 
 fn draw_translucent_hud_panel(fb:&mut RenderSurface,lx:i32,ly:i32,lw:i32,lh:i32,radius:i32,scale:i32){
     let s=scale.max(1);
@@ -808,11 +860,11 @@ fn draw_translucent_hud_panel(fb:&mut RenderSurface,lx:i32,ly:i32,lw:i32,lh:i32,
 }
 
 #[inline]
-fn is_hud_shell_backdrop_px(src:u32,ox:i32,oy:i32,w:i32,h:i32,scale:i32)->bool{
+fn is_hud_shell_backdrop_px(src:u32,ox:i32,oy:i32,w:i32,scale:i32)->bool{
     let a=(src>>24)&255;
     if a==0{return true;}
     let s=scale.max(1);
-    if ox<8*s||ox>=w-8*s||oy<12*s||oy>=h-2*s{
+    if ox<8*s||ox>=w-8*s||oy<12*s{
         return true;
     }
     let r=((src>>16)&255) as i32;
@@ -848,7 +900,7 @@ fn blit_hud_foreground_only(dst:&mut RenderSurface,src:&Image,x:i32,y:i32,scale:
         let dst_row=dy*dst.w;
         for ox in ox_start..ox_end{
             let sp=src.pixels[src_row+ox as usize];
-            if is_hud_shell_backdrop_px(sp,ox,oy,rw,rh,scale){continue;}
+            if is_hud_shell_backdrop_px(sp,ox,oy,rw,scale){continue;}
             blend(&mut dst.pixels[dst_row+(x+ox) as usize],sp);
         }
     }
@@ -858,67 +910,49 @@ fn draw_level2b_clock_scaled(fb:&mut RenderSurface,game:&Game,assets:&Assets,pix
     if game.active_stage()!=crate::stage::StageId::Level2B{return;}
     let pack=if pixel_scale==HQ_SCALE as i32{&assets.clock_frames_hq}else{&assets.clock_frames};
     if pack.len()<12{return;}
-    draw_translucent_hud_panel(fb,L2B_CLOCK_X,L2B_PANEL_Y,L2B_CLOCK_W,L2B_PANEL_H,L2B_PANEL_R,pixel_scale);
-    const CLOCK_ORIGIN_X:f32=7.0;
-    const CLOCK_ORIGIN_Y:f32=6.0;
-    const CLOCK_DIGITS_DX:i32=9;
+    let cw=(fb.w as i32)/pixel_scale.max(1);
+    let layout=compute_top_bar_layout(cw,true,true);
+    let Some((clock_x,clock_y))=layout.clock_pos else{return;};
+    draw_translucent_hud_panel(fb,clock_x,clock_y,L2B_CLOCK_W,L2B_PANEL_H,L2B_PANEL_R,pixel_scale);
+    let clock_origin_x:f32=(clock_x-1) as f32;
+    let clock_origin_y:f32=(clock_y+4) as f32;
+    const CLOCK_DIGITS_DX:i32=12;
     let scale=pixel_scale as f32;
     let shell=pack.frame(0);
     blit(
         fb,&shell.image,
-        (CLOCK_ORIGIN_X*scale-shell.anchor_x).round() as i32,
-        (CLOCK_ORIGIN_Y*scale-shell.anchor_y).round() as i32,
+        (clock_origin_x*scale-shell.anchor_x).round() as i32,
+        (clock_origin_y*scale-shell.anchor_y).round() as i32,
         shell.image.w as i32,shell.image.h as i32,false,
     );
-    // Stack-only formatting matching AVM1 clockTimer (`SS :MM` or `"00 :00"`).
-    let secs=game.clock_secs.min(99);
-    let ms=game.clock_millisecs.min(99);
-    let mut slots:[Option<usize>;6]=[
-        Some((secs/10) as usize + 1),
-        Some((secs%10) as usize + 1),
-        None,
-        Some(11),
-        None,
-        None,
+    // Centered 5-slot `MM:SS` countdown display (`00:00`..`99:59`).
+    let total_secs=(game.clock_secs as u16).min(5999);
+    let mins=total_secs/60;
+    let rem=total_secs%60;
+    let slots:[usize;5]=[
+        (mins/10) as usize + 1,
+        (mins%10) as usize + 1,
+        11,
+        (rem/10) as usize + 1,
+        (rem%10) as usize + 1,
     ];
-    if game.clock_exploded || ms>=10{
-        slots[4]=Some((ms/10) as usize + 1);
-        slots[5]=Some((ms%10) as usize + 1);
-    }else{
-        slots[4]=Some(ms as usize + 1);
-    }
     let mut slot_x=CLOCK_DIGITS_DX*pixel_scale;
-    for slot in slots{
-        match slot{
-            None=>{slot_x+=5*pixel_scale;}
-            Some(11)=>{
-                let f=pack.frame(11);
-                blit(
-                    fb,&f.image,
-                    (CLOCK_ORIGIN_X*scale-f.anchor_x).round() as i32 + slot_x,
-                    (CLOCK_ORIGIN_Y*scale-f.anchor_y).round() as i32,
-                    f.image.w as i32,f.image.h as i32,false,
-                );
-                slot_x+=5*pixel_scale;
-            }
-            Some(frame_idx)=>{
-                let f=pack.frame(frame_idx);
-                blit(
-                    fb,&f.image,
-                    (CLOCK_ORIGIN_X*scale-f.anchor_x).round() as i32 + slot_x,
-                    (CLOCK_ORIGIN_Y*scale-f.anchor_y).round() as i32,
-                    f.image.w as i32,f.image.h as i32,false,
-                );
-                slot_x+=17*pixel_scale;
-            }
-        }
+    for frame_idx in slots{
+        let f=pack.frame(frame_idx);
+        blit(
+            fb,&f.image,
+            (clock_origin_x*scale-f.anchor_x).round() as i32 + slot_x,
+            (clock_origin_y*scale-f.anchor_y).round() as i32,
+            f.image.w as i32,f.image.h as i32,false,
+        );
+        slot_x+=if frame_idx==11{5}else{17}*pixel_scale;
     }
 }
 
 fn draw_foreground_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     draw_hud(fb,game,assets);
     draw_level2b_clock_scaled(fb,game,assets,1);
-    draw_penguin_boss_health_bar(fb,game,assets,1);
+    draw_penguin_boss_health_bar(fb,game,1);
 
     if !assets.tutorial_overlay_frames.is_empty(){
         let i=game.overlay_frame.min(assets.tutorial_overlay_frames.len()-1);
@@ -949,7 +983,7 @@ fn draw_foreground_legacy(fb:&mut RenderSurface,game:&Game,assets:&Assets){
 fn draw_foreground_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     draw_hud_hq(fb,game,assets);
     draw_level2b_clock_scaled(fb,game,assets,HQ_SCALE as i32);
-    draw_penguin_boss_health_bar(fb,game,assets,HQ_SCALE);
+    draw_penguin_boss_health_bar(fb,game,HQ_SCALE);
 
     // Round 7 foreground timelines are already true 3x assets. Their SWF
     // display lists, embedded DefineText glyphs, masks and CXFORMWITHALPHA were
@@ -983,20 +1017,29 @@ fn draw_foreground_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
 }
 
 fn draw_hud_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
-    let is_2b=game.active_stage()==crate::stage::StageId::Level2B;
-    let dy_logical=if is_2b{L2B_HUD_DY}else{0};
-    const ROOT_X:f32=159.0;
+    let clock_visible=level2b_clock_visible(game,assets,HQ_SCALE as i32);
+    draw_hud_hq_with_clock(fb,game,assets,clock_visible);
+}
+
+fn draw_hud_hq_with_clock(fb:&mut RenderSurface,game:&Game,assets:&Assets,clock_visible:bool){
+    let use_panel=game.active_stage()!=crate::stage::StageId::Level1A;
+    let s=HQ_SCALE as i32;
+    let cw=(fb.w as i32)/s;
+    let layout=compute_top_bar_layout(cw,use_panel,clock_visible);
+    let dx_logical=layout.hud_x-L2B_HUD_X;
+    let dy_logical=if use_panel{L2B_HUD_DY}else{0};
+    let root_x:f32=(layout.hud_x+1) as f32;
     let root_y:f32=-11.0+dy_logical as f32;
     debug_assert!((assets.hud_shell_hq.logical_pixel_scale-HQ_SCALE as f32).abs()<0.001);
     debug_assert_eq!(assets.hud_shell_hq.len(),1);
     let shell=&assets.hud_shell_hq[0];
     let scale=assets.hud_shell_hq.logical_pixel_scale;
-    let shell_x=(ROOT_X*scale-shell.anchor_x).round() as i32;
+    let shell_x=(root_x*scale-shell.anchor_x).round() as i32;
     let shell_y=(root_y*scale-shell.anchor_y).round() as i32;
 
-    if is_2b{
-        draw_translucent_hud_panel(fb,L2B_HUD_X,L2B_PANEL_Y,L2B_HUD_W,L2B_PANEL_H,L2B_PANEL_R,HQ_SCALE as i32);
-        blit_hud_foreground_only(fb,&shell.image,shell_x,shell_y,HQ_SCALE as i32);
+    if use_panel{
+        draw_translucent_hud_panel(fb,layout.hud_x,layout.hud_y,L2B_HUD_W,L2B_PANEL_H,L2B_PANEL_R,s);
+        blit_hud_foreground_only(fb,&shell.image,shell_x,shell_y,s);
     }else{
         // Original sprite 716: icon art and rounded translucent backing remain.
         // The unwanted separate full-width counter band must never return.
@@ -1006,10 +1049,9 @@ fn draw_hud_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
 
     // Themed labels and dynamic counters share one stage-space layout; 
     // source-authentic 1x Flash HUD and game state remain unchanged.
-    let s=HQ_SCALE as i32;
     let (bx,by)=hud_hq_layout::BATARANG_CENTER;
     draw_number_centered_hq_1to1(
-        fb,&assets.hud_digits_batarang_hq,bx*s,(by+dy_logical)*s,game.batarangs.max(0),
+        fb,&assets.hud_digits_batarang_hq,(bx+dx_logical)*s,(by+dy_logical)*s,game.batarangs.max(0),
         hud_hq_layout::BATARANG_MAX_WIDTH*s,
         hud_hq_layout::BATARANG_DIGIT_ADVANCE*s
     );
@@ -1035,19 +1077,19 @@ fn draw_hud_hq(fb:&mut RenderSurface,game:&Game,assets:&Assets){
         hud_hq_layout::SCORE_LARGE_DIGIT_ADVANCE*s
     };
     draw_number_centered_hq_1to1(
-        fb,score_atlas,sx*s,(sy+dy_logical)*s,score,score_budget,score_advance
+        fb,score_atlas,(sx+dx_logical)*s,(sy+dy_logical)*s,score,score_budget,score_advance
     );
 
     // LIVES X is baked directly before this fixed value-left edge.
     // Widening numbers extend rightward, never back over the caption.
     draw_number_left_hq_1to1(
         fb,&assets.hud_digits_small_hq,
-        hud_hq_layout::LIVES_VALUE_LEFT*s,
+        (hud_hq_layout::LIVES_VALUE_LEFT+dx_logical)*s,
         (hud_hq_layout::LIVES_CENTER_Y+dy_logical)*s,
         game.lives.max(0),hud_hq_layout::LIVES_MAX_WIDTH*s,
         hud_hq_layout::LIVES_DIGIT_ADVANCE*s
     );
-    apply_hud_health_bat_mask_offset(fb,game.health,HQ_SCALE,dy_logical);
+    apply_hud_health_bat_mask_offset(fb,game.health,HQ_SCALE,dx_logical,dy_logical);
 }
 
 fn blend_rect_argb(fb:&mut RenderSurface,x:i32,y:i32,w:i32,h:i32,argb:u32){
@@ -1064,89 +1106,136 @@ fn blend_rect_argb(fb:&mut RenderSurface,x:i32,y:i32,w:i32,h:i32,argb:u32){
     }
 }
 
-/// Draws the Penguin boss health meter directly above Penguin's head during Level 1C, tracking him smoothly.
-fn draw_penguin_boss_health_bar(fb:&mut RenderSurface,game:&Game,assets:&Assets,scale:usize){
+/// Draws a thick, glowing, label-free Penguin boss health meter directly above his head during Level 1C.
+fn draw_penguin_boss_health_bar(fb:&mut RenderSurface,game:&Game,scale:usize){
     if game.screen!=AppScreen::Playing || game.active_stage()!=crate::stage::StageId::Level1C{
         return;
     }
     let Some(boss)=&game.penguin_boss else{return;};
     if !boss.active{return;}
-    let s=scale as i32;
+    let s=scale.max(1) as i32;
     let boss_sx=(boss.x+game.camera_x).round() as i32*s;
     let boss_sy=(boss.y+game.camera_y).round() as i32*s;
-    let label=if scale==HQ_SCALE{&assets.penguin_boss_label_hq}else{&assets.penguin_boss_label};
 
-    let panel_w=label.w as i32+86*s;
-    let panel_h=18*s;
-    if boss_sx+panel_w/2<0 || boss_sx-panel_w/2>fb.w as i32{
+    let panel_w=116*s;
+    let panel_h=20*s;
+    if boss_sx+panel_w/2+5*s<0 || boss_sx-panel_w/2-5*s>fb.w as i32{
         return;
     }
     let panel_x=boss_sx-panel_w/2;
-    let panel_y=(boss_sy-80*s).clamp(4*s,fb.h as i32-panel_h-4*s);
+    let max_panel_y=(fb.h as i32-panel_h-4*s).max(4*s);
+    let panel_y=(boss_sy-82*s).clamp(4*s,max_panel_y);
 
-    blend_rect_argb(fb,panel_x,panel_y,panel_w,panel_h,0xdc_12161e);
-    // Outer black border + inner slate-steel highlight matching HUD casing.
-    blend_rect_argb(fb,panel_x,panel_y,panel_w,s,0xff_080a0e);
-    blend_rect_argb(fb,panel_x,panel_y+panel_h-s,panel_w,s,0xff_080a0e);
-    blend_rect_argb(fb,panel_x,panel_y,s,panel_h,0xff_080a0e);
-    blend_rect_argb(fb,panel_x+panel_w-s,panel_y,s,panel_h,0xff_080a0e);
-    blend_rect_argb(fb,panel_x+s,panel_y+s,panel_w-2*s,s,0xff_5c687a);
-    blend_rect_argb(fb,panel_x+s,panel_y+s,s,panel_h-2*s,0xff_5c687a);
-
-    let label_x=panel_x+5*s;
-    let label_y=panel_y+((panel_h-label.h as i32)/2);
-    blit(fb,label,label_x,label_y,label.w as i32,label.h as i32,false);
-
-    let bar_x=label_x+label.w as i32+5*s;
-    let bar_y=panel_y+4*s;
-    let bar_w=(panel_x+panel_w-5*s)-bar_x;
-    let bar_h=10*s;
-    if bar_w<=2*s || bar_h<=2*s{return;}
-
-    blend_rect_argb(fb,bar_x,bar_y,bar_w,bar_h,0xff_0a0b0e);
+    let bar_x=panel_x+3*s;
+    let bar_y=panel_y+3*s;
+    let bar_w=panel_w-6*s;
+    let bar_h=14*s;
     let inner_x=bar_x+s;
     let inner_y=bar_y+s;
     let inner_w=bar_w-2*s;
-    let inner_h=bar_h-2*s;
-    blend_rect_argb(fb,inner_x,inner_y,inner_w,inner_h,0xff_1c0e12);
+    let inner_h=12*s;
 
     let max_hp=boss.max_health.max(1);
     let hp=boss.health.clamp(0,max_hp);
-    if hp>0{
-        let fill_w=(((inner_w as f32)*(hp as f32)/(max_hp as f32)).round() as i32).clamp(s,inner_w);
-        let top_h=(inner_h/3).max(1);
-        let mid_h=(inner_h/3).max(1);
-        let bot_h=(inner_h-top_h-mid_h).max(0);
-        blend_rect_argb(fb,inner_x,inner_y,fill_w,top_h,0xff_f06434);
-        blend_rect_argb(fb,inner_x,inner_y+top_h,fill_w,mid_h,0xff_d92622);
-        if bot_h>0{
-            blend_rect_argb(fb,inner_x,inner_y+top_h+mid_h,fill_w,bot_h,0xff_9c1414);
+    let fill_w=if hp>0{
+        (((inner_w as f32)*(hp as f32)/(max_hp as f32)).round() as i32).clamp(s,inner_w)
+    }else{
+        0
+    };
+
+    // Multi-pass radiant outer halo around the active fill span before drawing the steel frame.
+    if fill_w>0{
+        let glow_w=((inner_x+fill_w+4*s)-panel_x).min(panel_w);
+        blend_rect_argb(fb,panel_x-5*s,panel_y-5*s,glow_w+10*s,panel_h+10*s,0x1e_ff3314);
+        blend_rect_argb(fb,panel_x-3*s,panel_y-3*s,glow_w+6*s,panel_h+6*s,0x32_ff481e);
+        blend_rect_argb(fb,panel_x-2*s,panel_y-2*s,glow_w+4*s,panel_h+4*s,0x4a_ff6628);
+        blend_rect_argb(fb,panel_x-s,panel_y-s,glow_w+2*s,panel_h+2*s,0x64_ff8838);
+    }
+
+    // Beveled dark-steel housing matching HUD casing.
+    blend_rect_argb(fb,panel_x,panel_y,panel_w,panel_h,0xe8_10141c);
+    blend_rect_argb(fb,panel_x,panel_y,panel_w,s,0xff_07090d);
+    blend_rect_argb(fb,panel_x,panel_y+panel_h-s,panel_w,s,0xff_07090d);
+    blend_rect_argb(fb,panel_x,panel_y,s,panel_h,0xff_07090d);
+    blend_rect_argb(fb,panel_x+panel_w-s,panel_y,s,panel_h,0xff_07090d);
+    blend_rect_argb(fb,panel_x+s,panel_y+s,panel_w-2*s,s,0xff_708299);
+    blend_rect_argb(fb,panel_x+s,panel_y+s,s,panel_h-2*s,0xff_708299);
+    blend_rect_argb(fb,panel_x+s,panel_y+panel_h-2*s,panel_w-2*s,s,0xff_28303d);
+    blend_rect_argb(fb,panel_x+panel_w-2*s,panel_y+2*s,s,panel_h-4*s,0xff_28303d);
+
+    // Inner ember halo around the active bar frame + recessed dark track.
+    if fill_w>0{
+        blend_rect_argb(fb,bar_x-s,bar_y-s,(fill_w+4*s).min(bar_w+2*s),bar_h+2*s,0x44_ff5a22);
+    }
+    blend_rect_argb(fb,bar_x,bar_y,bar_w,bar_h,0xff_0a0b0e);
+    blend_rect_argb(fb,inner_x,inner_y,inner_w,inner_h,0xff_1c0e12);
+
+    if fill_w>0{
+        // Luminous 12-row vertical core gradient preserving fiery stops + hot specular top.
+        const GRADIENT_STOPS:[u32;12]=[
+            0xff_ffe699,
+            0xff_ffb347,
+            0xff_f06434,
+            0xff_ff542b,
+            0xff_ec3b24,
+            0xff_d92622,
+            0xff_d92622,
+            0xff_c41f1d,
+            0xff_b01918,
+            0xff_9c1414,
+            0xff_7e0e10,
+            0xff_5c0a0d,
+        ];
+        for (i,&color) in GRADIENT_STOPS.iter().enumerate(){
+            blend_rect_argb(fb,inner_x,inner_y+(i as i32)*s,fill_w,s,color);
         }
+        // Subtle 25% segment dividers across the meter track.
+        for q in 1..4{
+            let qx=inner_x+(inner_w*q)/4;
+            blend_rect_argb(fb,qx,inner_y,s,inner_h,0x44_080a0e);
+        }
+        // Bright active tip at the current HP edge when damaged.
         if fill_w<inner_w{
+            if fill_w>=2*s{
+                blend_rect_argb(fb,inner_x+fill_w-2*s,inner_y,s,inner_h,0xaa_fff2b2);
+            }
             blend_rect_argb(fb,inner_x+fill_w-s,inner_y,s,inner_h,0xff_ffd24c);
+        }
+    }else{
+        for q in 1..4{
+            let qx=inner_x+(inner_w*q)/4;
+            blend_rect_argb(fb,qx,inner_y,s,inner_h,0x44_080a0e);
         }
     }
 }
 
 #[allow(dead_code)]
 fn apply_hud_health_bat_mask(fb:&mut RenderSurface,health:i32,scale:usize){
-    apply_hud_health_bat_mask_offset(fb,health,scale,0);
+    apply_hud_health_bat_mask_offset(fb,health,scale,0,0);
 }
 
-fn apply_hud_health_bat_mask_offset(fb:&mut RenderSurface,health:i32,scale:usize,dy_logical:i32){
+fn apply_hud_health_bat_mask_offset(fb:&mut RenderSurface,health:i32,scale:usize,dx_logical:i32,dy_logical:i32){
     if health>=100 || fb.w==0 || fb.h==0{return;}
     let frac=(health.clamp(0,100) as f32)/100.0;
-    let (cx,base_cy,max_r)=if scale==HQ_SCALE{
+    let (base_cx,base_cy,max_r)=if scale==HQ_SCALE{
         (901.0_f32,104.5_f32,107.5_f32)
     }else{
         (301.0_f32,35.0_f32,36.0_f32)
     };
-    let cy=base_cy+(dy_logical*(scale as i32)) as f32;
+    let s=scale as i32;
+    let cx=base_cx+(dx_logical*s) as f32;
+    let cy=base_cy+(dy_logical*s) as f32;
     let cutoff=max_r*frac;
-    let y0=((15+dy_logical).max(0) as usize*scale).min(fb.h.saturating_sub(1));
-    let y1=((55+dy_logical).max(0) as usize*scale).min(fb.h.saturating_sub(1));
-    let x0=(265*scale).min(fb.w.saturating_sub(1));
-    let x1=(338*scale).min(fb.w.saturating_sub(1));
+    let y_start=(15+dy_logical)*s;
+    let y_end=(55+dy_logical)*s;
+    let x_start=(265+dx_logical)*s;
+    let x_end=(338+dx_logical)*s;
+    if x_end<0 || y_end<0 || x_start>=fb.w as i32 || y_start>=fb.h as i32{return;}
+    let y0=y_start.max(0) as usize;
+    let y1=y_end.min(fb.h as i32-1) as usize;
+    let x0=x_start.max(0) as usize;
+    let x1=x_end.min(fb.w as i32-1) as usize;
+    if x0>x1 || y0>y1{return;}
     for y in y0..=y1{
         let row=y*fb.w;
         let dy=(y as f32)-cy;
@@ -1317,18 +1406,26 @@ fn blit_region_hq3(
 }
 
 fn draw_hud(fb:&mut RenderSurface,game:&Game,assets:&Assets){
-    let is_2b=game.active_stage()==crate::stage::StageId::Level2B;
-    let dy_logical=if is_2b{L2B_HUD_DY}else{0};
-    // Root frame 19 placement of symbol 716 (shifted symmetrically inside aligned container in Level 2B).
-    const ROOT_X:f32=159.0;
+    let clock_visible=level2b_clock_visible(game,assets,1);
+    draw_hud_with_clock(fb,game,assets,clock_visible);
+}
+
+fn draw_hud_with_clock(fb:&mut RenderSurface,game:&Game,assets:&Assets,clock_visible:bool){
+    let use_panel=game.active_stage()!=crate::stage::StageId::Level1A;
+    let cw=fb.w as i32;
+    let layout=compute_top_bar_layout(cw,use_panel,clock_visible);
+    let dx_logical=layout.hud_x-L2B_HUD_X;
+    let dy_logical=if use_panel{L2B_HUD_DY}else{0};
+    // Root frame 19 placement of symbol 716 (shifted symmetrically inside aligned container post-1A).
+    let root_x:f32=(layout.hud_x+1) as f32;
     let root_y:f32=-11.0+dy_logical as f32;
     // Deterministic native-bounds anchor produced from symbol 716.
     const ANCHOR_X:f32=0.48106384;
     const ANCHOR_Y:f32=1.1601379;
-    let x=(ROOT_X-ANCHOR_X).round() as i32;
+    let x=(root_x-ANCHOR_X).round() as i32;
     let y=(root_y-ANCHOR_Y).round() as i32;
-    if is_2b{
-        draw_translucent_hud_panel(fb,L2B_HUD_X,L2B_PANEL_Y,L2B_HUD_W,L2B_PANEL_H,L2B_PANEL_R,1);
+    if use_panel{
+        draw_translucent_hud_panel(fb,layout.hud_x,layout.hud_y,L2B_HUD_W,L2B_PANEL_H,L2B_PANEL_R,1);
         blit_hud_foreground_only(fb,&assets.hud_base,x,y,1);
     }else{
         blit(
@@ -1342,7 +1439,7 @@ fn draw_hud(fb:&mut RenderSurface,game:&Game,assets:&Assets){
     draw_number_centered(fb,&assets.hud_digits_small,x+53,y+68,game.batarangs.max(0));
     draw_number_centered(fb,&assets.hud_digits_large,x+228,y+47,game.score.max(0));
     draw_number_centered(fb,&assets.hud_digits_small,x+155,y+69,game.lives.max(0));
-    apply_hud_health_bat_mask_offset(fb,game.health,1,dy_logical);
+    apply_hud_health_bat_mask_offset(fb,game.health,1,dx_logical,dy_logical);
 }
 
 fn draw_number_centered(fb:&mut RenderSurface,atlas:&Image,cx:i32,cy:i32,value:i32){
@@ -2126,9 +2223,9 @@ mod tests{
     #[test]
     fn hud_yellow_health_bat_shrinks_as_health_declines_in_1x_and_hq3x() {
         let mut assets = Assets::load();
-        assets.load_stage(crate::stage::StageId::Level1B);
+        assets.load_stage(crate::stage::StageId::Level1A);
         let mut game = Game::new();
-        game.start_stage(crate::stage::StageId::Level1B);
+        game.start_stage(crate::stage::StageId::Level1A);
         game.screen = AppScreen::Playing;
         game.ticks = 45;
 
@@ -2177,9 +2274,9 @@ mod tests{
     #[test]
     fn hud_yellow_bat_drains_concentric_circular_rings_and_preserves_health_label() {
         let mut assets = Assets::load();
-        assets.load_stage(crate::stage::StageId::Level1B);
+        assets.load_stage(crate::stage::StageId::Level1A);
         let mut game = Game::new();
-        game.start_stage(crate::stage::StageId::Level1B);
+        game.start_stage(crate::stage::StageId::Level1A);
         game.screen = AppScreen::Playing;
         game.ticks = 45;
 
@@ -2241,7 +2338,7 @@ mod tests{
 
         render(&mut fb1x, &game, &assets);
         render_high_quality(&mut scratch, &mut fbhq, &game, &assets);
-        // Overhead bar sits right above Penguin at screen x ~ 300, y ~ 236..254; old bottom 366..386 must be clear.
+        // Overhead bar sits right above Penguin at screen x ~ 300, y ~ 234..254; old bottom 366..386 must be clear.
         let bar_1x_200 = count_bar_crimson_in(&fb1x, 1, 220, 380, 225, 265);
         let bar_hq_200 = count_bar_crimson_in(&fbhq, HQ_SCALE, 220, 380, 225, 265);
         assert_eq!(count_bar_crimson_in(&fbhq, HQ_SCALE, 160, 440, 366, 386), 0, "Old fixed bottom bar must be removed");
@@ -2279,22 +2376,355 @@ mod tests{
         let mut scratch = RenderSurface::new(LOGICAL_W, LOGICAL_H);
         render_high_quality(&mut scratch, &mut fbhq, &game, &assets);
 
-        // Top margin y=0..2 (logical) and bottom gap y=84..90 (logical) must be pure black (corners unclipped inside viewport).
+        // Centered 600px layout: clock [85..227], 8px gap [227..235], HUD [235..515], y=[4..86].
+        // Top margin y=0..8 HQ (0..2.67 logical) must remain pure black across full width.
         for y in 0..8 {
-            for x in 0..(460 * HQ_SCALE) {
+            for x in 0..HQ_W {
                 assert_eq!(fbhq.pixels[y * HQ_W + x] & 0x00ff_ffff, 0, "Top margin clipped at ({x},{y})");
             }
         }
-        // Clean 8-logical-px gap between clock (8..150) and HUD (158..438) at x=151..157 must stay pure black!
-        for y in (4 * HQ_SCALE)..(82 * HQ_SCALE) {
-            for x in (152 * HQ_SCALE)..=(156 * HQ_SCALE) {
+        // Symmetric 85px left and right margins outside the centered pair must stay black at top bar rows.
+        for y in (4 * HQ_SCALE)..(86 * HQ_SCALE) {
+            for x in 0..(84 * HQ_SCALE) {
+                assert_eq!(fbhq.pixels[y * HQ_W + x] & 0x00ff_ffff, 0, "Left margin contaminated at ({x},{y})");
+            }
+            for x in (516 * HQ_SCALE)..HQ_W {
+                assert_eq!(fbhq.pixels[y * HQ_W + x] & 0x00ff_ffff, 0, "Right margin contaminated at ({x},{y})");
+            }
+        }
+        // Clean 8-logical-px gap between clock (85..227) and HUD (235..515) at x=228..=234 must stay pure black!
+        for y in (4 * HQ_SCALE)..(86 * HQ_SCALE) {
+            for x in (228 * HQ_SCALE)..=(234 * HQ_SCALE) {
                 assert_eq!(fbhq.pixels[y * HQ_W + x] & 0x00ff_ffff, 0, "Clock/HUD panel gap contaminated at ({x},{y})");
             }
         }
-        // Both aligned panels must share exact matching interior fill at logical y=4..82 centerlines (e.g. y=80 HQ).
-        let clock_panel_px = fbhq.pixels[(10 * HQ_SCALE) * HQ_W + (12 * HQ_SCALE)];
-        let hud_panel_px = fbhq.pixels[(10 * HQ_SCALE) * HQ_W + (162 * HQ_SCALE)];
+        // Both aligned panels must share exact matching interior fill inside logical y=4..86.
+        let clock_panel_px = fbhq.pixels[(10 * HQ_SCALE) * HQ_W + (89 * HQ_SCALE)];
+        let hud_panel_px = fbhq.pixels[(10 * HQ_SCALE) * HQ_W + (239 * HQ_SCALE)];
         assert_eq!(clock_panel_px, hud_panel_px, "Clock and HUD translucent panels should share identical fill");
         assert_ne!(clock_panel_px & 0x00ff_ffff, 0);
+    }
+
+    #[test]
+    fn post_1a_hud_uses_balanced_panel_padding_and_unclipped_lives_x() {
+        use super::{draw_hud, draw_hud_hq, L2B_HUD_DY};
+        use crate::stage::StageId;
+
+        for stage in [StageId::Level1B, StageId::Level1C, StageId::Level2A, StageId::Level2B] {
+            let mut assets = Assets::load();
+            assets.load_stage(stage);
+            let mut game = Game::new();
+            game.screen = AppScreen::Playing;
+            game.start_stage(stage);
+            game.ticks = 45;
+            game.batarangs = 12;
+            game.score = 1234;
+            game.lives = 5;
+
+            let expected_hud_x = if stage == StageId::Level2B { 235 } else { 160 };
+
+            let mut fb1x = RenderSurface::new(LOGICAL_W, LOGICAL_H);
+            let mut fbhq = RenderSurface::new(HQ_W, HQ_H);
+            draw_hud(&mut fb1x, &game, &assets);
+            draw_hud_hq(&mut fbhq, &game, &assets);
+
+            // Outer top (y=0..2) and bottom (y=87..91) margins stay pure black in both 1x and HQ3x.
+            for y in 0..3 {
+                for x in (expected_hud_x..expected_hud_x + 280) {
+                    assert_eq!(fb1x.pixels[y * LOGICAL_W + x] & 0x00ff_ffff, 0, "{stage:?} 1x top overflow at ({x},{y})");
+                }
+            }
+            for y in 88..92 {
+                for x in (expected_hud_x..expected_hud_x + 280) {
+                    assert_eq!(fb1x.pixels[y * LOGICAL_W + x] & 0x00ff_ffff, 0, "{stage:?} 1x bottom overflow at ({x},{y})");
+                }
+            }
+            for y in 0..8 {
+                for x in (expected_hud_x * HQ_SCALE)..((expected_hud_x + 280) * HQ_SCALE) {
+                    assert_eq!(fbhq.pixels[y * HQ_W + x] & 0x00ff_ffff, 0, "{stage:?} HQ top overflow at ({x},{y})");
+                }
+            }
+            for y in (88 * HQ_SCALE)..(92 * HQ_SCALE) {
+                for x in (expected_hud_x * HQ_SCALE)..((expected_hud_x + 280) * HQ_SCALE) {
+                    assert_eq!(fbhq.pixels[y * HQ_W + x] & 0x00ff_ffff, 0, "{stage:?} HQ bottom overflow at ({x},{y})");
+                }
+            }
+
+            // Balanced ~6px top & bottom inner padding: top inner rows (y=18..28 HQ) and bottom inner rows (y=241..251 HQ)
+            // remain uniform panel fill with zero label/digit ink crossing into the border.
+            let panel_fill = fbhq.pixels[(10 * HQ_SCALE) * HQ_W + ((expected_hud_x + 4) * HQ_SCALE)];
+            assert_ne!(panel_fill & 0x00ff_ffff, 0, "{stage:?} HQ panel fill must be non-black");
+            for y in [20usize, 26, 243, 249] {
+                for x in ((expected_hud_x + 15) * HQ_SCALE)..=((expected_hud_x + 265) * HQ_SCALE) {
+                    assert_eq!(
+                        fbhq.pixels[y * HQ_W + x], panel_fill,
+                        "{stage:?} ink leaked into inner padding at ({x},{y})"
+                    );
+                }
+            }
+
+            // Bottom rows of "X" in "LIVES X" (shell oy=237..239) must NOT be clipped.
+            let shell = &assets.hud_shell_hq[0];
+            let shell_x = ((expected_hud_x + 1) as f32 * HQ_SCALE as f32 - shell.anchor_x).round() as usize;
+            let shell_y = ((-11 + L2B_HUD_DY) as f32 * HQ_SCALE as f32 - shell.anchor_y).round() as isize;
+            let mut x_bottom_ink = 0usize;
+            for oy in 237isize..=239 {
+                let py = (shell_y + oy) as usize;
+                for ox in 427usize..=450 {
+                    let px = shell_x + ox;
+                    if fbhq.pixels[py * HQ_W + px] != panel_fill {
+                        x_bottom_ink += 1;
+                    }
+                }
+            }
+            assert!(x_bottom_ink >= 20, "{stage:?} bottom of 'X' in 'LIVES X' was clipped (ink={x_bottom_ink})");
+        }
+    }
+
+    #[test]
+    fn top_bar_alignment_centers_hud_with_and_without_clock_across_canvases() {
+        use super::{
+            compute_top_bar_layout, draw_hud_hq_with_clock, draw_hud_with_clock,
+            draw_level2b_clock_scaled,
+        };
+        use crate::stage::StageId;
+
+        // Pure layout math across 600px, 960px, 320px and Level1A.
+        let l1a = compute_top_bar_layout(960, false, false);
+        assert_eq!((l1a.hud_x, l1a.hud_y, l1a.clock_pos), (158, 4, None));
+
+        let l2b_600 = compute_top_bar_layout(600, true, true);
+        assert_eq!((l2b_600.clock_pos, l2b_600.hud_x), (Some((85, 4)), 235));
+
+        let l2b_960 = compute_top_bar_layout(960, true, true);
+        assert_eq!((l2b_960.clock_pos, l2b_960.hud_x), (Some((265, 4)), 415));
+
+        let l2b_320 = compute_top_bar_layout(320, true, true);
+        assert_eq!((l2b_320.clock_pos, l2b_320.hud_x, l2b_320.hud_y), (Some((89, 94)), 20, 4));
+
+        let hud_only_600 = compute_top_bar_layout(600, true, false);
+        assert_eq!((hud_only_600.hud_x, hud_only_600.clock_pos), (160, None));
+
+        let hud_only_960 = compute_top_bar_layout(960, true, false);
+        assert_eq!((hud_only_960.hud_x, hud_only_960.clock_pos), (340, None));
+
+        let mut assets = Assets::load();
+        assets.load_stage(StageId::Level2B);
+        let mut game = Game::new();
+        game.screen = AppScreen::Playing;
+        game.start_stage(StageId::Level2B);
+
+        // 960px HQ with clock: [265..407] + 8px gap + [415..695] (symmetric 265px margins).
+        let mut fb960_clk = RenderSurface::new(960 * HQ_SCALE, 400 * HQ_SCALE);
+        draw_hud_hq_with_clock(&mut fb960_clk, &game, &assets, true);
+        draw_level2b_clock_scaled(&mut fb960_clk, &game, &assets, HQ_SCALE as i32);
+        for x in 0..(264 * HQ_SCALE) {
+            assert_eq!(fb960_clk.pixels[(20 * HQ_SCALE) * fb960_clk.w + x] & 0x00ff_ffff, 0);
+        }
+        for x in (696 * HQ_SCALE)..fb960_clk.w {
+            assert_eq!(fb960_clk.pixels[(20 * HQ_SCALE) * fb960_clk.w + x] & 0x00ff_ffff, 0);
+        }
+        assert_ne!(fb960_clk.pixels[(20 * HQ_SCALE) * fb960_clk.w + (270 * HQ_SCALE)] & 0x00ff_ffff, 0);
+        assert_ne!(fb960_clk.pixels[(20 * HQ_SCALE) * fb960_clk.w + (690 * HQ_SCALE)] & 0x00ff_ffff, 0);
+        assert_eq!(fb960_clk.pixels[(20 * HQ_SCALE) * fb960_clk.w + (411 * HQ_SCALE)] & 0x00ff_ffff, 0);
+
+        // 960px HQ & 1x WITHOUT clock (e.g. Level2B clock hidden): HUD centered at [340..620] + health bat shifted +182.
+        let count_yellow_shifted = |fb: &RenderSurface, scale: usize, dx: usize| -> usize {
+            let mut n = 0;
+            for y in (23 * scale)..=(63 * scale) {
+                for x in ((265 + dx) * scale)..=((338 + dx) * scale) {
+                    let px = fb.pixels[y * fb.w + x];
+                    let r = ((px >> 16) & 0xff) as u8;
+                    let g = ((px >> 8) & 0xff) as u8;
+                    let b = (px & 0xff) as u8;
+                    if r > 150 && g > 110 && b < 95 {
+                        n += 1;
+                    }
+                }
+            }
+            n
+        };
+
+        let mut fb960_hq_100 = RenderSurface::new(960 * HQ_SCALE, 400 * HQ_SCALE);
+        let mut fb960_hq_0 = RenderSurface::new(960 * HQ_SCALE, 400 * HQ_SCALE);
+        let mut fb960_1x_100 = RenderSurface::new(960, 400);
+        let mut fb960_1x_0 = RenderSurface::new(960, 400);
+        game.health = 100;
+        draw_hud_hq_with_clock(&mut fb960_hq_100, &game, &assets, false);
+        draw_hud_with_clock(&mut fb960_1x_100, &game, &assets, false);
+        game.health = 0;
+        draw_hud_hq_with_clock(&mut fb960_hq_0, &game, &assets, false);
+        draw_hud_with_clock(&mut fb960_1x_0, &game, &assets, false);
+
+        for x in 0..(339 * HQ_SCALE) {
+            assert_eq!(fb960_hq_100.pixels[(20 * HQ_SCALE) * fb960_hq_100.w + x] & 0x00ff_ffff, 0);
+        }
+        for x in (621 * HQ_SCALE)..fb960_hq_100.w {
+            assert_eq!(fb960_hq_100.pixels[(20 * HQ_SCALE) * fb960_hq_100.w + x] & 0x00ff_ffff, 0);
+        }
+        assert_ne!(fb960_hq_100.pixels[(20 * HQ_SCALE) * fb960_hq_100.w + (345 * HQ_SCALE)] & 0x00ff_ffff, 0);
+        assert_ne!(fb960_hq_100.pixels[(20 * HQ_SCALE) * fb960_hq_100.w + (615 * HQ_SCALE)] & 0x00ff_ffff, 0);
+        // dx_logical = 340 - 158 = 182
+        assert!(count_yellow_shifted(&fb960_hq_100, HQ_SCALE, 182) > 500);
+        assert_eq!(count_yellow_shifted(&fb960_hq_0, HQ_SCALE, 182), 0);
+        assert!(count_yellow_shifted(&fb960_1x_100, 1, 182) > 50);
+        assert_eq!(count_yellow_shifted(&fb960_1x_0, 1, 182), 0);
+
+        // 320px HQ stacked layout: HUD [20..300] at y=4..86, Clock [89..231] at y=94..176.
+        let mut fb320 = RenderSurface::new(320 * HQ_SCALE, 400 * HQ_SCALE);
+        game.health = 100;
+        draw_hud_hq_with_clock(&mut fb320, &game, &assets, true);
+        draw_level2b_clock_scaled(&mut fb320, &game, &assets, HQ_SCALE as i32);
+        // Clean vertical gap at y=87..93
+        for y in (87 * HQ_SCALE)..(93 * HQ_SCALE) {
+            for x in 0..fb320.w {
+                assert_eq!(fb320.pixels[y * fb320.w + x] & 0x00ff_ffff, 0, "Stacked gap contaminated at ({x},{y})");
+            }
+        }
+        assert_ne!(fb320.pixels[(100 * HQ_SCALE) * fb320.w + (100 * HQ_SCALE)] & 0x00ff_ffff, 0);
+        assert_eq!(fb320.pixels[(100 * HQ_SCALE) * fb320.w + (40 * HQ_SCALE)] & 0x00ff_ffff, 0);
+    }
+
+    #[test]
+    fn level2b_clock_formats_mm_ss_centered() {
+        use super::draw_level2b_clock_scaled;
+        use crate::stage::StageId;
+
+        let mut assets = Assets::load();
+        assets.load_stage(StageId::Level2B);
+        let mut game = Game::new();
+        game.screen = AppScreen::Playing;
+        game.start_stage(StageId::Level2B);
+
+        let mut fb_240_a = RenderSurface::new(HQ_W, HQ_H);
+        let mut fb_240_b = RenderSurface::new(HQ_W, HQ_H);
+        let mut fb_185 = RenderSurface::new(HQ_W, HQ_H);
+        let mut fb_0 = RenderSurface::new(HQ_W, HQ_H);
+        let mut fb_1x_240 = RenderSurface::new(LOGICAL_W, LOGICAL_H);
+        let mut fb_1x_185 = RenderSurface::new(LOGICAL_W, LOGICAL_H);
+
+        game.clock_secs = 240 as _; // compiles whether clock_secs is u8 or u16? Wait: keep test safe for u8/u16 via min or 185/0/240 after u16!
+        // Wait: test clock values that fit u8 (185, 0, 125) and 240 (fits u8 too! 240 <= 255!)
+        game.clock_millisecs = 0;
+        draw_level2b_clock_scaled(&mut fb_240_a, &game, &assets, HQ_SCALE as i32);
+        draw_level2b_clock_scaled(&mut fb_1x_240, &game, &assets, 1);
+
+        game.clock_millisecs = 99;
+        draw_level2b_clock_scaled(&mut fb_240_b, &game, &assets, HQ_SCALE as i32);
+        assert_eq!(fb_240_a.pixels, fb_240_b.pixels, "MM:SS display must ignore sub-second clock_millisecs");
+
+        game.clock_secs = 185;
+        draw_level2b_clock_scaled(&mut fb_185, &game, &assets, HQ_SCALE as i32);
+        draw_level2b_clock_scaled(&mut fb_1x_185, &game, &assets, 1);
+        assert_ne!(fb_240_a.pixels, fb_185.pixels, "04:00 vs 03:05 must differ in HQ3x");
+        assert_ne!(fb_1x_240.pixels, fb_1x_185.pixels, "04:00 vs 03:05 must differ in 1x");
+
+        game.clock_secs = 0;
+        draw_level2b_clock_scaled(&mut fb_0, &game, &assets, HQ_SCALE as i32);
+        assert_ne!(fb_185.pixels, fb_0.pixels, "03:05 vs 00:00 must differ in HQ3x");
+
+        // Symmetric horizontal centering of "00:00" inside the 600px centered clock panel [85..227].
+        let clock_left = 85 * HQ_SCALE;
+        let clock_right = (85 + 142) * HQ_SCALE;
+        let mut min_x = usize::MAX;
+        let mut max_x = 0usize;
+        for y in (36 * HQ_SCALE)..(74 * HQ_SCALE) {
+            for x in clock_left..clock_right {
+                let px = fb_0.pixels[y * fb_0.w + x];
+                let r = ((px >> 16) & 0xff) as u8;
+                let g = ((px >> 8) & 0xff) as u8;
+                if r > 180 && g < 80 {
+                    min_x = min_x.min(x);
+                    max_x = max_x.max(x);
+                }
+            }
+        }
+        assert!(min_x < max_x, "MM:SS red LED digits must render");
+        let left_margin = min_x - clock_left;
+        let right_margin = clock_right - 1 - max_x;
+        assert!((left_margin as isize - right_margin as isize).abs() <= 2, "MM:SS margins L={left_margin}, R={right_margin}");
+    }
+
+    #[test]
+    fn penguin_boss_health_bar_is_label_free_thicker_and_glowing() {
+        use super::draw_penguin_boss_health_bar;
+        use crate::stage::StageId;
+
+        let mut assets = Assets::load();
+        assets.load_stage(StageId::Level1C);
+        let mut game = Game::new();
+        game.screen = AppScreen::Playing;
+        game.start_stage(StageId::Level1C);
+
+        let boss_x = game.penguin_boss.as_ref().unwrap().x;
+        let boss_y = game.penguin_boss.as_ref().unwrap().y;
+        game.camera_x = 300.0 - boss_x;
+        game.camera_y = 316.0 - boss_y;
+
+        for &scale in &[1usize, HQ_SCALE] {
+            let mut fb_full = RenderSurface::new(LOGICAL_W * scale, LOGICAL_H * scale);
+            let mut fb_half = RenderSurface::new(LOGICAL_W * scale, LOGICAL_H * scale);
+            let mut fb_zero = RenderSurface::new(LOGICAL_W * scale, LOGICAL_H * scale);
+
+            game.penguin_boss.as_mut().unwrap().health = 200;
+            draw_penguin_boss_health_bar(&mut fb_full, &game, scale);
+
+            game.penguin_boss.as_mut().unwrap().health = 100;
+            draw_penguin_boss_health_bar(&mut fb_half, &game, scale);
+
+            game.penguin_boss.as_mut().unwrap().health = 0;
+            draw_penguin_boss_health_bar(&mut fb_zero, &game, scale);
+
+            let panel_x = (300 - 58) * scale; // 116*s wide centered at 300*s
+            let panel_y = (316 - 82) * scale; // 234*s..254*s
+            let panel_w = 116 * scale;
+            let panel_h = 20 * scale;
+            let inner_x = panel_x + 4 * scale;
+            let inner_y = panel_y + 4 * scale;
+            let inner_w = 108 * scale;
+            let inner_h = 12 * scale;
+
+            // Label-free: row 2 of the fill (0xff_f06434) spans uniformly from the left edge without a "PENGUIN" label cutout.
+            let sample_y = inner_y + 2 * scale;
+            let left_px = fb_full.pixels[sample_y * fb_full.w + inner_x + scale] & 0x00ff_ffff;
+            assert_eq!(left_px, 0x00f0_6434, "Left of bar must be filled meter, not PENGUIN label (scale={scale})");
+
+            // Thicker 12*s inner gradient with hot specular top (0xff_ffe699) and fiery core stops.
+            let spec_px = fb_full.pixels[inner_y * fb_full.w + inner_x + scale] & 0x00ff_ffff;
+            let mid_px = fb_full.pixels[(inner_y + 5 * scale) * fb_full.w + inner_x + scale] & 0x00ff_ffff;
+            let dark_px = fb_full.pixels[(inner_y + 9 * scale) * fb_full.w + inner_x + scale] & 0x00ff_ffff;
+            assert_eq!(spec_px, 0x00ff_e699);
+            assert_eq!(mid_px, 0x00d9_2622);
+            assert_eq!(dark_px, 0x009c_1414);
+            // Verify all 12*s rows in inner_h are bright active gradient pixels.
+            let mut active_rows = 0usize;
+            for y in inner_y..(inner_y + inner_h) {
+                if (fb_full.pixels[y * fb_full.w + inner_x + scale] & 0x00ff_ffff) != 0x001c_0e12 {
+                    active_rows += 1;
+                }
+            }
+            assert_eq!(active_rows, inner_h);
+
+            // 25% dividers appear at 1/4, 2/4, 3/4 of inner_w.
+            for q in 1..4 {
+                let qx = inner_x + (inner_w * q) / 4;
+                let div_px = fb_full.pixels[sample_y * fb_full.w + qx] & 0x00ff_ffff;
+                assert_ne!(div_px, 0x00f0_6434, "Missing 25% divider #{q} at scale={scale}");
+            }
+
+            // Bright active tip (0x00ff_d24c) appears at half health.
+            let half_fill = (((inner_w as f32) * 0.5).round() as usize).clamp(scale, inner_w);
+            let tip_px = fb_half.pixels[sample_y * fb_half.w + inner_x + half_fill - scale] & 0x00ff_ffff;
+            assert_eq!(tip_px, 0x00ff_d24c, "Missing bright active tip at scale={scale}");
+
+            // Multi-pass outer glow halo outside housing when hp > 0, absent when hp == 0.
+            let halo_top = fb_full.pixels[(panel_y - 3 * scale) * fb_full.w + (300 * scale)];
+            let halo_bot = fb_full.pixels[(panel_y + panel_h + 2 * scale) * fb_full.w + (300 * scale)];
+            assert!(((halo_top >> 16) & 0xff) > 20 && ((halo_top >> 16) & 0xff) > (halo_top & 0xff));
+            assert!(((halo_bot >> 16) & 0xff) > 20 && ((halo_bot >> 16) & 0xff) > (halo_bot & 0xff));
+            assert_eq!(fb_zero.pixels[(panel_y - 3 * scale) * fb_zero.w + (300 * scale)] & 0x00ff_ffff, 0);
+            assert_eq!(fb_zero.pixels[(panel_y + panel_h + 2 * scale) * fb_zero.w + (300 * scale)] & 0x00ff_ffff, 0);
+            assert_eq!(panel_w, 116 * scale);
+        }
     }
 }

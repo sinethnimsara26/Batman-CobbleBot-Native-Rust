@@ -319,6 +319,7 @@ pub struct BankGoon {
     pub hit_count: u32,
     pub is_wave2: bool,
     pub spawn_index: usize,
+    pub blocked_ticks: u8,
 }
 
 impl BankGoon {
@@ -356,6 +357,7 @@ impl BankGoon {
             hit_count: 0,
             is_wave2: false,
             spawn_index,
+            blocked_ticks: 0,
         }
     }
 
@@ -385,6 +387,7 @@ impl BankGoon {
             hit_count: 0,
             is_wave2: false,
             spawn_index,
+            blocked_ticks: 0,
         }
     }
 
@@ -590,6 +593,7 @@ impl BankGoon {
 
         // Hurt state: knockback slide (-6 * dir) and child animation
         if self.state == GoonState::Hurt {
+            self.blocked_ticks = 0;
             let kx = -6.0 * (self.dir as f32);
             if !check_goon_wall_for_stage(self.stage_id, collision, self.x, self.y, kx) {
                 self.x += kx;
@@ -605,6 +609,7 @@ impl BankGoon {
 
         // Fall state: knockback slide (-10 * dir) for up to 6 ticks, child animation
         if self.state == GoonState::Fall {
+            self.blocked_ticks = 0;
             if self.fall_count < 6 {
                 let kx = -10.0 * (self.dir as f32);
                 if !check_goon_wall_for_stage(self.stage_id, collision, self.x, self.y, kx) {
@@ -623,6 +628,7 @@ impl BankGoon {
 
         // Attack state: lunges slightly on wind-up so goons close into strike distance and hit at frame 4
         if self.state == GoonState::Attack {
+            self.blocked_ticks = 0;
             if self.frame <= 1 {
                 self.dir = if self.x > player.x_game { -1 } else { 1 };
             }
@@ -681,6 +687,15 @@ impl BankGoon {
         self.tick_noncombat(player.x_game, player.y_game, collision, rng);
     }
 
+    /// Returns true if one step in `dir` is free of walls and has ground ahead.
+    #[inline]
+    fn can_advance_dir(&self, collision: &CollisionMask, dir: i8) -> bool {
+        let dx = self.speed * (dir as f32);
+        let wall = check_goon_wall_for_stage(self.stage_id, collision, self.x, self.y, dx);
+        let edge = check_goon_edge_for_stage(self.stage_id, collision, self.x, self.y, 50.0 * (dir as f32));
+        !wall && edge
+    }
+
     /// Step goon noncombat state machine based on exact Flash AVM1 goonAI.
     pub fn tick_noncombat(
         &mut self,
@@ -695,9 +710,10 @@ impl BankGoon {
 
         let range = (self.x - player_x).abs();
         let rangey = (self.y - player_y).abs();
+        let same_plane = self.same_combat_plane(player_y);
 
         // 1. Direction / facing adjustment + close-range trigger
-        if rangey < 400.0
+        if rangey < 420.0
             && (range > 180.0
                 || matches!(self.state, GoonState::Idle | GoonState::Stand | GoonState::Retreat)
                 || (self.state == GoonState::Walk && range > 55.0))
@@ -708,14 +724,19 @@ impl BankGoon {
                 self.dir = 1;
             }
         }
-        if range < 50.0 && rangey < 400.0 {
-            if self.attack_count > 5.0 && self.same_combat_plane(player_y) && !matches!(self.state, GoonState::Idle | GoonState::Intro) {
-                self.dir = if self.x >= player_x { -1 } else { 1 };
+        if range < 50.0 && rangey < 420.0 {
+            let desired_dir = if self.x >= player_x { -1 } else { 1 };
+            if self.attack_count > 5.0 && same_plane && !matches!(self.state, GoonState::Idle | GoonState::Intro) {
+                self.dir = desired_dir;
                 self.attack_count = 0.0;
                 self.set_state(GoonState::Attack);
                 return;
-            } else if self.state == GoonState::Stand && self.attack_count < 3.0 {
-                self.dir = if self.x >= player_x { -1 } else { 1 };
+            } else if self.state == GoonState::Stand
+                && self.attack_count < 3.0
+                && same_plane
+                && self.can_advance_dir(collision, -desired_dir)
+            {
+                self.dir = desired_dir;
                 self.set_state(GoonState::Retreat);
             }
         }
@@ -723,10 +744,16 @@ impl BankGoon {
         // 2. State-specific behavior
         match self.state {
             GoonState::Idle => {
-                // Flash AVM1 line 60: if range < 400 && rangey < 400 -> stand & face Batman
-                if range < 400.0 && rangey < 400.0 {
+                // Wake past the 475px viewport edge (plus ~900px on flat Level 1B street) without cross-floor aggro.
+                let wake_range = if self.stage_id == StageId::Level1B && rangey < 200.0 {
+                    900.0
+                } else {
+                    650.0
+                };
+                if range < wake_range && rangey < 420.0 {
                     self.dir = if self.x >= player_x { -1 } else { 1 };
                     self.attack_count = self.attack_count.max(5.0);
+                    self.blocked_ticks = 0;
                     self.set_state(GoonState::Stand);
                 }
             }
@@ -739,52 +766,79 @@ impl BankGoon {
                 }
             }
             GoonState::Stand => {
+                if self.blocked_ticks > 0 {
+                    self.blocked_ticks -= 1;
+                }
                 self.attack_count += 1.0;
                 let clip = self.family.child_clip(GoonState::Stand);
                 self.frame = (self.frame + 1) % clip.frame_count().max(1);
 
-                if range <= 74.0 && self.same_combat_plane(player_y) && self.attack_count >= 5.0 {
-                    self.dir = if self.x >= player_x { -1 } else { 1 };
+                let desired_dir = if self.x >= player_x { -1 } else { 1 };
+                if range <= 74.0 && same_plane && self.attack_count >= 5.0 {
+                    self.dir = desired_dir;
                     self.attack_count = 0.0;
                     self.set_state(GoonState::Attack);
-                } else if (range > 74.0 && self.attack_count >= 6.0) || range > 120.0 {
-                    // Actively pursue Batman instead of idling out of melee reach.
-                    self.dir = if self.x >= player_x { -1 } else { 1 };
-                    self.set_state(GoonState::Walk);
+                } else if rangey < 420.0 && self.blocked_ticks == 0 {
+                    let want_walk = if same_plane {
+                        (range > 74.0 && self.attack_count >= 6.0) || range > 120.0
+                    } else {
+                        // Batman is overhead/above on a nearby platform: close horizontally up to ~40px unless blocked.
+                        range > 40.0 && (self.attack_count >= 6.0 || range > 120.0)
+                    };
+                    if want_walk {
+                        if self.can_advance_dir(collision, desired_dir) {
+                            self.dir = desired_dir;
+                            self.set_state(GoonState::Walk);
+                        } else {
+                            self.blocked_ticks = 20;
+                        }
+                    }
                 }
             }
             GoonState::Walk => {
+                if rangey >= 420.0 || (!same_plane && range <= 40.0) {
+                    if rangey < 420.0 {
+                        self.dir = if self.x >= player_x { -1 } else { 1 };
+                    }
+                    self.set_state(GoonState::Stand);
+                    return;
+                }
                 let dx = self.speed * (self.dir as f32);
-                let wall = check_goon_wall_for_stage(self.stage_id, collision, self.x, self.y, dx);
-                let edge = check_goon_edge_for_stage(self.stage_id, collision, self.x, self.y, 50.0 * (self.dir as f32));
-
-                if !wall && edge {
+                if self.can_advance_dir(collision, self.dir) {
                     self.x += dx;
                     self.attack_count += 1.0;
                     let clip = self.family.child_clip(GoonState::Walk);
                     self.frame = (self.frame + 1) % clip.frame_count().max(1);
                 } else {
-                    // Flash AVM1: stopped by wall or edge; turns around and returns to stand
+                    // Flash AVM1: stopped by wall or edge; turns around and pauses in Stand without 2-tick oscillation.
                     self.dir = -self.dir;
+                    self.blocked_ticks = 20;
                     self.set_state(GoonState::Stand);
                 }
             }
             GoonState::Retreat => {
+                if rangey >= 420.0 {
+                    self.set_state(GoonState::Stand);
+                    return;
+                }
                 let dx = self.speed * (self.dir as f32);
-                let wall = check_goon_wall_for_stage(self.stage_id, collision, self.x, self.y, -dx);
-                let edge = check_goon_edge_for_stage(self.stage_id, collision, self.x, self.y, -50.0 * (self.dir as f32));
-
-                if !wall && edge {
+                if self.can_advance_dir(collision, -self.dir) {
                     self.x -= dx;
                     self.attack_count += 1.0;
                     let clip = self.family.child_clip(GoonState::Retreat);
                     self.frame = (self.frame + 1) % clip.frame_count().max(1);
 
-                    // Recover back into Walk/approach quickly so goons keep engaging Batman.
+                    // Recover back into Walk/approach quickly so goons keep engaging Batman if forward path is clear.
                     if self.attack_count > 5.0 || range > 150.0 {
-                        self.dir = if self.x >= player_x { -1 } else { 1 };
+                        let desired_dir = if self.x >= player_x { -1 } else { 1 };
+                        self.dir = desired_dir;
                         let _ = rng.next_f32();
-                        self.set_state(GoonState::Walk);
+                        if self.blocked_ticks == 0 && self.can_advance_dir(collision, desired_dir) {
+                            self.set_state(GoonState::Walk);
+                        } else {
+                            self.blocked_ticks = self.blocked_ticks.max(20);
+                            self.set_state(GoonState::Stand);
+                        }
                     }
                 } else {
                     // Flash AVM1: stopped by wall or edge in retreat
@@ -979,11 +1033,16 @@ impl BankGoonSquad {
 
         // 4. Check wave 2 activation (Flash AVM1 respawn2 — Level 1B only)
         if self.enable_wave2_respawn && self.respawned == 0 && self.e_kills >= 10 {
+            const WAVE2_MIN_X: f32 = -6420.0;
+            const WAVE2_MAX_X: f32 = 750.0;
+            const WAVE2_MIN_PLAYER_DIST: f32 = 300.0;
+
             self.e_kills = 0;
             self.respawned = 1;
 
             // Flash AVM1 respawn2 loops i = 0..7 (8 enemies)
             for i in 0..8 {
+                let rand_offset = 500.0 + (self.rng.next_f32() * 600.0);
                 let goon = &mut self.goons[i];
                 goon.active = true;
                 goon.visible = true;
@@ -994,18 +1053,67 @@ impl BankGoonSquad {
                 goon.attack_count = 0.0;
                 goon.fall_count = 0;
                 goon.flash = 0;
+                goon.invincible = false;
                 goon.hit_count = 0;
                 goon.is_wave2 = true;
+                goon.blocked_ticks = 0;
 
-                // Alternate spawns to right and left of player with random offset (500..1100 px)
-                let rand_offset = 500.0 + (self.rng.next_f32() * 600.0);
-                if i % 2 == 0 {
-                    goon.x = player.x_game + rand_offset;
-                    goon.dir = -1;
+                // Alternate spawns to right and left of player, clamped inside navigable street bounds [-6420.0, 750.0].
+                let prefer_right = i % 2 == 0;
+                let primary_x = if prefer_right {
+                    player.x_game + rand_offset
                 } else {
-                    goon.x = player.x_game - rand_offset;
-                    goon.dir = 1;
+                    player.x_game - rand_offset
                 }
+                .clamp(WAVE2_MIN_X, WAVE2_MAX_X);
+                let opposite_x = if prefer_right {
+                    player.x_game - rand_offset
+                } else {
+                    player.x_game + rand_offset
+                }
+                .clamp(WAVE2_MIN_X, WAVE2_MAX_X);
+
+                let (stage_id, goon_y, goon_speed) = (goon.stage_id, goon.y, goon.speed);
+                let is_navigable = |cand_x: f32, require_dist: bool| -> bool {
+                    if require_dist && (cand_x - player.x_game).abs() < WAVE2_MIN_PLAYER_DIST {
+                        return false;
+                    }
+                    let dir_to_player: i8 = if cand_x >= player.x_game { -1 } else { 1 };
+                    !check_goon_wall_for_stage(stage_id, collision, cand_x, goon_y, 0.0)
+                        && !check_goon_wall_for_stage(
+                            stage_id,
+                            collision,
+                            cand_x,
+                            goon_y,
+                            goon_speed * (dir_to_player as f32),
+                        )
+                        && check_goon_edge_for_stage(stage_id, collision, cand_x, goon_y, 0.0)
+                        && check_goon_edge_for_stage(
+                            stage_id,
+                            collision,
+                            cand_x,
+                            goon_y,
+                            50.0 * (dir_to_player as f32),
+                        )
+                };
+
+                let candidates = [
+                    primary_x,
+                    opposite_x,
+                    (player.x_game - 500.0).clamp(WAVE2_MIN_X, WAVE2_MAX_X),
+                    (player.x_game + 500.0).clamp(WAVE2_MIN_X, WAVE2_MAX_X),
+                    WAVE2_MIN_X,
+                    WAVE2_MAX_X,
+                ];
+                let chosen_x = candidates
+                    .iter()
+                    .copied()
+                    .find(|&x| is_navigable(x, true))
+                    .or_else(|| candidates.iter().copied().find(|&x| is_navigable(x, false)))
+                    .unwrap_or(primary_x);
+
+                goon.x = chosen_x;
+                goon.dir = if goon.x >= player.x_game { -1 } else { 1 };
                 goon.set_state(GoonState::Walk);
             }
             events.push(GoonCombatEvent::Wave2Spawned { count: 8 });
@@ -1166,12 +1274,12 @@ mod tests {
         let mut goon = BankGoon::from_spawn(BANK_GOON_SPAWNS[0]); // x = -1086.15, y = 398.1
         let mut rng = GoonRng::new(42);
 
-        // Far away: range = 500, rangey = 0 -> stays Idle
-        goon.tick_noncombat(goon.x + 500.0, goon.y, &ground, &mut rng);
+        // Far away: range = 1000, rangey = 0 -> stays Idle
+        goon.tick_noncombat(goon.x + 1000.0, goon.y, &ground, &mut rng);
         assert_eq!(goon.state, GoonState::Idle);
 
-        // Within 400px: range = 350 -> activates to Stand
-        goon.tick_noncombat(goon.x + 350.0, goon.y, &ground, &mut rng);
+        // Past 475px viewport edge on Level 1B street: range = 550 -> activates to Stand
+        goon.tick_noncombat(goon.x + 550.0, goon.y, &ground, &mut rng);
         assert_eq!(goon.state, GoonState::Stand);
 
         // Facing: player is to the right (x > goon.x), range > 180 -> dir should be 1
@@ -1614,6 +1722,206 @@ mod tests {
             assert!(saw_walk_or_attack, "Labs goon {} stayed stalled in {:?}", goon.name, goon.state);
             assert!(goon.x < start_x, "Labs goon {} did not move toward Batman ({} -> {})", goon.name, start_x, goon.x);
             assert_eq!(goon.dir, -1, "Labs goon {} did not face Batman", goon.name);
+        }
+    }
+
+    #[test]
+    fn viewport_edge_wake_prompts_approach_on_level1b_and_level2a() {
+        let ground_1b = CollisionMask::level1b();
+        let mut rng = GoonRng::new(101);
+        let mut events = Vec::new();
+
+        // Level 1B goon visible past 475px viewport edge (550px) and down flat street (850px) wakes and walks toward Batman.
+        for dist in [550.0_f32, 850.0] {
+            let mut g1b = BankGoon::from_spawn(BANK_GOON_SPAWNS[0]);
+            let start_x = g1b.x;
+            let ctx = PlayerCombatContext {
+                x_game: start_x + dist,
+                y_game: 323.25,
+                dir: -1,
+                is_attacking: false,
+                is_invincible: true,
+                state_name: "stand",
+            };
+            for _ in 0..10 {
+                g1b.tick_combat(&ctx, &ground_1b, &mut rng, &mut events);
+            }
+            assert_eq!(g1b.state, GoonState::Walk, "1B goon at dist {dist} must walk toward Batman");
+            assert_eq!(g1b.dir, 1);
+            assert!(g1b.x > start_x);
+        }
+
+        // Level 2A goon past 475px viewport edge (550px) on same floor wakes and walks toward Batman,
+        // while cross-floor Batman (rangey >= 420) stays Idle and stops Walk pursuit.
+        let ground_2a = CollisionMask::for_stage(StageId::Level2A);
+        let mut g2a = BankGoon::from_labs2a(crate::stage::labs2a::GOONS[0], 0);
+        let g2a_start = g2a.x;
+        let same_floor_edge = PlayerCombatContext {
+            x_game: g2a_start + 550.0,
+            y_game: g2a.y - 83.0,
+            dir: -1,
+            is_attacking: false,
+            is_invincible: true,
+            state_name: "stand",
+        };
+        for _ in 0..10 {
+            g2a.tick_combat(&same_floor_edge, &ground_2a, &mut rng, &mut events);
+        }
+        assert_eq!(g2a.state, GoonState::Walk);
+        assert!(g2a.x > g2a_start);
+
+        let mut g2a_cross_idle = BankGoon::from_labs2a(crate::stage::labs2a::GOONS[0], 0);
+        let other_floor = PlayerCombatContext {
+            x_game: g2a_cross_idle.x + 300.0,
+            y_game: g2a_cross_idle.y + 450.0,
+            dir: -1,
+            is_attacking: false,
+            is_invincible: true,
+            state_name: "stand",
+        };
+        for _ in 0..10 {
+            g2a_cross_idle.tick_combat(&other_floor, &ground_2a, &mut rng, &mut events);
+        }
+        assert_eq!(g2a_cross_idle.state, GoonState::Idle);
+
+        // Already-walking goon returns to Stand when Batman moves to another floor (rangey >= 420).
+        g2a.tick_combat(&other_floor, &ground_2a, &mut rng, &mut events);
+        assert_eq!(g2a.state, GoonState::Stand);
+    }
+
+    #[test]
+    fn blocked_goon14_and_goon13_do_not_oscillate_stand_walk() {
+        let ground_2a = CollisionMask::for_stage(StageId::Level2A);
+        let squad = BankGoonSquad::new_labs2a();
+        let mut rng = GoonRng::new(202);
+        let mut events = Vec::new();
+
+        let assert_no_oscillation = |mut goon: BankGoon, player_x: f32, player_y: f32| {
+            let ctx = PlayerCombatContext {
+                x_game: player_x,
+                y_game: player_y,
+                dir: 1,
+                is_attacking: false,
+                is_invincible: true,
+                state_name: "stand",
+            };
+            let mut stopped_at_tick = None;
+            let mut prev_state = goon.state;
+            let mut post_stop_walk_entries = 0usize;
+            let mut post_stop_dir_flips = 0usize;
+            let mut prev_settled_dir = goon.dir;
+
+            for tick in 0..140 {
+                goon.tick_combat(&ctx, &ground_2a, &mut rng, &mut events);
+                if stopped_at_tick.is_none()
+                    && prev_state == GoonState::Walk
+                    && goon.state == GoonState::Stand
+                {
+                    stopped_at_tick = Some(tick);
+                } else if let Some(stop_tick) = stopped_at_tick {
+                    if goon.state == GoonState::Walk {
+                        post_stop_walk_entries += 1;
+                    }
+                    // Allow 1 tick after stopping for Stand to turn toward Batman, then require zero dir flips.
+                    if tick > stop_tick + 1 && goon.dir != prev_settled_dir {
+                        post_stop_dir_flips += 1;
+                    }
+                    prev_settled_dir = goon.dir;
+                }
+                prev_state = goon.state;
+            }
+            assert!(stopped_at_tick.is_some(), "{} never reached obstacle", goon.name);
+            assert_eq!(post_stop_walk_entries, 0, "{} oscillated back into Walk", goon.name);
+            assert_eq!(post_stop_dir_flips, 0, "{} flipped direction after settling", goon.name);
+            assert_eq!(goon.state, GoonState::Stand);
+        };
+
+        // goon14 blocked by left wall (3136.45) and by right drop-off (4102.45)
+        let goon14 = squad.goons[8].clone();
+        assert_eq!(goon14.name, "goon14");
+        assert_no_oscillation(goon14.clone(), 3000.0, goon14.y - 83.0);
+
+        let mut goon14_right = goon14;
+        goon14_right.x = 3980.0;
+        assert_no_oscillation(goon14_right.clone(), 4350.0, goon14_right.y - 83.0);
+
+        // goon13 blocked on left by step/wall at x=4630..4740
+        let goon13 = squad.goons[6].clone();
+        assert_eq!(goon13.name, "goon13");
+        assert_no_oscillation(goon13.clone(), 4550.0, goon13.y - 83.0);
+
+        // Overhead Batman (range <= 74 && !same_combat_plane) closes horizontally to <= 40px and waits cleanly in Stand
+        let mut overhead_goon = BankGoon::from_spawn(BANK_GOON_SPAWNS[0]);
+        overhead_goon.state = GoonState::Stand;
+        overhead_goon.attack_count = 6.0;
+        let ground_1b = CollisionMask::level1b();
+        let overhead_ctx = PlayerCombatContext {
+            x_game: overhead_goon.x - 68.0,
+            y_game: overhead_goon.y - 220.0,
+            dir: 1,
+            is_attacking: false,
+            is_invincible: true,
+            state_name: "jump",
+        };
+        for _ in 0..12 {
+            overhead_goon.tick_combat(&overhead_ctx, &ground_1b, &mut rng, &mut events);
+        }
+        assert!((overhead_goon.x - overhead_ctx.x_game).abs() <= 40.0);
+        assert_eq!(overhead_goon.state, GoonState::Stand);
+    }
+
+    #[test]
+    fn wave2_respawn2_clamps_within_navigable_street_at_both_ends() {
+        let ground = CollisionMask::level1b();
+        for player_x in [-6350.0_f32, -6110.0, 500.0, 700.0] {
+            let mut squad = BankGoonSquad::new();
+            for g in &mut squad.goons {
+                g.health = 0;
+                g.active = false;
+            }
+            squad.e_kills = 10;
+            let mut events = Vec::new();
+            let player = PlayerCombatContext {
+                x_game: player_x,
+                y_game: 323.25,
+                dir: -1,
+                is_attacking: false,
+                is_invincible: false,
+                state_name: "stand",
+            };
+            squad.tick_combat(&player, &[], &ground, &mut events);
+            assert_eq!(events, vec![GoonCombatEvent::Wave2Spawned { count: 8 }]);
+            for g in &squad.goons[..8] {
+                assert!(
+                    (-6420.0..=750.0).contains(&g.x),
+                    "Wave 2 goon spawned outside street bounds at x={} (player_x={})",
+                    g.x,
+                    player_x
+                );
+                assert!(
+                    (g.x - player_x).abs() >= 300.0,
+                    "Wave 2 goon spawned too close at x={} (player_x={})",
+                    g.x,
+                    player_x
+                );
+                assert!(!super::check_goon_wall_for_stage(StageId::Level1B, &ground, g.x, g.y, 0.0));
+                assert!(!super::check_goon_wall_for_stage(
+                    StageId::Level1B,
+                    &ground,
+                    g.x,
+                    g.y,
+                    g.speed * (g.dir as f32),
+                ));
+                assert!(super::check_goon_edge_for_stage(StageId::Level1B, &ground, g.x, g.y, 0.0));
+                assert!(super::check_goon_edge_for_stage(
+                    StageId::Level1B,
+                    &ground,
+                    g.x,
+                    g.y,
+                    50.0 * (g.dir as f32),
+                ));
+                assert_eq!(g.dir, if g.x >= player_x { -1 } else { 1 });
+            }
         }
     }
 }
