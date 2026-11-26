@@ -1501,6 +1501,8 @@ impl Game{
             self.shots.iter().map(|s| (s.prev_x, s.x, s.y)).collect();
         let mut hidden_indices = Vec::new();
         let mut goon_events = Vec::new();
+        #[cfg(test)]
+        pt01_contact_tests::record_phase(player_ctx, self.animation_frame(), self.player.dx);
         if let Some(squad) = &mut self.bank_goons {
             hidden_indices.extend(squad.tick_combat_swept(
                 &player_ctx,
@@ -5135,4 +5137,4 @@ mod continuous_e2e_and_bugfix_regression_tests {
 
 #[cfg(test)]
 #[path = "pt01_contact_tests.rs"]
-mod pt01_contact_tests;
+pub(crate) mod pt01_contact_tests;

@@ -1015,6 +1015,9 @@ impl BankGoonSquad {
         // 3. Tick all goons and detect despawn removal
         for goon in &mut self.goons {
             let was_active = goon.active;
+            #[cfg(test)]
+            let (before_state, before_health, blocked_before) =
+                (goon.state, goon.health, self.player_dx_blocked);
             goon.tick_combat(player, collision, &mut self.rng, events);
             if was_active && !goon.active {
                 self.e_kills += 1;
@@ -1022,15 +1025,22 @@ impl BankGoonSquad {
             // Original goonAI still performs its player contact probes for
             // living Hurt/Fall goons (RE-20261126-055). Keep the existing
             // geometric approximation for now; only correct state eligibility.
-            if goon.active
+            let blocks_player = goon.active
                 && goon.health > 0
                 && goon.state != GoonState::Die
                 && goon.same_combat_plane(player.y_game)
                 && (goon.x - player.x_game).abs() <= 35.0
                 && ((player.dir > 0 && goon.x >= player.x_game)
-                    || (player.dir < 0 && goon.x <= player.x_game))
-            {
+                    || (player.dir < 0 && goon.x <= player.x_game));
+            if blocks_player {
                 self.player_dx_blocked = true;
+            }
+            #[cfg(test)]
+            if was_active || goon.active {
+                crate::game::pt01_contact_tests::record_enemy(
+                    goon, was_active, before_state, before_health,
+                    blocked_before, blocks_player, self.player_dx_blocked,
+                );
             }
         }
 

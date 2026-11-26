@@ -1,7 +1,8 @@
 //! Diagnostic only: raster occupancy is not an exact AVM1 shape oracle.
 use super::*;
-use crate::assets::{SpriteFrame, batman_contact_qa_frames};
-use crate::bank_goons::GoonState;
+use crate::assets::{SpriteFrame, SpriteSet, batman_contact_qa_frames};
+use crate::bank_goons::{BankGoon, GoonState, PlayerCombatContext};
+use std::cell::RefCell;
 
 fn raster_hit(frame: &SpriteFrame, px: f32, py: f32, dir: i32, x: f32, y: f32) -> bool {
     let (w, h) = (frame.image.w as i32, frame.image.h as i32);
@@ -12,6 +13,101 @@ fn raster_hit(frame: &SpriteFrame, px: f32, py: f32, dir: i32, x: f32, y: f32) -
     if col < 0 || col >= w || row < 0 || row >= h { return false; }
     let src_col = if mirrored { w - 1 - col } else { col };
     frame.image.pixels[row as usize * w as usize + src_col as usize] >> 24 != 0
+}
+
+
+#[derive(Clone, Copy)]
+struct Phase {
+    player: PlayerCombatContext,
+    frame: usize,
+    dx: f32,
+}
+struct EnemySample {
+    name: &'static str,
+    x: f32,
+    y: f32,
+    dir: i8,
+    was_active: bool,
+    before_state: GoonState,
+    before_health: i32,
+    after_state: GoonState,
+    after_health: i32,
+    after_active: bool,
+    blocked_before: bool,
+    blocks: bool,
+    blocked_after: bool,
+}
+#[derive(Default)]
+struct Capture {
+    phase: Option<Phase>,
+    enemies: Vec<EnemySample>,
+}
+thread_local! {
+    // Armed for exactly one traced Game::tick; unrelated tests and matched
+    // controls never collect rows. No production data or code path is added.
+    static CAPTURE: RefCell<Option<Capture>> = RefCell::new(None);
+}
+
+pub(crate) fn record_phase(player: PlayerCombatContext, frame: usize, dx: f32) {
+    CAPTURE.with(|slot| {
+        if let Some(capture) = slot.borrow_mut().as_mut() {
+            assert!(capture.phase.is_none(), "duplicate PT01 player phase");
+            capture.phase = Some(Phase { player, frame, dx });
+        }
+    });
+}
+
+pub(crate) fn record_enemy(
+    goon: &BankGoon, was_active: bool, before_state: GoonState, before_health: i32,
+    blocked_before: bool, blocks: bool, blocked_after: bool,
+) {
+    CAPTURE.with(|slot| {
+        if let Some(capture) = slot.borrow_mut().as_mut() {
+            capture.enemies.push(EnemySample {
+                name: goon.name, x: goon.x, y: goon.y, dir: goon.dir,
+                was_active, before_state, before_health,
+                after_state: goon.state, after_health: goon.health,
+                after_active: goon.active, blocked_before, blocks, blocked_after,
+            });
+        }
+    });
+}
+
+fn traced_tick(game: &mut Game, input: &mut InputState, ground: &CollisionMask,
+    frames: &SpriteSet, scenario: &str, tick: usize, dir: i32) {
+    CAPTURE.with(|slot| assert!(slot.replace(Some(Capture::default())).is_none()));
+    game.tick(input, ground);
+    let capture = CAPTURE.with(|slot| slot.replace(None).expect("armed PT01 capture"));
+    let phase = capture.phase.expect("PT01 fixture did not reach enemy callback");
+    // Current fixtures isolate one authored enemy; the ordered shadow loop
+    // also preserves hypothetical zero-dx propagation if more are added.
+    assert_eq!(capture.enemies.len(), 1, "PT01 fixture active enemy count");
+    let frame = &frames.frames[phase.frame];
+    let mut shadow_dx = phase.dx;
+    let mut aggregate = false;
+    for (order, enemy) in capture.enemies.iter().enumerate() {
+        assert_eq!(enemy.blocked_before, aggregate, "PT01 native aggregate before");
+        aggregate |= enemy.blocks;
+        assert_eq!(enemy.blocked_after, aggregate, "PT01 native aggregate after");
+        // This is a raster candidate at the native phase, not AVM1 shape
+        // equivalence. Entry health is sampled after native bat/melee batching.
+        let eligible = enemy.was_active && enemy.before_health > 0;
+        let incoming = shadow_dx;
+        let probe_x = enemy.x + 50.0 * enemy.dir as f32 + incoming;
+        let low = eligible && raster_hit(frame, phase.player.x_game, phase.player.y_game,
+            phase.player.dir, probe_x, enemy.y - 20.0);
+        let high = eligible && !low && raster_hit(frame, phase.player.x_game, phase.player.y_game,
+            phase.player.dir, probe_x, enemy.y - 120.0);
+        if low || high { shadow_dx = 0.0; }
+        println!("PT01_PHASE stage={:?} scenario={} dir={} tick={} order={} enemy={} player=({:.2},{:.2}) player_dir={} phase_frame={} post_frame={} requested_dx={:.2} shadow_in={:.2} shadow_out={:.2} native_before={} native_block={} native_after={} enemy_xy=({:.2},{:.2}) enemy_dir={} state={:?}->{:?} health={}->{} active={}->{} eligible={} probe_x={:.2} low={} high={}",
+            game.active_stage(), scenario, dir, tick, order, enemy.name,
+            phase.player.x_game, phase.player.y_game, phase.player.dir, phase.frame,
+            game.animation_frame(), phase.dx, incoming, shadow_dx,
+            enemy.blocked_before, enemy.blocks, enemy.blocked_after,
+            enemy.x, enemy.y, enemy.dir, enemy.before_state, enemy.after_state,
+            enemy.before_health, enemy.after_health, enemy.was_active, enemy.after_active,
+            eligible, probe_x, low, high);
+    }
 }
 
 // Select an authored goon and a sampled clear corridor in the real mask.
@@ -104,7 +200,7 @@ fn pt01_held_input_contact_trace() {
                 let mut raster_hits = 0;
                 for tick in 0..ticks {
                     let pre_x = game.player.x;
-                    game.tick(&mut input, &ground);
+                    traced_tick(&mut game, &mut input, &ground, &frames, scenario, tick, dir);
                     control.tick(&mut ctrl_input, &ground);
                     input.set(VK_SPACE, false);
                     ctrl_input.set(VK_SPACE, false);
@@ -138,7 +234,7 @@ fn pt01_held_input_contact_trace() {
             }
         }
     }
-    pt01_close_encounter_matrix();
+    pt01_close_encounter_matrix(&frames);
 }
 
 #[test]
@@ -156,7 +252,7 @@ fn pt01_raster_hit_respects_anchor_and_mirroring() {
 
 // Expand only the diagnostic, not the gameplay rules. Initial close-range
 // offsets and hurt/fall are controlled stress fixtures, not a human playthrough.
-fn pt01_close_encounter_matrix() {
+fn pt01_close_encounter_matrix(frames: &SpriteSet) {
     for stage in [StageId::Level1B, StageId::Level2A] {
         let ground = CollisionMask::for_stage(stage);
         let f = fixture(stage, &ground);
@@ -184,6 +280,7 @@ fn pt01_close_encounter_matrix() {
                         let mut player_crossing = false;
                         let mut ctrl_crossing = false;
                         let mut witness = false;
+                        let scenario = format!("close_{:?}_{}_damage{}", initial, gap, damage_enabled);
                         for tick in 0..12 {
                             let pre_x = game.player.x + game.level_origin_x();
                             let pre_y = game.player.y + game.level_origin_y();
@@ -193,7 +290,7 @@ fn pt01_close_encounter_matrix() {
                             let (ex, ey, es, alive) = (pre_enemy.x, pre_enemy.y,
                                 pre_enemy.state, pre_enemy.active && pre_enemy.health > 0);
                             let pre_health = game.health;
-                            game.tick(&mut input, &ground);
+                            traced_tick(&mut game, &mut input, &ground, frames, &scenario, tick, dir);
                             control.tick(&mut ctrl_input, &ground);
                             if game.fadeout_tick.is_some() || control.fadeout_tick.is_some() {
                                 break;
