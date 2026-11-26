@@ -1839,6 +1839,9 @@ jobs:
       - name: Run sprite-pack compatibility tests
         run: cargo test --release --locked --target x86_64-pc-windows-msvc
 
+      - name: Record PT01 held-input contact diagnostic
+        run: cargo test --release --locked --target x86_64-pc-windows-msvc pt01_held_input_contact_trace -- --nocapture
+
       - name: Build Level 1A fidelity slice
         run: cargo build --release --locked --target x86_64-pc-windows-msvc
 

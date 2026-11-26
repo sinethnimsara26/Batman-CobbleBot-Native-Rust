@@ -462,6 +462,11 @@ fn decode_sprite_frames_lazy(bytes:&'static [u8])->LazySpriteSet{
     }
 }
 
+#[cfg(test)]
+pub(crate) fn batman_contact_qa_frames() -> SpriteSet {
+    decode_sprite_frames_expected(include_bytes!("../assets/batman_frames.bin"), 1.0, "batman_contact_qa")
+}
+
 fn decode_sprite_frames_expected(bytes:&[u8],expected_scale:f32,label:&str)->SpriteSet{
     let set=decode_sprite_frames(bytes);
     let delta=(set.logical_pixel_scale-expected_scale).abs();

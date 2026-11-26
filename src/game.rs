@@ -5132,3 +5132,7 @@ mod continuous_e2e_and_bugfix_regression_tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "pt01_contact_tests.rs"]
+mod pt01_contact_tests;
