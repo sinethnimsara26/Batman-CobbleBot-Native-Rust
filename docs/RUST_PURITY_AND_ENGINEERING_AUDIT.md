@@ -1321,3 +1321,8 @@ Do not erase two historical CI failures: documentation-only #42834460076 and ini
 ## AUD-20261126-041 — Regression-test compiler repair (2026-11-26)
 
 Post-edit source comparison: single added `mut` in test closure `assert_no_oscillation`, preserves all three calls, existing captured RNG and event buffer, assertions and 140-tick checks. No runtime, crate, dependency, FFI, unsafe, asset or workflow changes. PURE-RUST COMPLIANCE: PASS for patch scope; ENGINEERING: static correction consistent with compiler E0596 diagnostic, execution UNVERIFIED; ORIGINAL-GAME FIDELITY: no runtime change, existing wider fidelity remains UNVERIFIED. No local Rust toolchain, no local execution. Failed parent [45817285103](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/45817285103) did not execute unit tests; subsequent actual CI must prove the repair. See RE-20261126-041. Six compiler warnings deferred outside this one-token batch; do not conflate warning cleanup with functional verification.
+
+
+## AUD-20261126-042 — Verification pending, countdown research only
+
+No implementation changes — Rust code audit not applicable to this documentation-only checkpoint. Reviewed timer runtime, rendering and QA contract excerpts at repair SHA c8a8b14d4b87d14877dcfac3f2ad47347d385a12. Current MM:SS display and four-minute overlay diverge from preserved original-timing tests; existing `clock_remaining` QA field remains seconds:subseconds rather than displayed text. No runtime/dependency/FFI/gate change. Engineering/fidelity of wider upload remains UNVERIFIED, current exact-code CI [45820852386](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/45820852386) still IN_PROGRESS. See RE-20261126-042.
