@@ -1298,7 +1298,17 @@ impl Game{
             if !self.player.jumping{
                 self.player.jumping=true;
                 self.enter(PlayerState::Jump);
-                self.player.dy=JUMP_VELOCITY;
+                // PT-05: the source #1484 lava-room right podium is 212px above
+                // its floor (game Y 3627 vs 3839), but the stock jump rises 198px.
+                // User-authorized playtest reachability assist, only from that floor.
+                // Do not change the source tile/mask or jumps in other rooms.
+                let gx=self.player.x+self.level_origin_x();
+                let feet_y=self.player.y+self.level_origin_y()+PLAYER_H;
+                let right_podium_launch=self.stage==StageId::Level2B
+                    && !self.on_platform
+                    && (7380.0..7694.0).contains(&gx)
+                    && (3833.0..=3840.0).contains(&feet_y);
+                self.player.dy=if right_podium_launch{-48.0}else{JUMP_VELOCITY};
                 self.gravity=GLOBAL_GRAVITY;
                 self.player.walk_count=12;
             }
@@ -4980,6 +4990,74 @@ mod continuous_e2e_and_bugfix_regression_tests {
                 "Batman failed to collect Level 2B pickup[{i}] ({}) from stand floor (diff={stand_diff})",
                 p.name
             );
+        }
+    }
+
+    #[test]
+    fn level2b_pt05_right_podium_jump_clears_slab_and_lands_from_floor() {
+        let ground=CollisionMask::for_stage(StageId::Level2B);
+        let mut game=Game::new();
+        game.screen=AppScreen::Playing;
+        game.start_stage(StageId::Level2B);
+        let ox=game.level_origin_x();
+        let oy=game.level_origin_y();
+        let gx=7550.0;
+        // Recovered source-mask top and floor: no edits to canonical geometry.
+        assert!(!ground.solid(gx-ox,3626.0-oy));
+        assert!(ground.solid(gx-ox,3627.0-oy));
+        assert!(ground.solid(gx-ox,3676.0-oy));
+        assert!(!ground.solid(gx-ox,3677.0-oy));
+        assert!(!ground.solid(gx-ox,3838.0-oy));
+        assert!(ground.solid(gx-ox,3839.0-oy));
+        // Seed the room floor only; jump and landing must use ordinary tick/input.
+        game.player.x=gx-ox;
+        game.player.y=3839.0-PLAYER_H-oy;
+        game.player.dx=0.0;
+        game.player.dy=0.0;
+        game.player.jumping=false;
+        game.player.on_ground=true;
+        let mut input=InputState::default();
+        input.set(VK_SPACE,true);
+        game.tick(&mut input,&ground);
+        assert_eq!(game.player.dy,-48.0);
+        input.set(VK_SPACE,false);
+        let mut min_feet=3839.0_f32;
+        let mut landed=false;
+        for _ in 0..40 {
+            game.tick(&mut input,&ground);
+            let feet=game.player.y+oy+PLAYER_H;
+            min_feet=min_feet.min(feet);
+            if !game.player.jumping && game.player.on_ground {
+                assert!((3610.0..=3627.1).contains(&feet),"landed at wrong height {feet}");
+                landed=true;
+                break;
+            }
+        }
+        assert!(min_feet<=3595.0,"jump must genuinely clear the top, not depend on snap: {min_feet}");
+        assert!(landed,"must land on the right podium");
+    }
+
+    #[test]
+    fn level2b_pt05_jump_assist_does_not_change_other_rooms_stages_or_platform_launches() {
+        for (stage,gx,feet,on_platform,expected) in [
+            (StageId::Level2B,7410.0,3838.0,false,-48.0),
+            (StageId::Level2B,7350.0,3838.0,false,JUMP_VELOCITY),
+            (StageId::Level2B,7550.0,3626.0,false,JUMP_VELOCITY),
+            (StageId::Level2B,7550.0,3838.0,true,JUMP_VELOCITY),
+            (StageId::Level2A,7550.0,3838.0,false,JUMP_VELOCITY),
+            (StageId::Level1B,7550.0,3838.0,false,JUMP_VELOCITY),
+        ] {
+            let mut game=Game::new();
+            game.screen=AppScreen::Playing;
+            game.start_stage(stage);
+            game.player.x=gx-game.level_origin_x();
+            game.player.y=feet-PLAYER_H-game.level_origin_y();
+            game.player.jumping=false;
+            game.on_platform=on_platform;
+            let mut input=InputState::default();
+            input.set(VK_SPACE,true);
+            game.process_jump_and_glide(&input);
+            assert_eq!(game.player.dy,expected,"unexpected jump at {stage:?} gx={gx} feet={feet}");
         }
     }
 
