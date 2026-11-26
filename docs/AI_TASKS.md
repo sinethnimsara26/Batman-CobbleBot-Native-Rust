@@ -1,5 +1,13 @@
 # Persistent development tasks — Batman Rust port
 
+## PT-04/05/06 — combined verification pending after E0425 repair
+
+- Active [draft PR #64](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/64), branch `revive/level2-b32-e2e-qa-closeout-2026-11-14`, stacked on #63 at a89d262a564f8c7f8cf4a565a017b66d4b50c6d0. Last full green code c8a8b14d4b87d14877dcfac3f2ad47347d385a12 / run 45820852386, 169 tests; no human acceptance.
+- [Run 45832542614](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/45832542614), code 463157f265a2c8b120ef005a3969e7a095ab5470, job 139952771932: **COMPLETED FAILURE**. Original asset regeneration passed; step 26 Run sprite-pack compatibility tests failed to compile at 14:04:33 UTC with E0425 twice at src/render.rs:2671,2675, missing `draw_penguin_boss_health_bar` in new nested test scope. Compiler suggests import. Six warnings, no unit tests executed; missing later route/campaign uploads are downstream consequences. The failed run did not include PT-05.
+- **Implemented-unverified repair:** add one `use super::draw_penguin_boss_health_bar;` line inside `penguin_bar_disappears_at_first_invisible_death_frame_in_both_render_modes`, consistent with immediately adjacent existing test. No runtime changes, no test assertion, asset, dependency or workflow edits. Parent 6ee248b9d7f63e8284376dd92df71787391226e3 already includes PT-05 localized jump assistance and both tests, and inherits PT-04/PT-06. Exact one-line test-only patch verified in memory. No local Rust execution.
+- Trigger combined Windows QA via this non-skip commit; parent run already completed, no cancellation. Recover actual new SHA and matching run from GitHub, inspect compilation, all existing gates plus 4 added tests for PT-04/05/06 (expected 173 total, not executed yet), route reports, screenshots; diagnose first actual failure. PT-01/02/03 OPEN, PT-04/05/06 IMPLEMENTED-UNVERIFIED; other historic bugs and physical audio remain open. No Level3A, merge or release.
+
+
 ## PT-05 — identified and patched, Windows QA pending
 
 - Active branch `revive/level2-b32-e2e-qa-closeout-2026-11-14`, [draft #64](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/64), stacked #63. Parent 463157f265a2c8b120ef005a3969e7a095ab5470; prior fully green c8a8b14d4b87d14877dcfac3f2ad47347d385a12 run 45820852386. Timer/Penguin run [45832542614](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/45832542614), job 139952771932, still IN_PROGRESS at step 5 original asset regeneration. No new compile/test outcome yet.

@@ -2655,6 +2655,7 @@ mod tests{
 
     #[test]
     fn penguin_bar_disappears_at_first_invisible_death_frame_in_both_render_modes() {
+        use super::draw_penguin_boss_health_bar;
         let mut game = Game::new();
         game.screen = AppScreen::Playing;
         game.start_stage(crate::stage::StageId::Level1C);
