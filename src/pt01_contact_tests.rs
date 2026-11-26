@@ -219,6 +219,13 @@ fn pt01_close_encounter_matrix() {
                             }
                         }
                         if ctrl_crossing { valid_controls += 1; }
+                        // Regression for the 16 player-driven crossings witnessed
+                        // in run 45849657061. This guards the current geometric
+                        // approximation, not exact Flash shape hitTest parity.
+                        if gap == 30.0 && matches!(initial, GoonState::Hurt | GoonState::Fall) {
+                            assert!(ctrl_crossing, "PT01 close control did not cross: {:?} {:?} dir={} damage={}", stage, initial, dir, damage_enabled);
+                            assert!(!player_crossing, "PT01 living hurt/fall goon crossed: {:?} {:?} dir={} damage={}", stage, initial, dir, damage_enabled);
+                        }
                         println!("PT01_CLOSE_SUMMARY stage={:?} initial={:?} gap={} damage={} dir={} control_crossed={} relative_crossed={} player_crossed_old_center={} live_witness={} health={}",
                             stage, initial, gap, damage_enabled, dir, ctrl_crossing, crossing,
                             player_crossing, witness, game.health);

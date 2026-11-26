@@ -1019,9 +1019,12 @@ impl BankGoonSquad {
             if was_active && !goon.active {
                 self.e_kills += 1;
             }
+            // Original goonAI still performs its player contact probes for
+            // living Hurt/Fall goons (RE-20261126-055). Keep the existing
+            // geometric approximation for now; only correct state eligibility.
             if goon.active
                 && goon.health > 0
-                && !matches!(goon.state, GoonState::Hurt | GoonState::Fall | GoonState::Die)
+                && goon.state != GoonState::Die
                 && goon.same_combat_plane(player.y_game)
                 && (goon.x - player.x_game).abs() <= 35.0
                 && ((player.dir > 0 && goon.x >= player.x_game)
