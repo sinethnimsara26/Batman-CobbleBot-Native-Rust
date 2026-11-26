@@ -4052,7 +4052,7 @@ mod b31_kabuki_card_tests {
 mod continuous_e2e_and_bugfix_regression_tests {
     use super::{
         AppScreen, AudioEvent, Game, InputState, PlayerState, LEVEL_X, LEVEL_Y, PICKUPS, VK_A,
-        VK_ENTER, VK_LEFT, VK_S, VK_SPACE,
+        VK_ENTER, VK_LEFT, VK_S, VK_SPACE, JUMP_VELOCITY, PLAYER_H,
     };
     use crate::bank_biker::BikerState;
     use crate::collision::CollisionMask;

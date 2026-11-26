@@ -1,5 +1,13 @@
 # AI handoff — current recovery checkpoint
 
+## 2026-11-26 — PT-05 test constant import repair / combined QA retry
+
+- Active [draft PR #64](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/64), branch `revive/level2-b32-e2e-qa-closeout-2026-11-14`, stacked #63 at a89d262a564f8c7f8cf4a565a017b66d4b50c6d0. Parent docs-only HEAD 19df3169b8a248939f353e41348d769d791b3202; latest fully green code c8a8b14d4b87d14877dcfac3f2ad47347d385a12 (run 45820852386, 169 tests).
+- [Combined Windows run 45835616416](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/45835616416), code 5e193b2bd93655d1638e521df6d443e2ed4d178d, job 139963552934: COMPLETED FAILURE. Steps 1–25 succeeded, including canonical SWF fetch and original asset regeneration. Step 26 failed compilation at 14:20:18 UTC: 8 E0425 errors, 6 warnings. All errors in src/game.rs tests: PLAYER_H at 5014,5028,5054; JUMP_VELOCITY at 5044–5048. Previous Penguin meter import error no longer appears. No Rust tests executed; downstream build/route/GUI gates skipped and missing artifact uploads are consequences, not independent defects.
+- **Implemented-unverified:** add JUMP_VELOCITY and PLAYER_H to existing `use super::{...}` in `continuous_e2e_and_bugfix_regression_tests` (src/game.rs:4053–4056); parent constants at lines 23/27 already defined as 75.0/-42.0. Both PT-05 tests now import the real constants instead of duplicating values. Exact one-line replacement and inverse equality checked; no gameplay code, assertion, asset, dependency, workflow or gate changes. No local Cargo execution.
+- **Next exact step:** normal non-skip commit triggers unchanged Windows QA; retrieve actual matching push run using branch Actions REST listing (PR-only wrapper misses push runs). Check actual test result (expected 173), fix first failure if needed; only after combined QA passes inspect artifacts/screenshots and resume PT-01 source/contact regression. PT-04/05/06 IMPLEMENTED-UNVERIFIED; PT-01/02/03 OPEN, all historic issues and human acceptance remain open, physical audio blocker retained. No merge/release/Level3A.
+
+
 ## 2026-11-26 — PT-01 contact-path research / combined QA still running
 
 - Active [draft PR #64](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/64), branch `revive/level2-b32-e2e-qa-closeout-2026-11-14`, stacked #63 at a89d262a564f8c7f8cf4a565a017b66d4b50c6d0. Code HEAD `5e193b2bd93655d1638e521df6d443e2ed4d178d` (parent 6ee248b9d7f63e8284376dd92df71787391226e3); last fully green c8a8b14d4b87d14877dcfac3f2ad47347d385a12, run 45820852386, 169 tests.
