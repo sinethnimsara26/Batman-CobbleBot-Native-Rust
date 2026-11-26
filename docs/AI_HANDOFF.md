@@ -1,5 +1,14 @@
 # AI handoff — current recovery checkpoint
 
+## 2026-11-26 — B32 repair: E0596 regression-test closure binding
+
+- Active branch `revive/level2-b32-e2e-qa-closeout-2026-11-14`, [draft PR #64](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/64), stacked on PR #63 at `a89d262a564f8c7f8cf4a565a017b66d4b50c6d0`. Last fully passing code `2eb694379114cc1d8a43e690e1fbe0c45f88aebb` ([run 43731954665](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/43731954665), 161 tests, 20 HQ hashes); not the November 22 upload.
+- Recovery HEAD `f42ad8ae5e9281fa0edd63ef5760526233a504ad` triggered [Windows run 45817285103](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/45817285103), job `139900179326`: **FAILED**. Actual log at 12:28:04 UTC: Rust E0596 at `src/bank_goons.rs:1799`, test `blocked_goon14_and_goon13_do_not_oscillate_stand_walk`, closure `assert_no_oscillation` captures `&mut rng` and `&mut events` on line 1815, compiler recommends mutable binding. Six warnings, one compilation error; no unit test execution/result. Missing Bank, Labs and campaign QA artifacts are downstream consequences, not independent gameplay failures. 13 artifacts listed (including source-bake proof metadata), no artifact contents independently opened here.
+- Bounded repair: add only `mut` to the closure binding, no changed assertions, call sites, runtime behavior, assets, dependencies, test gates or CI workflow. Exact single-source-line patch compared in memory against parent, and remote commit intended to contain this patch + documentation only. No local Rust toolchain available; actual native build/test pending.
+- **IMPLEMENTED-UNVERIFIED** until unchanged full Windows CI passes on the repair commit (which cannot include its own future SHA; recover from Git/Actions). Previous failed run remains FAILED, not retroactively green. No Level 3A work, merge, release, or history rewrite. Countdown text vs runtime discrepancy remains open pending source/intent verification.
+- **Exact next action:** fetch PR #64 HEAD and matching Windows run for this repair, inspect actual test results and new failure logs if any; if green, inspect campaign/route and rendering artifacts, then complete the source/engineering audit of the November 22 changes, including the timer inconsistency. Stop at first blocker; never weaken tests.
+
+
 ## 2026-11-26 — B32 recovery: final local upload requires exact-tree Windows QA
 
 - Active branch `revive/level2-b32-e2e-qa-closeout-2026-11-14`, [draft PR #64](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/64), stacked on PR #63 (`revive/level2-b31-labs2b-kabuki-card-2026-11-14`, `a89d262a564f8c7f8cf4a565a017b66d4b50c6d0`). PR remains open/draft/unmerged.

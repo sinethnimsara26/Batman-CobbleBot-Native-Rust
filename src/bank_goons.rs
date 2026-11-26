@@ -1796,7 +1796,7 @@ mod tests {
         let mut rng = GoonRng::new(202);
         let mut events = Vec::new();
 
-        let assert_no_oscillation = |mut goon: BankGoon, player_x: f32, player_y: f32| {
+        let mut assert_no_oscillation = |mut goon: BankGoon, player_x: f32, player_y: f32| {
             let ctx = PlayerCombatContext {
                 x_game: player_x,
                 y_game: player_y,
