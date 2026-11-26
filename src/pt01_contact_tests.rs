@@ -138,6 +138,7 @@ fn pt01_held_input_contact_trace() {
             }
         }
     }
+    pt01_close_encounter_matrix();
 }
 
 #[test]
@@ -151,4 +152,81 @@ fn pt01_raster_hit_respects_anchor_and_mirroring() {
     assert!(raster_hit(&frame, 100.0, 200.0, -1, 99.0, 199.0));
     assert!(!raster_hit(&frame, 100.0, 200.0, -1, 100.0, 199.0));
     assert!(!raster_hit(&frame, 100.0, 200.0, -1, 99.0, 200.0));
+}
+
+// Expand only the diagnostic, not the gameplay rules. Initial close-range
+// offsets and hurt/fall are controlled stress fixtures, not a human playthrough.
+fn pt01_close_encounter_matrix() {
+    for stage in [StageId::Level1B, StageId::Level2A] {
+        let ground = CollisionMask::for_stage(stage);
+        let f = fixture(stage, &ground);
+        let mut valid_controls = 0;
+        let mut cases = 0;
+        for dir in [-1, 1] {
+            for initial in [GoonState::Stand, GoonState::Hurt, GoonState::Fall] {
+                for gap in [30.0_f32, 90.0] {
+                    for damage_enabled in [false, true] {
+                        cases += 1;
+                        let mut game = setup(stage, f, dir, "run", initial, false);
+                        let mut control = setup(stage, f, dir, "run", initial, true);
+                        game.player.x = f.1 - gap * dir as f32;
+                        control.player.x = game.player.x;
+                        if damage_enabled {
+                            game.player_invincible_ticks = 0;
+                            control.player_invincible_ticks = 0;
+                        }
+                        let key = if dir < 0 { VK_LEFT } else { VK_RIGHT };
+                        let mut input = InputState::default();
+                        let mut ctrl_input = InputState::default();
+                        input.set(key, true);
+                        ctrl_input.set(key, true);
+                        let mut crossing = false;
+                        let mut player_crossing = false;
+                        let mut ctrl_crossing = false;
+                        let mut witness = false;
+                        for tick in 0..12 {
+                            let pre_x = game.player.x + game.level_origin_x();
+                            let pre_y = game.player.y + game.level_origin_y();
+                            let pre_ground = game.player.on_ground;
+                            let pre_state = game.player.state;
+                            let pre_enemy = &game.bank_goons.as_ref().unwrap().goons[f.0];
+                            let (ex, ey, es, alive) = (pre_enemy.x, pre_enemy.y,
+                                pre_enemy.state, pre_enemy.active && pre_enemy.health > 0);
+                            let pre_health = game.health;
+                            game.tick(&mut input, &ground);
+                            control.tick(&mut ctrl_input, &ground);
+                            if game.fadeout_tick.is_some() || control.fadeout_tick.is_some() {
+                                break;
+                            }
+                            let post_x = game.player.x + game.level_origin_x();
+                            let post_y = game.player.y + game.level_origin_y();
+                            let enemy = &game.bank_goons.as_ref().unwrap().goons[f.0];
+                            let relative_cross = (pre_x - ex) * dir as f32 <= 0.0
+                                && (post_x - enemy.x) * dir as f32 > 0.0;
+                            let crossed_old_center = (pre_x - ex) * dir as f32 <= 0.0
+                                && (post_x - ex) * dir as f32 > 0.0;
+                            crossing |= relative_cross;
+                            player_crossing |= relative_cross && crossed_old_center;
+                            ctrl_crossing |= (control.player.x - f.1) * dir as f32 > 15.0;
+                            if !witness && relative_cross && alive {
+                                witness = true;
+                                println!("PT01_CLOSE_WITNESS stage={:?} initial={:?} gap={} damage={} dir={} tick={} player_x={:.2}->{:.2} player_y={:.2}->{:.2} enemy_x={:.2}->{:.2} enemy_y={:.2}->{:.2} player_crossed_old_center={} pre_ground={} post_ground={} player_state={:?}->{:?} enemy_state={:?}->{:?} health={}->{} dx={:.2}",
+                                    stage, initial, gap, damage_enabled, dir, tick,
+                                    pre_x, post_x, pre_y, post_y, ex, enemy.x, ey, enemy.y,
+                                    crossed_old_center, pre_ground, game.player.on_ground,
+                                    pre_state, game.player.state, es, enemy.state,
+                                    pre_health, game.health, game.player.dx);
+                            }
+                        }
+                        if ctrl_crossing { valid_controls += 1; }
+                        println!("PT01_CLOSE_SUMMARY stage={:?} initial={:?} gap={} damage={} dir={} control_crossed={} relative_crossed={} player_crossed_old_center={} live_witness={} health={}",
+                            stage, initial, gap, damage_enabled, dir, ctrl_crossing, crossing,
+                            player_crossing, witness, game.health);
+                    }
+                }
+            }
+        }
+        assert_eq!(cases, 24);
+        assert!(valid_controls > 0, "PT01 close matrix: no reachable control on {:?}", stage);
+    }
 }
