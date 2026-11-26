@@ -11,6 +11,9 @@ use crate::stage::{labs2a, LabsCameraMode, LabsTriggerPlacement, PendingStageEnt
 pub const LOGICAL_W:usize=600;
 pub const LOGICAL_H:usize=400;
 pub const FIXED_STEP:f32=1.0/25.0;
+/// User-authorized development playtest allowance (2026-11-26); original AVM1 starts at 80:99.
+/// Restore source timing and the authored tutorial together before claiming original timing parity.
+pub const LEVEL2B_PLAYTEST_CLOCK_SECONDS:u16=600;
 
 pub const VK_LEFT:usize=37; pub const VK_UP:usize=38; pub const VK_RIGHT:usize=39; pub const VK_DOWN:usize=40;
 pub const VK_SPACE:usize=32; pub const VK_ENTER:usize=13; pub const VK_ESCAPE:usize=27; pub const VK_I:usize=73;
@@ -323,8 +326,8 @@ pub struct Game{
     pub shots:Vec<Shot>,
     pub labs_doors:Vec<LabsDoorState>,
     pub labs_elevators:Vec<LabsElevatorState>,
-    /// Original `clock` (`#1503`) countdown seconds (`80 -> 0`) and centiseconds (`99`, then `curTimer % 100`).
-    pub clock_secs:u8,
+    /// Development playtest countdown in whole seconds (600 -> 0); u16 prevents overflow above 255.
+    pub clock_secs:u16,
     pub clock_millisecs:u8,
     clock_elapsed_ms:u32,
     clock_last_ms:u32,
@@ -378,7 +381,7 @@ impl Game{
             kabuki_card_tick:0,kabuki_card_fadeout_tick:None,kabuki_card_sound_stopped:false,kabuki_card_complete:false,kabuki_post_complete_ticks:0,
             bank_goons:None,labs_eagles:Vec::new(),labs_bird_rng:GoonRng::new(0x2A00_1393),bank_biker:None,penguin_boss:None,penguin_rng:PenguinRng::new(0x1C00_1250),
             pickups:vec![false;PICKUPS.len()],labs_health_collected:false,shots:Vec::new(),labs_doors:Vec::new(),labs_elevators:Vec::new(),
-            clock_secs:80,clock_millisecs:99,clock_elapsed_ms:0,clock_last_ms:0,clock_exploded:false,
+            clock_secs:LEVEL2B_PLAYTEST_CLOCK_SECONDS,clock_millisecs:99,clock_elapsed_ms:0,clock_last_ms:0,clock_exploded:false,
             halo_frame:0,halo_fire:false,lava_done:false,
             ticks:0,audio_events:Vec::new(),pit_done:false,respawn_after_fade:false,gameover_after_fade:false,
         }
@@ -496,7 +499,7 @@ impl Game{
             .iter()
             .map(|e|LabsElevatorState{y:e.y,dy:0.0,moving:false,active:true})
             .collect();
-        self.clock_secs=80;
+        self.clock_secs=LEVEL2B_PLAYTEST_CLOCK_SECONDS;
         self.clock_millisecs=99;
         self.clock_elapsed_ms=0;
         self.clock_last_ms=0;
@@ -2055,18 +2058,19 @@ impl Game{
     }
 
     fn update_level2b_clock(&mut self){
-        // AVM1 `_global.clockTimer` (`action[21]`): starts at `80 :99` unless already
-        // exploded (`secs <= 0 && !exploded` sets `00 :00`, `explode.start()`, `halo.gotoAndPlay("fire")`,
-        // `playerHealth = 0`, `playerState = "die"`).
+        // Original AVM1 clockTimer (action[21]) starts at 80:99. For this explicitly
+        // authorized playtest build, count exactly 600 fixed-step seconds, retaining
+        // the original one-shot explosion, halo fire, player death and reset behavior.
         if self.stage!=StageId::Level2B || self.clock_exploded || self.fadeout_tick.is_some(){return;}
         if self.clock_secs>0{
             self.clock_elapsed_ms=self.clock_elapsed_ms.saturating_add(40);
-            if self.clock_elapsed_ms-self.clock_last_ms>1000{
+            if self.clock_elapsed_ms-self.clock_last_ms>=1000{
                 self.clock_last_ms=self.clock_elapsed_ms;
                 self.clock_secs-=1;
                 self.clock_millisecs=(self.clock_elapsed_ms%100) as u8;
             }
-        }else{
+        }
+        if self.clock_secs==0{
             self.clock_exploded=true;
             self.clock_secs=0;
             self.clock_millisecs=0;
@@ -3719,7 +3723,7 @@ mod b29_labs2b_lava_clock_halo_tests {
         game.screen = AppScreen::Playing;
         game.start_stage(StageId::Level2B);
 
-        assert_eq!((game.clock_secs, game.clock_millisecs), (80, 99));
+        assert_eq!((game.clock_secs, game.clock_millisecs), (600, 99));
         assert!(!game.clock_exploded);
         assert!(!game.halo_fire);
         assert_eq!(game.halo_frame, 0);
@@ -3733,13 +3737,15 @@ mod b29_labs2b_lava_clock_halo_tests {
         game.tick(&mut input, &ground);
         assert_eq!(game.halo_frame, 0);
 
-        // 26 ticks * 40ms = 1040ms > 1000ms -> decrements `clock_secs` from 80 to 79, `millisecs = 1040 % 100 = 40`.
-        for _ in 0..6 {
+        // 25 ticks * 40ms = 1000ms: exactly one displayed second elapsed.
+        for _ in 0..4 {
             game.tick(&mut input, &ground);
         }
-        assert_eq!((game.clock_secs, game.clock_millisecs), (79, 40));
+        assert_eq!(game.clock_secs, 600);
+        game.tick(&mut input, &ground);
+        assert_eq!((game.clock_secs, game.clock_millisecs), (599, 0));
 
-        // When `secs` reaches 0, next tick explodes (`00 :00`, `Explode`, `halo_fire = true`, `Die`).
+        // An already-zero clock explodes on update (`00:00`, `Explode`, `halo_fire = true`, `Die`).
         game.clock_secs = 0;
         let _ = game.take_audio_events();
         game.tick(&mut input, &ground);
@@ -3766,9 +3772,31 @@ mod b29_labs2b_lava_clock_halo_tests {
             }
         }
         assert!(!game.clock_exploded);
-        assert_eq!((game.clock_secs, game.clock_millisecs), (80, 99));
+        assert_eq!((game.clock_secs, game.clock_millisecs), (600, 99));
         assert!(!game.halo_fire);
         assert_eq!(game.halo_frame, 0);
+    }
+
+    #[test]
+    fn level2b_playtest_clock_expires_after_exactly_ten_simulation_minutes() {
+        let mut game = Game::new();
+        game.screen = AppScreen::Playing;
+        game.start_stage(StageId::Level2B);
+        assert_eq!(game.clock_secs, 600);
+        for _ in 0..14_999 {
+            game.update_level2b_clock();
+        }
+        assert_eq!(game.clock_secs, 1);
+        assert!(!game.clock_exploded);
+        let _ = game.take_audio_events();
+        game.update_level2b_clock();
+        assert_eq!(game.clock_secs, 0);
+        assert!(game.clock_exploded && game.halo_fire);
+        assert_eq!(game.health, 0);
+        assert_eq!(game.player.state, PlayerState::Die);
+        assert!(game.take_audio_events().contains(&AudioEvent::Explode));
+        game.update_level2b_clock();
+        assert!(!game.take_audio_events().contains(&AudioEvent::Explode));
     }
 
     #[test]

@@ -1,6 +1,6 @@
 use crate::assets::Assets;
 use crate::collision::CollisionMask;
-use crate::game::{AppScreen,AudioEvent,Game,InputState,LEVEL_X,LEVEL_Y,LOGICAL_H,LOGICAL_W,PICKUPS,VK_A,VK_D,VK_ENTER,VK_RIGHT,VK_S,VK_SPACE};
+use crate::game::{AppScreen,AudioEvent,Game,InputState,LEVEL2B_PLAYTEST_CLOCK_SECONDS,LEVEL_X,LEVEL_Y,LOGICAL_H,LOGICAL_W,PICKUPS,VK_A,VK_D,VK_ENTER,VK_RIGHT,VK_S,VK_SPACE};
 use crate::render;
 use crate::surface::RenderSurface;
 use png::{BitDepth,ColorType,Encoder};
@@ -822,6 +822,7 @@ pub fn qa_level2_route(out_dir:&str){
     assert_eq!(next_2b,StageId::Level2B);
     assert_eq!(game.active_stage(),StageId::Level2B);
     assert_eq!(game.pickups.len(),10);
+    assert_eq!(game.clock_secs,600,"Level 2B playtest countdown must start at 10:00");
     assert_eq!(game.score,score_before_2b);
     assert_eq!(game.batarangs,batarangs_before_2b);
     let audio_2b=game.take_audio_events();
@@ -872,7 +873,8 @@ pub fn qa_level2_route(out_dir:&str){
     game.tick(&mut input,&ground);
     assert_eq!(game.health,90,"lava1 must deal 10 damage");
     assert!(game.take_audio_events().contains(&AudioEvent::Punch2));
-    assert!(game.clock_secs<80,"Level 2B countdown clock must advance");
+    assert!(game.clock_secs<LEVEL2B_PLAYTEST_CLOCK_SECONDS,"Level 2B countdown clock must advance");
+    assert!(game.clock_secs>0,"Level 2B countdown must remain live during route QA");
 
     let elev2b=labs2b::ELEVATORS[0];
     let e2b_y0=game.labs_elevators[0].y;
@@ -938,8 +940,8 @@ pub fn qa_level2_route(out_dir:&str){
     assert_eq!(game.pending_stage_entry(),None);
 
     let report=format!(
-        "{{\n  \"milestone\": \"B32\",\n  \"route\": [\"EscapeCard\", \"Level2A\", \"TvCard\", \"Level2B\", \"KabukiCard\", \"Complete\"],\n  \"final_score\": {},\n  \"final_lives\": {},\n  \"final_batarangs\": {},\n  \"final_health_after_lava\": {},\n  \"clock_remaining\": \"{}:{:02}\",\n  \"level2a_goon_kills\": {},\n  \"fingerprints\": {{\n    \"l2_2a_spawn_hq\": \"0x{fp_2a_spawn:016x}\",\n    \"l2_2a_gameplay_hq\": \"0x{fp_2a_mid:016x}\",\n    \"l2_tv_000\": \"0x{fp_tv0:016x}\",\n    \"l2_tv_110\": \"0x{fp_tv110:016x}\",\n    \"l2_2b_spawn_hq\": \"0x{fp_2b_spawn:016x}\",\n    \"l2_2b_gameplay_hq\": \"0x{fp_2b_mid:016x}\",\n    \"l2_kabuki_000\": \"0x{fp_kb0:016x}\",\n    \"l2_kabuki_135\": \"0x{fp_kb135:016x}\"\n  }},\n  \"dark_fraction\": {{\n    \"l2_2a_spawn_hq\": {dark_2a_spawn:.4},\n    \"l2_2a_gameplay_hq\": {dark_2a_mid:.4},\n    \"l2_2b_spawn_hq\": {dark_2b_spawn:.4},\n    \"l2_2b_gameplay_hq\": {dark_2b_mid:.4}\n  }},\n  \"hq_frame_p95_ms\": {{\n    \"level2a\": {p95_2a:.4},\n    \"level2b\": {p95_2b:.4}\n  }},\n  \"keyframes\": [\n    \"l2_2a_spawn.png\", \"l2_2a_spawn_hq.png\", \"l2_2a_gameplay.png\", \"l2_2a_gameplay_hq.png\",\n    \"l2_tv_000.png\", \"l2_tv_110_hq.png\",\n    \"l2_2b_spawn.png\", \"l2_2b_spawn_hq.png\", \"l2_2b_gameplay.png\", \"l2_2b_gameplay_hq.png\", \"l2_2b_fire_hq.png\",\n    \"l2_kabuki_000.png\", \"l2_kabuki_135_hq.png\"\n  ]\n}}\n",
-        game.score,game.lives,game.batarangs,game.health,game.clock_secs,game.clock_millisecs,kills_2a
+        "{{\n  \"milestone\": \"B32\",\n  \"route\": [\"EscapeCard\", \"Level2A\", \"TvCard\", \"Level2B\", \"KabukiCard\", \"Complete\"],\n  \"final_score\": {},\n  \"final_lives\": {},\n  \"final_batarangs\": {},\n  \"final_health_after_lava\": {},\n  \"clock_remaining\": \"{:02}:{:02}\",\n  \"level2a_goon_kills\": {},\n  \"fingerprints\": {{\n    \"l2_2a_spawn_hq\": \"0x{fp_2a_spawn:016x}\",\n    \"l2_2a_gameplay_hq\": \"0x{fp_2a_mid:016x}\",\n    \"l2_tv_000\": \"0x{fp_tv0:016x}\",\n    \"l2_tv_110\": \"0x{fp_tv110:016x}\",\n    \"l2_2b_spawn_hq\": \"0x{fp_2b_spawn:016x}\",\n    \"l2_2b_gameplay_hq\": \"0x{fp_2b_mid:016x}\",\n    \"l2_kabuki_000\": \"0x{fp_kb0:016x}\",\n    \"l2_kabuki_135\": \"0x{fp_kb135:016x}\"\n  }},\n  \"dark_fraction\": {{\n    \"l2_2a_spawn_hq\": {dark_2a_spawn:.4},\n    \"l2_2a_gameplay_hq\": {dark_2a_mid:.4},\n    \"l2_2b_spawn_hq\": {dark_2b_spawn:.4},\n    \"l2_2b_gameplay_hq\": {dark_2b_mid:.4}\n  }},\n  \"hq_frame_p95_ms\": {{\n    \"level2a\": {p95_2a:.4},\n    \"level2b\": {p95_2b:.4}\n  }},\n  \"keyframes\": [\n    \"l2_2a_spawn.png\", \"l2_2a_spawn_hq.png\", \"l2_2a_gameplay.png\", \"l2_2a_gameplay_hq.png\",\n    \"l2_tv_000.png\", \"l2_tv_110_hq.png\",\n    \"l2_2b_spawn.png\", \"l2_2b_spawn_hq.png\", \"l2_2b_gameplay.png\", \"l2_2b_gameplay_hq.png\", \"l2_2b_fire_hq.png\",\n    \"l2_kabuki_000.png\", \"l2_kabuki_135_hq.png\"\n  ]\n}}\n",
+        game.score,game.lives,game.batarangs,game.health,game.clock_secs/60,game.clock_secs%60,kills_2a
     );
     fs::write(out.join("level2_route_qa_report.json"),report).expect("write B32 Level2 QA report");
 }

@@ -469,11 +469,11 @@ def load_shapes(swf_path: Path, unsupported: set[str], fix_gradient_scale: bool 
 
 
 def _patch_escape_lab_text_def():
-    """Update DefineText #733 (OVERLAY_ESCAPE_LAB frame 84) from 90s to 4 minutes.
+    """Update DefineText #733 (OVERLAY_ESCAPE_LAB frame 84) from 90s to 10 minutes (user-authorized playtest).
 
     Uses only the SWF's embedded DefineFont2 #25 (Impact) glyph outlines and
     canonical authored glyph advances; '4'/'2' were stripped by Flash, while all
-    characters of 'WITHIN FOUR MINUTES....' are natively embedded in #25.
+    characters of 'WITHIN TEN MINUTES....' are natively embedded in #25.
     """
     td = TEXT_DEFS.get(733)
     font = FONT_DEFS.get(25)
@@ -494,7 +494,7 @@ def _patch_escape_lab_text_def():
         "F": 191, "O": 262, "U": 263, "R": 259,
         "M": 344, "E": 199, "S": 248, ".": 89,
     }
-    updated = "WITHIN FOUR MINUTES...."
+    updated = "WITHIN TEN MINUTES...."
     line2["glyphs"] = [(char_to_glyph[ch], advances[ch]) for ch in updated]
     # Center line 2 horizontally beneath line 1's visible text ('ESCAPE FROM THE LAB').
     line1 = td["records"][0]

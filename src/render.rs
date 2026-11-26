@@ -926,7 +926,7 @@ fn draw_level2b_clock_scaled(fb:&mut RenderSurface,game:&Game,assets:&Assets,pix
         shell.image.w as i32,shell.image.h as i32,false,
     );
     // Centered 5-slot `MM:SS` countdown display (`00:00`..`99:59`).
-    let total_secs=(game.clock_secs as u16).min(5999);
+    let total_secs=game.clock_secs.min(5999);
     let mins=total_secs/60;
     let rem=total_secs%60;
     let slots:[usize;5]=[
@@ -1112,7 +1112,9 @@ fn draw_penguin_boss_health_bar(fb:&mut RenderSurface,game:&Game,scale:usize){
         return;
     }
     let Some(boss)=&game.penguin_boss else{return;};
-    if !boss.active{return;}
+    // Source #1249 die clip has fully transparent local frames 38..39 (RE ledger).
+    // Keep the empty meter during visible death animation, but not after Penguin vanishes.
+    if !boss.active || (boss.state==crate::penguin::PenguinState::Die && boss.child_frame>=38){return;}
     let s=scale.max(1) as i32;
     let boss_sx=(boss.x+game.camera_x).round() as i32*s;
     let boss_sy=(boss.y+game.camera_y).round() as i32*s;
@@ -2603,11 +2605,17 @@ mod tests{
         let mut fb_1x_240 = RenderSurface::new(LOGICAL_W, LOGICAL_H);
         let mut fb_1x_185 = RenderSurface::new(LOGICAL_W, LOGICAL_H);
 
-        game.clock_secs = 240 as _; // compiles whether clock_secs is u8 or u16? Wait: keep test safe for u8/u16 via min or 185/0/240 after u16!
-        // Wait: test clock values that fit u8 (185, 0, 125) and 240 (fits u8 too! 240 <= 255!)
+        assert_eq!(game.clock_secs, 600);
+        let mut fb_600 = RenderSurface::new(HQ_W, HQ_H);
+        let mut fb_1x_600 = RenderSurface::new(LOGICAL_W, LOGICAL_H);
+        draw_level2b_clock_scaled(&mut fb_600, &game, &assets, HQ_SCALE as i32);
+        draw_level2b_clock_scaled(&mut fb_1x_600, &game, &assets, 1);
+        game.clock_secs = 240;
         game.clock_millisecs = 0;
         draw_level2b_clock_scaled(&mut fb_240_a, &game, &assets, HQ_SCALE as i32);
         draw_level2b_clock_scaled(&mut fb_1x_240, &game, &assets, 1);
+        assert_ne!(fb_600.pixels, fb_240_a.pixels, "10:00 vs 04:00 HQ3x");
+        assert_ne!(fb_1x_600.pixels, fb_1x_240.pixels, "10:00 vs 04:00 1x");
 
         game.clock_millisecs = 99;
         draw_level2b_clock_scaled(&mut fb_240_b, &game, &assets, HQ_SCALE as i32);
@@ -2643,6 +2651,31 @@ mod tests{
         let left_margin = min_x - clock_left;
         let right_margin = clock_right - 1 - max_x;
         assert!((left_margin as isize - right_margin as isize).abs() <= 2, "MM:SS margins L={left_margin}, R={right_margin}");
+    }
+
+    #[test]
+    fn penguin_bar_disappears_at_first_invisible_death_frame_in_both_render_modes() {
+        let mut game = Game::new();
+        game.screen = AppScreen::Playing;
+        game.start_stage(crate::stage::StageId::Level1C);
+        let boss = game.penguin_boss.as_mut().unwrap();
+        game.camera_x = 300.0 - boss.x;
+        game.camera_y = 316.0 - boss.y;
+        boss.health = 0;
+        boss.state = crate::penguin::PenguinState::Die;
+        for scale in [1usize, HQ_SCALE] {
+            let mut visible = RenderSurface::new(LOGICAL_W * scale, LOGICAL_H * scale);
+            let mut hidden = RenderSurface::new(LOGICAL_W * scale, LOGICAL_H * scale);
+            let before = hidden.pixels.clone();
+            game.penguin_boss.as_mut().unwrap().child_frame = 37;
+            draw_penguin_boss_health_bar(&mut visible, &game, scale);
+            assert_ne!(visible.pixels, before, "visible death frame must retain the meter");
+            for frame in [38, 39] {
+                game.penguin_boss.as_mut().unwrap().child_frame = frame;
+                draw_penguin_boss_health_bar(&mut hidden, &game, scale);
+                assert_eq!(hidden.pixels, before, "invisible death frame {frame} must not draw the meter");
+            }
+        }
     }
 
     #[test]
