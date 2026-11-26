@@ -1,5 +1,13 @@
 # AI handoff — current recovery checkpoint
 
+## 2026-11-26 — PT01 early source-evidence Windows run
+
+- Draft PR #64, branch `revive/level2-b32-e2e-qa-closeout-2026-11-14`, stacked #63 at a89d262a564f8c7f8cf4a565a017b66d4b50c6d0. Parent 4162393990dea3f917a105dda011b5ae54646497; last fully green gameplay SHA 1467b43e7abffee7553bc6c7103066278c4a26af / [run45838507326](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/45838507326) / job139973634641 / 173 passed, 0 failed; campaign gates passed. No active run before batch.
+- PT01: split existing source parser/extractor and upload before long asset bake. Reinitialize identical PowerShell preferences and variables in bake step. One parser, one upload, all existing extraction/bake/test commands preserved; inverse patch equality verified. No new gameplay changes. Normal non-skip push intentionally launches one run for pending original helper evidence. Initial tree creation rejected base tree (422); ref and tree reread before retry, no partial ref change.
+- Acceptance: step5 Parse original SWF and extract PT01 contact evidence, step6 upload; inspect Batman-CobbleBot-PT01-CheckPlayer-Source artifact, canonical SHA, body100191 size156, actual probe math and branches. Continue existing full QA. Static patch verified only; no local YAML/SWF/Cargo execution.
+- Next: recover exact push run using branch Actions REST; inspect extraction failure or published helper JSON, then design held-input native Game tick regressions. No duplicate push during active run. PT01/02/03 OPEN; PT04/05/06 AUTOMATED-VERIFIED at green SHA, human acceptance and historical issues/hosted audio blocker remain. No merge/release/Level3A.
+
+
 ## 2026-11-26 — PT-04/05/06 combined Windows QA green
 
 - Active [draft PR #64](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/pull/64), branch `revive/level2-b32-e2e-qa-closeout-2026-11-14`, stacked #63 at a89d262a564f8c7f8cf4a565a017b66d4b50c6d0. Parent HEAD 2c8cdc9e73ffdf8a539a40f53b0dd1939d705631; latest fully green gameplay/test code now **1467b43e7abffee7553bc6c7103066278c4a26af**, [Windows run45838507326](https://github.com/sinethnimsara26/Batman-CobbleBot-Native-Rust/actions/runs/45838507326), job139973634641 COMPLETED SUCCESS. Branch parent 2c8cdc9 is later workflow-only original helper extractor plus docs, not tested by this run. New checkpoint docs-only [skip ci]. Prior c8a8b14 green/169 superseded for gameplay.

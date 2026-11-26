@@ -54,7 +54,7 @@ jobs:
           (out/"cobblebot.swf").write_bytes(fws)
           '@ | python -
 
-      - name: Rebuild original Level 1A assets from SWF
+      - name: Parse original SWF and extract PT01 contact evidence
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
@@ -87,6 +87,23 @@ jobs:
           print("PT01_CHECK_PLAYER_SOURCE",tag,helper["body_offset"],len(helper["body"]))
           '@ | python -
           if ($LASTEXITCODE -ne 0) { throw "PT01 source helper extraction failed" }
+
+      - name: Upload PT01 original checkPlayer AVM1 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Batman-CobbleBot-PT01-CheckPlayer-Source
+          path: .generated/pt01-check-player-source.json
+          if-no-files-found: warn
+
+      - name: Rebuild original Level 1A assets from SWF
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $PSNativeCommandUseErrorActionPreference = $true
+          $tools = "reverse-engineering/tools"
+          $work = ".generated"
+          $swf = "$work/cobblebot.swf"
           # HUD-REAL-06B source-only probe: recover actual child placements
           # before changing the scaled HQ icons. No source assets are edited.
           @'
@@ -389,14 +406,6 @@ jobs:
 
       # ICON-ART-06 only: produce PNG design at Windows taskbar sizes from
       # the source-derived bat in sprite #716. NO .ico/.rc/EXE embedding.
-      - name: Upload PT01 original checkPlayer AVM1 evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: Batman-CobbleBot-PT01-CheckPlayer-Source
-          path: .generated/pt01-check-player-source.json
-          if-no-files-found: warn
-
       - name: Render and verify source-derived Windows icon ART (Batch06)
         shell: pwsh
         run: |
