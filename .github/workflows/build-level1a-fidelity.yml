@@ -65,6 +65,28 @@ jobs:
           New-Item -ItemType Directory -Force -Path "$work/reports","$work/bitmaps","$work/sounds","$work/batman-frames","$work/batman-frames-hq","$work/pickup-frames","$work/pickup-frames-hq-super","$work/pickup-frames-hq","$work/batarang-frames","$work/batarang-frames-hq-super","$work/batarang-frames-hq","$work/level-title","$work/level-title-hq-super","$work/level-title-hq","$work/level2a-title-frames-hq-super","$work/level2a-title-frames-hq","$work/fadein","$work/fadein-hq-super","$work/fadein-hq","$work/fadeout","$work/fadeout-hq-super","$work/fadeout-hq","$work/tutorial-overlay","$work/tutorial-overlay-hq-super","$work/tutorial-overlay-hq","$work/hud","$work/hud-hq-super","$work/hud-hq-final","$work/level1a-tiles","$work/level1a-tiles-hq-base","$work/level1a-detail-tiles-1x","$work/level1a-detail-tiles-hq","$work/scenery-probes","$work/root-moon-hq-super","$work/root-moon-hq","$work/intro","assets","reverse-engineering/generated/collision_masks" | Out-Null
 
           python "$tools/swf_re.py" "$swf" "$work/reports"
+          # PT-01: retain only the original checkPlayer helper from the verified parser.
+          @'
+          import hashlib,json
+          from pathlib import Path
+          work=Path(".generated")
+          digest=hashlib.sha256((work/"cobblebot.swf").read_bytes()).hexdigest()
+          assert digest=="3d9e1992404313bc2e2652d46a5838160ef721e2ad559fdd7455f3c54f8ac1ed",digest
+          blocks=json.loads((work/"reports/actions.json").read_text(encoding="utf-8"))
+          matches=[(b["tag_offset"],a) for b in blocks
+                   if b.get("context")=="root" and b.get("frame")==15
+                   for a in b["actions"]
+                   if a.get("body_offset")==100191]
+          assert len(matches)==1,("checkPlayer candidates",len(matches))
+          tag,helper=matches[0]
+          assert helper["op"]=="DefineFunction2" and helper["code_size"]==156 and helper["body"],"checkPlayer identity mismatch"
+          report={"source_sha256":digest,"root_parser_frame":15,"tag_offset":tag,
+                  "function_name":"checkPlayer","classification":"static original AVM1 evidence, not live playback",
+                  "function":helper}
+          (work/"pt01-check-player-source.json").write_text(json.dumps(report,indent=2)+"\n",encoding="utf-8")
+          print("PT01_CHECK_PLAYER_SOURCE",tag,helper["body_offset"],len(helper["body"]))
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { throw "PT01 source helper extraction failed" }
           # HUD-REAL-06B source-only probe: recover actual child placements
           # before changing the scaled HQ icons. No source assets are edited.
           @'
@@ -367,6 +389,14 @@ jobs:
 
       # ICON-ART-06 only: produce PNG design at Windows taskbar sizes from
       # the source-derived bat in sprite #716. NO .ico/.rc/EXE embedding.
+      - name: Upload PT01 original checkPlayer AVM1 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Batman-CobbleBot-PT01-CheckPlayer-Source
+          path: .generated/pt01-check-player-source.json
+          if-no-files-found: warn
+
       - name: Render and verify source-derived Windows icon ART (Batch06)
         shell: pwsh
         run: |
