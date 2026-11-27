@@ -18,7 +18,7 @@ import json
 import math
 from pathlib import Path
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 
 from b03_bake_stage_asset_proofs import expect_original_source
 from bake_level_tiles import load_bitmaps
@@ -176,33 +176,66 @@ def bake_halo_fire_frames(out_dir: Path, symbols: dict, shapes: dict, bitmaps: d
     return {"frame_count": 9, "size": [w, h], "anchor": [anchor[0], anchor[1]]}
 
 
+def _find_impact_font(size_px: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+    for p in (
+        Path("C:/Windows/Fonts/impact.ttf"),
+        Path("/usr/share/fonts/truetype/msttcorefonts/Impact.ttf"),
+        Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
+    ):
+        if p.is_file():
+            return ImageFont.truetype(str(p), size=size_px)
+    return ImageFont.load_default()
+
+
+def _premul_lanczos(img: Image.Image, target: tuple[int, int]) -> Image.Image:
+    return img.convert("RGBa").resize(target, Image.Resampling.LANCZOS).convert("RGBA")
+
+
 def bake_clock_pack(
     out_dir: Path, pixel_scale: int, symbols: dict, shapes: dict, bitmaps: dict
 ) -> dict:
-    sb = symbol_bounds(CLOCK_SYMBOL_ID, 0, (CLOCK_SCALE_X, 0.0, 0.0, CLOCK_SCALE_Y, 0.0, 0.0), symbols, shapes, 0, None)
-    x0 = math.floor(sb[0]) - 2
-    y0 = math.floor(sb[1]) - 2
-    x1 = math.ceil(sb[2]) + 2
-    y1 = math.ceil(sb[3]) + 2
-    shell_w1, shell_h1 = x1 - x0, y1 - y0
-    anchor_x1, anchor_y1 = float(-x0), float(-y0)
-
+    # Unified Level 2B clock header & LED glyphs inside a 144x74 logical panel frame
+    # matching HUD (#716) padding, Impact typography, and crisp centered proportions.
+    shell_w1, shell_h1 = 144, 74
     ss = 3 * pixel_scale
-    shell_ss = Image.new("RGBA", (shell_w1 * ss, shell_h1 * ss), (0, 0, 0, 0))
-    render_symbol(
-        CLOCK_SYMBOL_ID,
-        0,
-        (CLOCK_SCALE_X * ss, 0.0, 0.0, CLOCK_SCALE_Y * ss, anchor_x1 * ss, anchor_y1 * ss),
-        shell_ss,
-        symbols,
-        shapes,
-        bitmaps,
-        set(),
-        set(),
-        0,
-    )
     target_shell = (shell_w1 * pixel_scale, shell_h1 * pixel_scale)
-    shell_img = shell_ss.resize(target_shell, Image.Resampling.LANCZOS)
+
+    label_ss = Image.new("RGBA", (shell_w1 * ss, shell_h1 * ss), (0, 0, 0, 0))
+    ldraw = ImageDraw.Draw(label_ss)
+    font_size = round(11.8 * ss)
+    font = _find_impact_font(font_size)
+    while font_size > 6 * ss:
+        bbox = ldraw.textbbox((0, 0), "TIME UNTIL DETONATION", font=font)
+        if bbox[2] - bbox[0] <= round((shell_w1 - 14) * ss):
+            break
+        font_size -= ss
+        font = _find_impact_font(font_size)
+
+    outline = max(2, round(0.90 * ss))
+    cx = (shell_w1 * ss) * 0.5
+    ty = round(10.0 * ss)
+    # Match HUD Impact header: warm yellow fill with dark drop-shadow & black stroke
+    ldraw.text(
+        (cx + 0.6 * ss, ty + 0.6 * ss),
+        "TIME UNTIL DETONATION",
+        font=font,
+        fill=(5, 5, 8, 255),
+        anchor="mt",
+        stroke_width=outline + max(1, round(0.25 * ss)),
+        stroke_fill=(5, 5, 8, 255),
+    )
+    ldraw.text(
+        (cx, ty),
+        "TIME UNTIL DETONATION",
+        font=font,
+        fill=(255, 235, 80, 255),
+        anchor="mt",
+        stroke_width=outline,
+        stroke_fill=(2, 2, 5, 255),
+    )
+    # Ensure corners remain non-empty bounds inside (0,0)-(shell_w1, shell_h1) if needed;
+    # keep clean cropped Impact header with anchor (0, 0) in panel space.
+    shell_img = _premul_lanczos(label_ss, target_shell)
 
     out_dir.mkdir(parents=True, exist_ok=True)
     frames_info: list[tuple[int, str, int, int]] = []
@@ -210,34 +243,40 @@ def bake_clock_pack(
     shell_img.save(out_dir / shell_name)
     frames_info.append((0, shell_name, target_shell[0], target_shell[1]))
 
-    # Bake LED glyphs '0'..'9' and ':' on a shell-sized canvas sharing (anchor_x1, anchor_y1)
-    # so `pack_sprite_frames` crops each glyph tightly while keeping exact anchor alignment
-    # to the #1503 clock origin (-83.0, -11.0) at both 1x and 3x!
-    font = bsf.FONT_DEFS[CLOCK_FONT_ID]
-    code_to_idx = {c: i for i, c in enumerate(font["codes"])}
-    gscale = 45.0 / 1024.0
-    canvas_w1, canvas_h1 = shell_w1, shell_h1
-    canvas_w, canvas_h = canvas_w1 * pixel_scale, canvas_h1 * pixel_scale
-    ox_base = 128.0 * CLOCK_SCALE_X
-    oy_base = (38.0 + 30.0) * CLOCK_SCALE_Y
+    # Bake chunky, high-contrast LED glyphs '0'..'9' and ':' anchored cleanly to (0, 0)
+    # of the 144x74 logical panel (`y = 32..68`, centered below the Impact header).
+    font_swf = bsf.FONT_DEFS[CLOCK_FONT_ID]
+    code_to_idx = {c: i for i, c in enumerate(font_swf["codes"])}
+    gscale = 45.0 / 1024.0 * 0.92
+    ox_base = 24.0
+    oy_base = 57.5
+    dilate_core = max(3, (round(1.9 * ss) | 1))
+    dilate_halo = max(5, (round(3.1 * ss) | 1))
+
     for idx, ch in enumerate(CLOCK_GLYPHS, start=1):
         glyph_idx = code_to_idx[ord(ch)]
         contours = [
             [
                 (
-                    (ox_base + gx * gscale * CLOCK_SCALE_X - x0) * ss,
-                    (oy_base + gy * gscale * CLOCK_SCALE_Y - y0) * ss,
+                    (ox_base + gx * gscale * CLOCK_SCALE_X) * ss,
+                    (oy_base + gy * gscale * CLOCK_SCALE_Y) * ss,
                 )
                 for (gx, gy) in contour
             ]
-            for contour in font["glyphs"][glyph_idx]
+            for contour in font_swf["glyphs"][glyph_idx]
         ]
         if contours:
-            mask_ss = Image.new("1", (canvas_w1 * ss, canvas_h1 * ss), 0)
+            mask_ss = Image.new("1", (shell_w1 * ss, shell_h1 * ss), 0)
             rasterize_winding(mask_ss, contours, 0.0, 0.0, False)
-            alpha = mask_ss.convert("L").resize((canvas_w, canvas_h), Image.Resampling.LANCZOS)
-            glyph_img = Image.new("RGBA", (canvas_w, canvas_h), (255, 0, 0, 255))
-            glyph_img.putalpha(alpha)
+            core_ss = mask_ss.convert("L").filter(ImageFilter.MaxFilter(dilate_core))
+            halo_ss = mask_ss.convert("L").filter(ImageFilter.MaxFilter(dilate_halo))
+            # Dark crisp rim + vibrant bright red LED stroke so digits read vividly at 1x & 3x
+            halo_rgba = Image.new("RGBA", (shell_w1 * ss, shell_h1 * ss), (22, 0, 0, 255))
+            halo_rgba.putalpha(halo_ss)
+            core_rgba = Image.new("RGBA", (shell_w1 * ss, shell_h1 * ss), (255, 48, 42, 255))
+            core_rgba.putalpha(core_ss)
+            comp_ss = Image.alpha_composite(halo_rgba, core_rgba)
+            glyph_img = _premul_lanczos(comp_ss, target_shell)
         else:
             glyph_img = Image.new("RGBA", (1, 1), (0, 0, 0, 0))
         fname = f"frame_{idx:04d}.png"
@@ -246,14 +285,14 @@ def bake_clock_pack(
 
     write_pack_dir(
         out_dir,
-        (anchor_x1 * pixel_scale, anchor_y1 * pixel_scale),
+        (0.0, 0.0),
         float(pixel_scale),
         frames_info,
     )
     return {
         "pixel_scale": pixel_scale,
         "shell_size": [target_shell[0], target_shell[1]],
-        "anchor": [anchor_x1 * pixel_scale, anchor_y1 * pixel_scale],
+        "anchor": [0.0, 0.0],
         "frame_count": len(frames_info),
     }
 

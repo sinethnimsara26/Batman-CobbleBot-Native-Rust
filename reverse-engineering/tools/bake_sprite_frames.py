@@ -26,7 +26,13 @@ TEXT_DEFS = {}
 FONT_DEFS = {}
 
 
-def _read_fill_style(data: bytes, pos: int, alpha: bool, unsupported: set[str]):
+def _read_fill_style(
+    data: bytes,
+    pos: int,
+    alpha: bool,
+    unsupported: set[str],
+    fix_gradient_scale: bool = False,
+):
     kind = data[pos]
     pos += 1
     if kind == 0:
@@ -38,6 +44,12 @@ def _read_fill_style(data: bytes, pos: int, alpha: bool, unsupported: set[str]):
         return (r, g, b, a), pos
     if kind in (0x10, 0x12, 0x13):
         matrix, pos = read_matrix(data, pos)
+        if fix_gradient_scale:
+            # Gradient matrices map from the [-16384, 16384] gradient square
+            # into SWF twip coordinates, while this baker composes fill
+            # matrices in pixels (matching bitmap fills below).
+            for key in ("sx", "sy", "r0", "r1"):
+                matrix[key] /= 20.0
         if pos >= len(data):
             raise ValueError("truncated gradient fill")
         flags = data[pos]
@@ -96,7 +108,13 @@ def _read_fill_style(data: bytes, pos: int, alpha: bool, unsupported: set[str]):
     raise ValueError(f"unsupported fill style 0x{kind:02x}")
 
 
-def _read_fill_array(data: bytes, pos: int, alpha: bool, unsupported: set[str]):
+def _read_fill_array(
+    data: bytes,
+    pos: int,
+    alpha: bool,
+    unsupported: set[str],
+    fix_gradient_scale: bool = False,
+):
     count = data[pos]
     pos += 1
     if count == 0xFF:
@@ -104,12 +122,19 @@ def _read_fill_array(data: bytes, pos: int, alpha: bool, unsupported: set[str]):
         pos += 2
     fills = []
     for _ in range(count):
-        color, pos = _read_fill_style(data, pos, alpha, unsupported)
+        color, pos = _read_fill_style(data, pos, alpha, unsupported, fix_gradient_scale=fix_gradient_scale)
         fills.append(color)
     return fills, pos
 
 
-def _read_line_array(data: bytes, pos: int, alpha: bool, shape4: bool, unsupported: set[str]):
+def _read_line_array(
+    data: bytes,
+    pos: int,
+    alpha: bool,
+    shape4: bool,
+    unsupported: set[str],
+    fix_gradient_scale: bool = False,
+):
     count = data[pos]
     pos += 1
     if count == 0xFF:
@@ -130,7 +155,9 @@ def _read_line_array(data: bytes, pos: int, alpha: bool, shape4: bool, unsupport
             if join == 2:
                 pos += 2  # miter limit factor
             if has_fill:
-                fill, pos = _read_fill_style(data, pos, alpha, unsupported)
+                fill, pos = _read_fill_style(
+                    data, pos, alpha, unsupported, fix_gradient_scale=fix_gradient_scale
+                )
                 if isinstance(fill, tuple):
                     color = fill
                 else:
@@ -229,7 +256,12 @@ def _pending_add(pending, style_id, segment, flip=False):
     segments.append(new_segment)
 
 
-def parse_shape(payload: bytes, tag: int, unsupported: set[str]):
+def parse_shape(
+    payload: bytes,
+    tag: int,
+    unsupported: set[str],
+    fix_gradient_scale: bool = False,
+):
     """Convert Flash's directed edge soup into ordered drawing layers.
 
     This follows Ruffle's ShapeConverter model: FillStyle0 and FillStyle1 own
@@ -250,8 +282,12 @@ def parse_shape(payload: bytes, tag: int, unsupported: set[str]):
         even_odd = not uses_fill_winding
         pos += 1
 
-    fills, pos = _read_fill_array(payload, pos, has_alpha, unsupported)
-    lines, pos = _read_line_array(payload, pos, has_alpha, tag == 83, unsupported)
+    fills, pos = _read_fill_array(
+        payload, pos, has_alpha, unsupported, fix_gradient_scale=fix_gradient_scale
+    )
+    lines, pos = _read_line_array(
+        payload, pos, has_alpha, tag == 83, unsupported, fix_gradient_scale=fix_gradient_scale
+    )
     bits = Bits(payload, pos)
     fill_bits = bits.u(4)
     line_bits = bits.u(4)
@@ -377,8 +413,12 @@ def parse_shape(payload: bytes, tag: int, unsupported: set[str]):
         if new_styles:
             bits.align()
             pos = bits.pos
-            replacement_fills, pos = _read_fill_array(payload, pos, has_alpha, unsupported)
-            replacement_lines, pos = _read_line_array(payload, pos, has_alpha, tag == 83, unsupported)
+            replacement_fills, pos = _read_fill_array(
+                payload, pos, has_alpha, unsupported, fix_gradient_scale=fix_gradient_scale
+            )
+            replacement_lines, pos = _read_line_array(
+                payload, pos, has_alpha, tag == 83, unsupported, fix_gradient_scale=fix_gradient_scale
+            )
             bits.bit = pos * 8
             next_fill_bits = bits.u(4)
             next_line_bits = bits.u(4)
@@ -412,7 +452,7 @@ def parse_shape(payload: bytes, tag: int, unsupported: set[str]):
 
 
 
-def load_shapes(swf_path: Path, unsupported: set[str]):
+def load_shapes(swf_path: Path, unsupported: set[str], fix_gradient_scale: bool = False):
     data = swf_path.read_bytes()
     if data[:3] != b"FWS":
         raise ValueError("expected the canonical uncompressed FWS from extract_projector.py")
@@ -422,9 +462,49 @@ def load_shapes(swf_path: Path, unsupported: set[str]):
     for code, payload, _, _ in tags(data, pos, len(data)):
         if code in SHAPE_TAGS:
             shape_id = struct.unpack_from("<H", payload, 0)[0]
-            shapes[shape_id] = parse_shape(payload, code, unsupported)
+            shapes[shape_id] = parse_shape(
+                payload, code, unsupported, fix_gradient_scale=fix_gradient_scale
+            )
     return shapes
 
+
+def _patch_escape_lab_text_def():
+    """Update DefineText #733 (OVERLAY_ESCAPE_LAB frame 84) from 90s to 10 minutes (user-authorized playtest).
+
+    Uses only the SWF's embedded DefineFont2 #25 (Impact) glyph outlines and
+    canonical authored glyph advances; '4'/'2' were stripped by Flash, while all
+    characters of 'WITHIN TEN MINUTES....' are natively embedded in #25.
+    """
+    td = TEXT_DEFS.get(733)
+    font = FONT_DEFS.get(25)
+    if td is None or font is None or len(td["records"]) < 2:
+        return
+    codes = font["codes"]
+    line2 = td["records"][1]
+    if line2["font"] != 25:
+        return
+    orig_text = "".join(chr(codes[g]) for g, _ in line2["glyphs"] if g < len(codes))
+    if orig_text != "WITHIN 90 SECONDS....":
+        return
+
+    char_to_glyph = {chr(code): idx for idx, code in enumerate(codes)}
+    # Canonical Font #25 glyph advances at height=480 from DefineTexts 723..736.
+    advances = {
+        "W": 391, "I": 138, "T": 221, "H": 266, "N": 260, " ": 85,
+        "F": 191, "O": 262, "U": 263, "R": 259,
+        "M": 344, "E": 199, "S": 248, ".": 89,
+    }
+    updated = "WITHIN TEN MINUTES...."
+    line2["glyphs"] = [(char_to_glyph[ch], advances[ch]) for ch in updated]
+    # Center line 2 horizontally beneath line 1's visible text ('ESCAPE FROM THE LAB').
+    line1 = td["records"][0]
+    line1_visible_adv = sum(adv for _, adv in line1["glyphs"][:-1])
+    line1_center = (line1["x"] or 0) + line1_visible_adv / 2.0
+    new_adv = sum(adv for _, adv in line2["glyphs"])
+    new_x = round(line1_center - new_adv / 2.0)
+    line2["x"] = new_x
+    td["bounds"][0] = min(td["bounds"][0], new_x)
+    td["bounds"][1] = max(td["bounds"][1], new_x + new_adv)
 
 
 def load_text_defs(swf_path: Path):
@@ -447,6 +527,7 @@ def load_text_defs(swf_path: Path):
     for char_id, payload in text_payloads.items():
         parsed_id, bounds, matrix, records = parse_define_text(payload)
         TEXT_DEFS[parsed_id] = {"bounds": bounds, "matrix": matrix, "records": records}
+    _patch_escape_lab_text_def()
 
 
 def render_text(character_id, transform, canvas, missing):
@@ -982,6 +1063,8 @@ def main():
     parser.add_argument("--native-bounds", action="store_true", help="size the single-frame PNG to the symbol's native transformed bounds")
     parser.add_argument("--source-over-strokes", action="store_true",
                         help="opt-in corrected RGBA stroke compositing; legacy assets unchanged")
+    parser.add_argument("--fix-gradient-scale", action="store_true",
+                        help="opt-in SWF twips-to-pixels (/20.0) scale fix on gradient fill matrices; legacy Level 1A assets unchanged by default")
     parser.add_argument("--bounds-symbols-json", type=Path,
                         help="optional ORIGINAL source symbols for image bounds/anchor; rasterize from positional symbols_json")
     parser.add_argument("--clip-stage-width", type=float, help="for --all-frames, crop rendering to this logical stage width")
@@ -996,7 +1079,7 @@ def main():
     bounds_symbols = (json.loads(args.bounds_symbols_json.read_text(encoding="utf-8"))
                       if args.bounds_symbols_json is not None else symbols)
     unsupported: set[str] = set()
-    shapes = load_shapes(args.swf, unsupported)
+    shapes = load_shapes(args.swf, unsupported, fix_gradient_scale=args.fix_gradient_scale)
     load_text_defs(args.swf)
     bitmap_dir = args.bitmaps or args.swf.resolve().parent.parent / "bitmaps"
     bitmap_manifest = json.loads((bitmap_dir / "manifest.json").read_text(encoding="utf-8"))

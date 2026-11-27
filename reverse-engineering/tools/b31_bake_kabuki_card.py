@@ -105,6 +105,12 @@ def main() -> None:
     ap.add_argument("root_placements", type=Path)
     ap.add_argument("bitmaps", type=Path)
     ap.add_argument("out", type=Path)
+    ap.add_argument(
+        "--fix-gradient-scale",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="divide SWF gradient fill matrices by 20.0 (pixels vs twips); enabled by default for story cards",
+    )
     ns = ap.parse_args()
 
     manifest = bake_story_card(
@@ -115,6 +121,7 @@ def main() -> None:
         ns.out,
         KABUKI_CARD_SPEC,
         audit_kabuki_card_scripts,
+        fix_gradient_scale=ns.fix_gradient_scale,
     )
     print(
         "Kabuki card source bake:",

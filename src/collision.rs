@@ -105,6 +105,43 @@ impl CollisionMask {
         true
     }
 
+    /// Returns true if the solid pixel at `(x, y)` belongs to a thin floating platform slab
+    /// (total vertical thickness <= `max_thickness` and clear standing headroom above it).
+    pub fn is_thin_platform(&self, x: f32, y: f32, max_thickness: f32) -> bool {
+        if !self.solid(x, y) {
+            return false;
+        }
+        let max_steps = max_thickness.ceil() as i32;
+        let mut top_open = None;
+        for up in 1..=max_steps {
+            let probe = y - up as f32;
+            if !self.solid(x, probe) {
+                top_open = Some(probe);
+                break;
+            }
+        }
+        let Some(slab_top) = top_open else {
+            return false;
+        };
+        let mut bot_open = None;
+        for dn in 1..=max_steps {
+            let probe = y + dn as f32;
+            if !self.solid(x, probe) {
+                bot_open = Some(probe);
+                break;
+            }
+        }
+        let Some(slab_bot) = bot_open else {
+            return false;
+        };
+        if (slab_bot - slab_top) > max_thickness {
+            return false;
+        }
+        !self.solid(x, slab_top - 24.0)
+            && !self.solid(x, slab_top - 48.0)
+            && !self.solid(x, slab_top - 72.0)
+    }
+
     pub fn check_ceiling(&self, x: f32, y: &mut f32, height: f32, dy: &mut f32, _loop_count: u8) -> bool {
         if !self.solid(x, *y - height) {
             return false;
@@ -119,6 +156,26 @@ impl CollisionMask {
             }
         }
         true
+    }
+
+    /// Ceiling check for Labs stages that lets upward jumps pass cleanly through thin
+    /// overhead podium slabs (`<= max_thickness`) while still blocking solid room ceilings.
+    pub fn check_ceiling_allowing_thin(
+        &self,
+        x: f32,
+        y: &mut f32,
+        height: f32,
+        dy: &mut f32,
+        max_thickness: f32,
+    ) -> bool {
+        let probe_y = *y - height;
+        if !self.solid(x, probe_y) {
+            return false;
+        }
+        if *dy < 0.0 && self.is_thin_platform(x, probe_y, max_thickness) {
+            return false;
+        }
+        self.check_ceiling(x, y, height, dy, 0)
     }
 
     #[inline]

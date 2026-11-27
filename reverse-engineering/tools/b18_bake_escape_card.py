@@ -69,6 +69,12 @@ def main() -> None:
     ap.add_argument("root_placements", type=Path)
     ap.add_argument("bitmaps", type=Path)
     ap.add_argument("out", type=Path)
+    ap.add_argument(
+        "--fix-gradient-scale",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="divide SWF gradient fill matrices by 20.0 (pixels vs twips); enabled by default for story cards",
+    )
     ns = ap.parse_args()
 
     raw = ns.swf.read_bytes()
@@ -98,7 +104,7 @@ def main() -> None:
     }
 
     unsupported: set[str] = set()
-    shapes = load_shapes(ns.swf, unsupported)
+    shapes = load_shapes(ns.swf, unsupported, fix_gradient_scale=ns.fix_gradient_scale)
     load_text_defs(ns.swf)
 
     button_placement = next(p for p in source_scene if p.get("character_id") == 1268)
@@ -196,6 +202,7 @@ def main() -> None:
         "recovered_button_up_state": button_report,
         "skip_button_stage_bounds": click_rect,
         "deferred_script_controlled_transition_ids": sorted(script_controlled_transitions),
+        "fix_gradient_scale": ns.fix_gradient_scale,
         **script_report,
         "frames": manifest_frames,
     }

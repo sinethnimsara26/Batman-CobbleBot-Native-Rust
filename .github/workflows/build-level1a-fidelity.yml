@@ -54,6 +54,92 @@ jobs:
           (out/"cobblebot.swf").write_bytes(fws)
           '@ | python -
 
+      - name: Parse original SWF and extract PT01 contact evidence
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $PSNativeCommandUseErrorActionPreference = $true
+          $tools = "reverse-engineering/tools"
+          $work = ".generated"
+          $swf = "$work/cobblebot.swf"
+          New-Item -ItemType Directory -Force -Path "$work/reports","$work/bitmaps","$work/sounds","$work/batman-frames","$work/batman-frames-hq","$work/pickup-frames","$work/pickup-frames-hq-super","$work/pickup-frames-hq","$work/batarang-frames","$work/batarang-frames-hq-super","$work/batarang-frames-hq","$work/level-title","$work/level-title-hq-super","$work/level-title-hq","$work/level2a-title-frames-hq-super","$work/level2a-title-frames-hq","$work/fadein","$work/fadein-hq-super","$work/fadein-hq","$work/fadeout","$work/fadeout-hq-super","$work/fadeout-hq","$work/tutorial-overlay","$work/tutorial-overlay-hq-super","$work/tutorial-overlay-hq","$work/hud","$work/hud-hq-super","$work/hud-hq-final","$work/level1a-tiles","$work/level1a-tiles-hq-base","$work/level1a-detail-tiles-1x","$work/level1a-detail-tiles-hq","$work/scenery-probes","$work/root-moon-hq-super","$work/root-moon-hq","$work/intro","assets","reverse-engineering/generated/collision_masks" | Out-Null
+
+          python "$tools/swf_re.py" "$swf" "$work/reports"
+          # PT-01: retain only the original checkPlayer helper from the verified parser.
+          @'
+          import hashlib,json
+          from pathlib import Path
+          work=Path(".generated")
+          digest=hashlib.sha256((work/"cobblebot.swf").read_bytes()).hexdigest()
+          assert digest=="3d9e1992404313bc2e2652d46a5838160ef721e2ad559fdd7455f3c54f8ac1ed",digest
+          blocks=json.loads((work/"reports/actions.json").read_text(encoding="utf-8"))
+          matches=[(b["tag_offset"],a) for b in blocks
+                   if b.get("context")=="root" and b.get("frame")==15
+                   for a in b["actions"]
+                   if a.get("body_offset")==100191]
+          assert len(matches)==1,("checkPlayer candidates",len(matches))
+          tag,helper=matches[0]
+          assert helper["op"]=="DefineFunction2" and helper["code_size"]==156 and helper["body"],"checkPlayer identity mismatch"
+          report={"source_sha256":digest,"root_parser_frame":15,"tag_offset":tag,
+                  "function_name":"checkPlayer","classification":"static original AVM1 evidence, not live playback",
+                  "function":helper}
+          (work/"pt01-check-player-source.json").write_text(json.dumps(report,indent=2)+"\n",encoding="utf-8")
+          print("PT01_CHECK_PLAYER_SOURCE",tag,helper["body_offset"],len(helper["body"]))
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { throw "PT01 source helper extraction failed" }
+
+      - name: Upload PT01 original checkPlayer AVM1 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Batman-CobbleBot-PT01-CheckPlayer-Source
+          path: .generated/pt01-check-player-source.json
+          if-no-files-found: warn
+
+      - name: Extract PT02 original checkBatarang helper evidence
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $PSNativeCommandUseErrorActionPreference = $true
+          @'
+          import hashlib,json
+          from pathlib import Path
+          work=Path(".generated")
+          digest=hashlib.sha256((work/"cobblebot.swf").read_bytes()).hexdigest()
+          assert digest=="3d9e1992404313bc2e2652d46a5838160ef721e2ad559fdd7455f3c54f8ac1ed",digest
+          blocks=json.loads((work/"reports/actions.json").read_text(encoding="utf-8"))
+          matches=[]
+          for b in blocks:
+              if b.get("context")!="root" or b.get("frame")!=15: continue
+              ops=b["actions"]
+              for i,a in enumerate(ops):
+                  if a.get("op") not in ("DefineFunction","DefineFunction2"): continue
+                  name=a.get("function","")
+                  if not name and i and ops[i-1].get("op")=="Push":
+                      vals=ops[i-1].get("values",[])
+                      if vals:
+                          v=vals[-1]
+                          name=v.get("resolved") if v.get("resolved") is not None else v.get("value")
+                  if name=="checkBatarang":
+                      matches.append((b["tag_offset"],a,ops[max(0,i-2):i],ops[i+1:i+3]))
+          assert len(matches)==1,("checkBatarang candidates",len(matches))
+          tag,helper,before,after=matches[0]
+          assert helper.get("body") and helper.get("code_size",0)>0 and helper.get("body_offset") is not None,"checkBatarang body missing"
+          report={"source_sha256":digest,"root_parser_frame":15,"tag_offset":tag,
+                  "function_name":"checkBatarang","classification":"static original AVM1 evidence, not live playback",
+                  "preceding_actions":before,"function":helper,"following_actions":after}
+          (work/"pt02-check-batarang-source.json").write_text(json.dumps(report,indent=2)+"\n",encoding="utf-8")
+          print("PT02_CHECK_BATARANG_SOURCE",tag,helper["body_offset"],len(helper["body"]))
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { throw "PT02 source helper extraction failed" }
+
+      - name: Upload PT02 original checkBatarang AVM1 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: Batman-CobbleBot-PT02-CheckBatarang-Source
+          path: .generated/pt02-check-batarang-source.json
+          if-no-files-found: error
+
       - name: Rebuild original Level 1A assets from SWF
         shell: pwsh
         run: |
@@ -62,9 +148,6 @@ jobs:
           $tools = "reverse-engineering/tools"
           $work = ".generated"
           $swf = "$work/cobblebot.swf"
-          New-Item -ItemType Directory -Force -Path "$work/reports","$work/bitmaps","$work/sounds","$work/batman-frames","$work/batman-frames-hq","$work/pickup-frames","$work/pickup-frames-hq-super","$work/pickup-frames-hq","$work/batarang-frames","$work/batarang-frames-hq-super","$work/batarang-frames-hq","$work/level-title","$work/level-title-hq-super","$work/level-title-hq","$work/fadein","$work/fadein-hq-super","$work/fadein-hq","$work/fadeout","$work/fadeout-hq-super","$work/fadeout-hq","$work/tutorial-overlay","$work/tutorial-overlay-hq-super","$work/tutorial-overlay-hq","$work/hud","$work/hud-hq-super","$work/hud-hq-final","$work/level1a-tiles","$work/level1a-tiles-hq-base","$work/level1a-detail-tiles-1x","$work/level1a-detail-tiles-hq","$work/scenery-probes","$work/root-moon-hq-super","$work/root-moon-hq","$work/intro","assets","reverse-engineering/generated/collision_masks" | Out-Null
-
-          python "$tools/swf_re.py" "$swf" "$work/reports"
           # HUD-REAL-06B source-only probe: recover actual child placements
           # before changing the scaled HQ icons. No source assets are edited.
           @'
@@ -330,6 +413,9 @@ jobs:
           python "$tools/b25_bake_labs_pickups.py" "$swf" "$work/reports/symbols.json" "$work/reports/actions.json" "$work/sounds/manifest.json" "$work/labs-pickups-frames" "$work/level2a-title-frames" --bitmaps "$work/bitmaps" --proof ".generated/b25-labs2a-proof/labs_pickups_proof.png" --report ".generated/b25-labs2a-proof/labs-pickups-report.json"
           python "$tools/pack_sprite_frames.py" "$work/labs-pickups-frames" "assets/labs_pickups_frames.bin" --format-version 2 --logical-pixel-scale 1.0
           python "$tools/pack_sprite_frames.py" "$work/level2a-title-frames" "assets/level2a_title_frames.bin" --format-version 2 --logical-pixel-scale 1.0
+          python "$tools/bake_sprite_frames.py" "$swf" "$work/reports/symbols.json" "$work/level2a-title-frames-hq-super" --bitmaps "$work/bitmaps" --symbol 1408 --scale 6.0 --all-frames --clip-stage-width 600 --clip-stage-height 400 --place-x 318.7 --place-y 76.75
+          python "$tools/finalize_hq_timeline.py" "$work/level2a-title-frames-hq-super" "$work/level2a-title-frames-hq" --output-scale 3 --supersample 2
+          python "$tools/pack_sprite_frames.py" "$work/level2a-title-frames-hq" "assets/level2a_title_frames_hq.bin" --format-version 2 --logical-pixel-scale 3.0
 
           # Level 2B Labs (#1485 145-tile 1x pack, #1484 8781x10060 mask, #1496 objects & multi-floor HQ3x proof) (B27).
           python "$tools/bake_level_tiles.py" "$swf" "$work/reports/symbols.json" "$work/level2b-tiles" --bitmaps "$work/bitmaps" --symbol 1485 --place-x 1210.1 --place-y 238.25 --exclude-symbol 1484 --include-source-static-text
@@ -1797,6 +1883,9 @@ jobs:
       - name: Run sprite-pack compatibility tests
         run: cargo test --release --locked --target x86_64-pc-windows-msvc
 
+      - name: Record PT01 held-input contact diagnostic
+        run: cargo test --release --locked --target x86_64-pc-windows-msvc pt01_held_input_contact_trace -- --nocapture
+
       - name: Build Level 1A fidelity slice
         run: cargo build --release --locked --target x86_64-pc-windows-msvc
 
@@ -1926,6 +2015,14 @@ jobs:
           $labs2aQa = Start-Process -FilePath $exe -ArgumentList @("--qa-labs2a-route", ".generated/b26-labs2a-qa") -Wait -PassThru
           if ($labs2aQa.ExitCode -ne 0) { throw "B26 Labs 2A route QA failed with exit code $($labs2aQa.ExitCode)" }
           Get-Content ".generated/b26-labs2a-qa/labs2a_route_qa_report.json"
+
+          $level2Qa = Start-Process -FilePath $exe -ArgumentList @("--qa-level2-route", ".generated/b32-level2-qa") -Wait -PassThru
+          if ($level2Qa.ExitCode -ne 0) { throw "B32 Full Level 2 E2E route QA failed with exit code $($level2Qa.ExitCode)" }
+          Get-Content ".generated/b32-level2-qa/level2_route_qa_report.json"
+
+          $campaignQa = Start-Process -FilePath $exe -ArgumentList @("--qa-full-campaign", ".generated/full-campaign-qa") -Wait -PassThru
+          if ($campaignQa.ExitCode -ne 0) { throw "Continuous Level 1 -> Level 2 -> Replay campaign QA failed with exit code $($campaignQa.ExitCode)" }
+          Get-Content ".generated/full-campaign-qa/full_campaign_qa_report.json"
 
           $legacyShots = Get-ChildItem ".generated/visual-smoke/*.png"
           $hqShots = Get-ChildItem ".generated/visual-smoke-hq/*.png"
@@ -2564,6 +2661,20 @@ jobs:
         with:
           name: Batman-CobbleBot-B31-KabukiCard-Proof
           path: .generated/b31-kabuki-card-proof/
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Batman-CobbleBot-B32-Level2-E2E-QA
+          path: .generated/b32-level2-qa/
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Batman-CobbleBot-Full-Campaign-E2E-QA
+          path: .generated/full-campaign-qa/
           if-no-files-found: error
 
       - uses: actions/upload-artifact@v4
