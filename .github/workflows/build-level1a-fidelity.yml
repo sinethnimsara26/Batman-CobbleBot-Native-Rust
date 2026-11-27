@@ -96,6 +96,50 @@ jobs:
           path: .generated/pt01-check-player-source.json
           if-no-files-found: warn
 
+      - name: Extract PT02 original checkBatarang helper evidence
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $PSNativeCommandUseErrorActionPreference = $true
+          @'
+          import hashlib,json
+          from pathlib import Path
+          work=Path(".generated")
+          digest=hashlib.sha256((work/"cobblebot.swf").read_bytes()).hexdigest()
+          assert digest=="3d9e1992404313bc2e2652d46a5838160ef721e2ad559fdd7455f3c54f8ac1ed",digest
+          blocks=json.loads((work/"reports/actions.json").read_text(encoding="utf-8"))
+          matches=[]
+          for b in blocks:
+              if b.get("context")!="root" or b.get("frame")!=15: continue
+              ops=b["actions"]
+              for i,a in enumerate(ops):
+                  if a.get("op") not in ("DefineFunction","DefineFunction2"): continue
+                  name=a.get("function","")
+                  if not name and i and ops[i-1].get("op")=="Push":
+                      vals=ops[i-1].get("values",[])
+                      if vals:
+                          v=vals[-1]
+                          name=v.get("resolved") if v.get("resolved") is not None else v.get("value")
+                  if name=="checkBatarang":
+                      matches.append((b["tag_offset"],a,ops[max(0,i-2):i],ops[i+1:i+3]))
+          assert len(matches)==1,("checkBatarang candidates",len(matches))
+          tag,helper,before,after=matches[0]
+          assert helper.get("body") and helper.get("code_size",0)>0 and helper.get("body_offset") is not None,"checkBatarang body missing"
+          report={"source_sha256":digest,"root_parser_frame":15,"tag_offset":tag,
+                  "function_name":"checkBatarang","classification":"static original AVM1 evidence, not live playback",
+                  "preceding_actions":before,"function":helper,"following_actions":after}
+          (work/"pt02-check-batarang-source.json").write_text(json.dumps(report,indent=2)+"\n",encoding="utf-8")
+          print("PT02_CHECK_BATARANG_SOURCE",tag,helper["body_offset"],len(helper["body"]))
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { throw "PT02 source helper extraction failed" }
+
+      - name: Upload PT02 original checkBatarang AVM1 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: Batman-CobbleBot-PT02-CheckBatarang-Source
+          path: .generated/pt02-check-batarang-source.json
+          if-no-files-found: error
+
       - name: Rebuild original Level 1A assets from SWF
         shell: pwsh
         run: |
