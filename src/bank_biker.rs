@@ -229,14 +229,8 @@ impl BankBiker {
                     events.push(BikerEvent::Sound(BikerSound::Bike));
                 }
 
-                // Check collision with swept batarang trajectories
-                for (idx, &(prev_bx, bx, by)) in batarang_segments.iter().enumerate() {
-                    if self.apply_batarang_segment_hit(prev_bx, bx, by, events) {
-                        return Some(idx);
-                    }
-                }
-
-                // Check collision with player
+                // Original bikerAI evaluates player contact before checkBatarang
+                // (RE-20261126-049/053). Keep native geometry and hurt gate.
                 let dx = (player_x - self.x).abs();
                 if dx <= 45.0 && self.hits_player_y(player_y) {
                     if player_attacking {
@@ -248,6 +242,16 @@ impl BankBiker {
                         events.push(BikerEvent::PlayerHurt {
                             damage: self.strength,
                         });
+                    }
+                }
+
+                // Preserve the existing Fall guard in apply_batarang_segment_hit:
+                // a melee defeat cannot award another score or consume a shot.
+                // A surviving Drive biker can still be defeated by a projectile
+                // in the same callback, after any contact damage event.
+                for (idx, &(prev_bx, bx, by)) in batarang_segments.iter().enumerate() {
+                    if self.apply_batarang_segment_hit(prev_bx, bx, by, events) {
+                        return Some(idx);
                     }
                 }
             }

@@ -241,7 +241,7 @@ fn pt01_held_input_contact_trace() {
 // PT02: exercise the real Game enemy/event callback with controlled phase
 // poses and relative offsets. This is not a held-input or original Flash run.
 fn pt02_biker_contact_matrix(frames: &SpriteSet) {
-    use crate::bank_biker::{BikerState, BIKER_INITIAL_Y};
+    use crate::bank_biker::{BikerSound, BikerState, BIKER_INITIAL_Y};
     let stage = StageId::Level1B;
     let ground = CollisionMask::for_stage(stage);
     let f = fixture(stage, &ground);
@@ -302,9 +302,9 @@ fn pt02_biker_contact_matrix(frames: &SpriteSet) {
         }
     }
     assert_eq!(cases, 108);
-    // Isolated component priority witness: both contact and swept projectile
-    // eligible at the same endpoint. Observe current order, do not assert
-    // that projectile-first is the desired original behavior.
+    // Regression for the four simultaneous-hit witnesses in run45964476100.
+    // Contact precedes projectile handling. Preserve the native Fall guard,
+    // invulnerability gate and swept projectile geometry.
     for attacking in [false, true] {
         for hurt in [false, true] {
             let mut biker = BankBiker::new();
@@ -314,6 +314,18 @@ fn pt02_biker_contact_matrix(frames: &SpriteSet) {
                 &[(-50.0, 50.0, 303.25)], &mut events);
             assert_eq!(biker.state, BikerState::Fall);
             assert_eq!(events.iter().filter(|e| matches!(e, BikerEvent::Score(100))).count(), 1);
+            let mut expected = Vec::new();
+            if !attacking && !hurt {
+                expected.push(BikerEvent::Sound(BikerSound::Kick));
+                expected.push(BikerEvent::PlayerHurt { damage: 10 });
+            }
+            expected.push(BikerEvent::Score(100));
+            expected.push(BikerEvent::Sound(BikerSound::Bam));
+            assert_eq!(events, expected, "PT02 contact must precede projectile");
+            assert_eq!(consumed, if attacking { None } else { Some(0) },
+                "PT02 preserve native Fall projectile guard");
+            assert!(!biker.alive);
+            assert_eq!(biker.frame, 0);
             println!("PT02_PRIORITY attacking={} hurt={} consumed={:?} events={:?}",
                 attacking, hurt, consumed, events);
         }
