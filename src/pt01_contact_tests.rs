@@ -235,7 +235,91 @@ fn pt01_held_input_contact_trace() {
         }
     }
     pt01_close_encounter_matrix(&frames);
+    pt02_biker_contact_matrix(&frames);
 }
+
+// PT02: exercise the real Game enemy/event callback with controlled phase
+// poses and relative offsets. This is not a held-input or original Flash run.
+fn pt02_biker_contact_matrix(frames: &SpriteSet) {
+    use crate::bank_biker::{BikerState, BIKER_INITIAL_Y};
+    let stage = StageId::Level1B;
+    let ground = CollisionMask::for_stage(stage);
+    let f = fixture(stage, &ground);
+    let mut cases = 0;
+    for state in [PlayerState::Stand, PlayerState::Run, PlayerState::Punch] {
+        for dir in [-1, 1] {
+            for invincible in [false, true] {
+                for gap in [-90.0_f32, -50.0, -45.0, -25.0, 0.0, 25.0, 45.0, 50.0, 90.0] {
+                    let mut game = Game::new();
+                    game.start_stage(stage);
+                    game.screen = AppScreen::Playing;
+                    game.bank_goons = None;
+                    game.labs_eagles.clear();
+                    game.shots.clear();
+                    game.player.x = f.1;
+                    game.player.y = f.2 - PLAYER_H;
+                    game.player.dir = dir;
+                    game.player.state = state;
+                    game.player.state_tick = 0;
+                    game.player.dx = if state == PlayerState::Run { 19.0 * dir as f32 } else { 0.0 };
+                    game.player.dy = 0.0;
+                    game.player_attacking = state == PlayerState::Punch;
+                    game.player_invincible_ticks = if invincible { 35 } else { 0 };
+                    let px = game.player.x + game.level_origin_x();
+                    let py = game.player.y + game.level_origin_y();
+                    let dx = game.player.dx;
+                    let frame_id = game.animation_frame();
+                    let frame = &frames.frames[frame_id];
+                    let mut biker = BankBiker::new();
+                    // Keep original Y, speed, facing and strength; offset X to
+                    // obtain the desired post-drive gap in a real street plane.
+                    biker.x = px + gap - biker.speed * biker.dir;
+                    let pre_x = biker.x;
+                    game.bank_biker = Some(biker);
+                    let before_health = game.health;
+                    let before_score = game.score;
+                    game.tick_stage_enemies(&ground);
+                    let biker = game.bank_biker.as_ref().expect("PT02 biker fixture");
+                    let probe_x = biker.x + 50.0 * biker.dir + dx;
+                    let probe_y = biker.y - 40.0;
+                    let shadow_hit = raster_hit(frame, px, py, dir, probe_x, probe_y);
+                    let damage = before_health - game.health;
+                    let score = game.score - before_score;
+                    assert!((biker.x - pre_x - biker.speed * biker.dir).abs() < 0.01,
+                        "PT02 fixture must reach ordinary drive branch");
+                    assert_eq!(biker.y, BIKER_INITIAL_Y);
+                    assert!(damage >= 0 && damage <= biker.strength as i32);
+                    assert!(score == 0 || score == 100);
+                    assert!(!(damage > 0 && score > 0), "PT02 isolated callback double outcome");
+                    if invincible { assert_eq!(damage, 0, "existing invincibility gate"); }
+                    println!("PT02_PHASE pose={:?} dir={} invincible={} gap={} player=({:.2},{:.2}) frame={} requested_dx={:.2} result_dx={:.2} biker_pre_x={:.2} biker_post=({:.2},{:.2}) probe=({:.2},{:.2}) shadow_hit={} damage={} score={} biker_state={:?} player_state={:?}",
+                        state, dir, invincible, gap, px, py, frame_id, dx, game.player.dx,
+                        pre_x, biker.x, biker.y, probe_x, probe_y, shadow_hit, damage, score,
+                        biker.state, game.player.state);
+                    cases += 1;
+                }
+            }
+        }
+    }
+    assert_eq!(cases, 108);
+    // Isolated component priority witness: both contact and swept projectile
+    // eligible at the same endpoint. Observe current order, do not assert
+    // that projectile-first is the desired original behavior.
+    for attacking in [false, true] {
+        for hurt in [false, true] {
+            let mut biker = BankBiker::new();
+            biker.x = -biker.speed;
+            let mut events = Vec::new();
+            let consumed = biker.tick_swept(0.0, 323.25, attacking, hurt,
+                &[(-50.0, 50.0, 303.25)], &mut events);
+            assert_eq!(biker.state, BikerState::Fall);
+            assert_eq!(events.iter().filter(|e| matches!(e, BikerEvent::Score(100))).count(), 1);
+            println!("PT02_PRIORITY attacking={} hurt={} consumed={:?} events={:?}",
+                attacking, hurt, consumed, events);
+        }
+    }
+}
+
 
 #[test]
 fn pt01_raster_hit_respects_anchor_and_mirroring() {
